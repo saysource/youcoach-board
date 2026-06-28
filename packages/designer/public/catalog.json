@@ -47,6 +47,7 @@
       "id": "fields",
       "name": "Fields and Background",
       "categories": [
+        "fields_all",
         "fields_11",
         "fields_futsal"
       ]
@@ -17302,6 +17303,736 @@
           "h": 975,
           "scale": 1.1,
           "color": "#d1d1d1"
+        }
+      ]
+    },
+    "fields_all": {
+      "name": "All Fields",
+      "kind": "field",
+      "facets": {
+        "action": [
+          {
+            "id": "field-11",
+            "label": "Field 11"
+          },
+          {
+            "id": "futsal",
+            "label": "Futsal"
+          }
+        ]
+      },
+      "figures": [
+        {
+          "svg": "images/optimized/fields/11/0.svg",
+          "thumb": "images/optimized/fields/11/0_mini.png",
+          "w": 1300,
+          "h": 1000,
+          "scale": 1,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/1.svg",
+          "thumb": "images/optimized/fields/11/1_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.5,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/2.svg",
+          "thumb": "images/optimized/fields/11/2_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.1,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/3.svg",
+          "thumb": "images/optimized/fields/11/3_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/4.svg",
+          "thumb": "images/optimized/fields/11/4_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/5.svg",
+          "thumb": "images/optimized/fields/11/5_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/6.svg",
+          "thumb": "images/optimized/fields/11/6_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/7.svg",
+          "thumb": "images/optimized/fields/11/7_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.4,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/8.svg",
+          "thumb": "images/optimized/fields/11/8_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.7,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/9.svg",
+          "thumb": "images/optimized/fields/11/9_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/10.svg",
+          "thumb": "images/optimized/fields/11/10_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/11.svg",
+          "thumb": "images/optimized/fields/11/11_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/12.svg",
+          "thumb": "images/optimized/fields/11/12_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/13.svg",
+          "thumb": "images/optimized/fields/11/13_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.75,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/14.svg",
+          "thumb": "images/optimized/fields/11/14_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.75,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/15.svg",
+          "thumb": "images/optimized/fields/11/15_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.5,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/16.svg",
+          "thumb": "images/optimized/fields/11/16_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/17.svg",
+          "thumb": "images/optimized/fields/11/17_mini.png",
+          "w": 1302,
+          "h": 975,
+          "scale": 0.4,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/18.svg",
+          "thumb": "images/optimized/fields/11/18_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.5,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/19.svg",
+          "thumb": "images/optimized/fields/11/19_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.3,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/21.svg",
+          "thumb": "images/optimized/fields/11/21_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.4,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/22.svg",
+          "thumb": "images/optimized/fields/11/22_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.4,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/23.svg",
+          "thumb": "images/optimized/fields/11/23_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.5,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/24.svg",
+          "thumb": "images/optimized/fields/11/24_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/25.svg",
+          "thumb": "images/optimized/fields/11/25_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.7,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/26.svg",
+          "thumb": "images/optimized/fields/11/26_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.7,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/27.svg",
+          "thumb": "images/optimized/fields/11/27_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.45,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/28.svg",
+          "thumb": "images/optimized/fields/11/28_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.45,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/29.svg",
+          "thumb": "images/optimized/fields/11/29_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/30.svg",
+          "thumb": "images/optimized/fields/11/30_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/31.svg",
+          "thumb": "images/optimized/fields/11/31_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/32.svg",
+          "thumb": "images/optimized/fields/11/32_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/33.svg",
+          "thumb": "images/optimized/fields/11/33_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.5,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/34.svg",
+          "thumb": "images/optimized/fields/11/34_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.5,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/35.svg",
+          "thumb": "images/optimized/fields/11/35_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.4,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/36.svg",
+          "thumb": "images/optimized/fields/11/36_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.4,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/37.svg",
+          "thumb": "images/optimized/fields/11/37_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.4,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/38.svg",
+          "thumb": "images/optimized/fields/11/38_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.4,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/39.svg",
+          "thumb": "images/optimized/fields/11/39_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.3,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/40.svg",
+          "thumb": "images/optimized/fields/11/40_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.35,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/41.svg",
+          "thumb": "images/optimized/fields/11/41_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/42.svg",
+          "thumb": "images/optimized/fields/11/42_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 2,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/43.svg",
+          "thumb": "images/optimized/fields/11/43_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/44.svg",
+          "thumb": "images/optimized/fields/11/44_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/45.svg",
+          "thumb": "images/optimized/fields/11/45_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/46.svg",
+          "thumb": "images/optimized/fields/11/46_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/47.svg",
+          "thumb": "images/optimized/fields/11/47_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.9,
+          "actions": [
+            "field-11"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/1.svg",
+          "thumb": "images/optimized/fields/futsal/1_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.5,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/2.svg",
+          "thumb": "images/optimized/fields/futsal/2_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/3.svg",
+          "thumb": "images/optimized/fields/futsal/3_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/4.svg",
+          "thumb": "images/optimized/fields/futsal/4_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.7,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/5.svg",
+          "thumb": "images/optimized/fields/futsal/5_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/6.svg",
+          "thumb": "images/optimized/fields/futsal/6_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/7.svg",
+          "thumb": "images/optimized/fields/futsal/7_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/8.svg",
+          "thumb": "images/optimized/fields/futsal/8_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.3,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/9.svg",
+          "thumb": "images/optimized/fields/futsal/9_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.2,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/10.svg",
+          "thumb": "images/optimized/fields/futsal/10_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.2,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/11.svg",
+          "thumb": "images/optimized/fields/futsal/11_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.9,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/12.svg",
+          "thumb": "images/optimized/fields/futsal/12_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/13.svg",
+          "thumb": "images/optimized/fields/futsal/13_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/14.svg",
+          "thumb": "images/optimized/fields/futsal/14_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.6,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/15.svg",
+          "thumb": "images/optimized/fields/futsal/15_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.8,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/16.svg",
+          "thumb": "images/optimized/fields/futsal/16_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.5,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/17.svg",
+          "thumb": "images/optimized/fields/futsal/17_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.7,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/18.svg",
+          "thumb": "images/optimized/fields/futsal/18_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.2,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/19.svg",
+          "thumb": "images/optimized/fields/futsal/19_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.05,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/20.svg",
+          "thumb": "images/optimized/fields/futsal/20_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.5,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/21.svg",
+          "thumb": "images/optimized/fields/futsal/21_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 0.85,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/futsal/22.svg",
+          "thumb": "images/optimized/fields/futsal/22_mini.png",
+          "w": 1300,
+          "h": 975,
+          "scale": 1.1,
+          "color": "#d1d1d1",
+          "actions": [
+            "futsal"
+          ]
         }
       ]
     }

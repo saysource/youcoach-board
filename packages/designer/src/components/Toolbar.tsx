@@ -124,15 +124,19 @@ function MoreToolsMenu({ onOpenCategory }: { onOpenCategory: (catId: string) => 
         <TooltipContent>More tools</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-44">
-        {catalog?.groups.map((g) => {
-          const Icon = GROUP_ICON[g.id] ?? Shapes
-          const firstCat = g.categories[0]
-          return (
-            <DropdownMenuItem key={g.id} disabled={!firstCat} onSelect={() => firstCat && onOpenCategory(firstCat)}>
-              <Icon /> {g.id === 'fields' ? 'Background' : g.name}
-            </DropdownMenuItem>
-          )
-        })}
+        {/* Figure macro-groups jump the drawer to a category. Fields are handled
+            by "Edit Background" below. */}
+        {catalog?.groups
+          .filter((g) => g.id !== 'fields')
+          .map((g) => {
+            const Icon = GROUP_ICON[g.id] ?? Shapes
+            const firstCat = g.categories[0]
+            return (
+              <DropdownMenuItem key={g.id} disabled={!firstCat} onSelect={() => firstCat && onOpenCategory(firstCat)}>
+                <Icon /> {g.name}
+              </DropdownMenuItem>
+            )
+          })}
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!ball} onSelect={addBall}>
           <MatchIcon /> Add Ball
@@ -140,6 +144,11 @@ function MoreToolsMenu({ onOpenCategory }: { onOpenCategory: (catId: string) => 
         {/* Text element not implemented yet — placeholder. */}
         <DropdownMenuItem disabled>
           <Type /> Add Text
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {/* Opens the All Fields category (and, later, a background-settings mode). */}
+        <DropdownMenuItem disabled={!catalog?.categories.fields_all} onSelect={() => onOpenCategory('fields_all')}>
+          <SoccerFieldIcon /> Edit Background
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

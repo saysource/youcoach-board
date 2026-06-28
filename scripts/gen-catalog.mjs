@@ -179,6 +179,22 @@ for (const macro of palette_categories) {
   groups.push({ id: gid, name: groupName[gid] || macro.label, categories: ids })
 }
 
+// Virtual "All Fields" category: Field 11 + Futsal combined, as action sections,
+// so a background can be picked without switching category. The two stay as
+// independent categories too. Listed first in the Fields group.
+const f11 = categories['fields_11']
+const ffut = categories['fields_futsal']
+if (f11 && ffut) {
+  categories['fields_all'] = {
+    name: 'All Fields',
+    kind: 'field',
+    facets: { action: [{ id: 'field-11', label: 'Field 11' }, { id: 'futsal', label: 'Futsal' }] },
+    figures: [...f11.figures.map((f) => ({ ...f, actions: ['field-11'] })), ...ffut.figures.map((f) => ({ ...f, actions: ['futsal'] }))],
+  }
+  const fg = groups.find((g) => g.id === 'fields')
+  if (fg) fg.categories.unshift('fields_all')
+}
+
 const catalog = { version: 1, imageBase: IMG_BASE, defaults: DEFAULTS, groups, categories }
 writeFileSync(OUT, JSON.stringify(catalog, null, 2) + '\n')
 
