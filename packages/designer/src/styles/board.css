@@ -1,0 +1,146 @@
+/* YouCoach Board — scoped Tailwind entry.
+ *
+ * This component is *embeddable*, so the styling is deliberately scoped to our
+ * own `.ycb-root` wrapper and must never leak into a host page:
+ *   - We import Tailwind's `theme` + `utilities` layers but NOT `preflight`.
+ *     Preflight is a global element reset (`*`, `html`, `body`, headings, …)
+ *     that would clobber a host's styles. We provide a tiny reset scoped to
+ *     `.ycb-root` instead (bottom of this file).
+ *   - Design tokens (the shadcn palette, copied from YouCoach App 2 so the
+ *     family stays visually consistent) live on `.ycb-root`, never on `:root`.
+ *   - Dark mode is a class on OUR root (`.ycb-root.dark`), never on <html>.
+ *     Radix portals (menus, tooltips) are rendered into a container inside
+ *     `.ycb-root` (see BoardRootContext) so tokens + dark reach them too.
+ */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+
+/* Tell Tailwind where to scan for class names (no auto content detection in a
+ * library build). */
+@source './..';
+
+/* Dark variant keyed to our own root, not the document. Matches both the root
+ * element itself and anything inside it (incl. portaled menus). */
+@custom-variant dark (&:is(.ycb-root.dark, .ycb-root.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* Light tokens (copied from YouCoach App 2's palette). Scoped to our root. */
+.ycb-root {
+  --radius: 0.45rem;
+  /* Editor accents (theme-independent). */
+  --color-selection-frame: oklch(0.79 0.08 285.83);
+  --color-selection-handle: oklch(0.62 0.14 281.03);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.32 0 0);
+  --card: oklch(0.98 0 0 / 1);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.49 0 0);
+  --primary: oklch(0.57 0.12 247.21);
+  --primary-foreground: oklch(0.97 0.014 254.604);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.79 0 0);
+  --ring: oklch(0.705 0.015 286.067);
+}
+
+.ycb-root.dark {
+  --background: oklch(0.3 0.03 253.95 / 1);
+  --foreground: oklch(0.9 0 0);
+  --card: #2e3a49;
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.25 0.03 255.18);
+  --popover-foreground: oklch(0.9 0 0);
+  --primary: oklch(0.57 0.12 247.21);
+  --primary-foreground: oklch(0.97 0.014 254.604);
+  --secondary: oklch(0.44 0.03 253.1);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.23 0.03 267.75);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.5 0.05 252.09 / 1);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: hsl(223deg 17.23% 12.08%);
+  --ring: oklch(0.57 0.07 267.06);
+}
+
+/* Minimal reset, scoped to our subtree — the safe replacement for Tailwind's
+ * global preflight in an embedded component.
+ *
+ * MUST live in @layer base: unlayered rules win over @layer-ed ones in the
+ * cascade, so an unlayered `.ycb-root button { background: none }` would
+ * override Tailwind utilities (.bg-primary, .text-primary-foreground, …) on
+ * every button. Putting the reset in `base` (declared before `utilities`)
+ * lets utilities take precedence as intended. */
+@layer base {
+  .ycb-root,
+  .ycb-root *,
+  .ycb-root *::before,
+  .ycb-root *::after {
+    box-sizing: border-box;
+  }
+
+  .ycb-root {
+    color: var(--foreground);
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .ycb-root button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .ycb-root input {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Polyline finish dots: bounce on pointer-enter (overshoot easing). */
+  .ycb-root .ycb-poly-end {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 180ms cubic-bezier(0.34, 1.7, 0.5, 1);
+  }
+  .ycb-root .ycb-poly-end:hover {
+    transform: scale(1.6);
+  }
+}
