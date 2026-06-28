@@ -51,6 +51,7 @@ export function makeFigure(type: DraftType, id: string, start: Point, current: P
     transform: { ...IDENTITY_TRANSFORM },
     stroke: FIGURE_STROKE,
     strokeWidth: FIGURE_STROKE_WIDTH,
+    strokeStyle: 'solid' as const,
     fill: FIGURE_FILL,
   }
   if (type === 'line') {
@@ -68,6 +69,7 @@ export function makePolyline(id: string, points: Point[], closed: boolean): Boar
     transform: { ...IDENTITY_TRANSFORM },
     stroke: FIGURE_STROKE,
     strokeWidth: FIGURE_STROKE_WIDTH,
+    strokeStyle: 'solid',
     fill: FIGURE_FILL,
     points: points.map((p) => [p.x, p.y] as [number, number]),
     closed,

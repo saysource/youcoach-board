@@ -29,9 +29,12 @@ export function useTheme(initial: ThemeSetting = 'system', controlled?: ThemeSet
 
   // Mirror host-controlled changes into local state so the value stays coherent
   // if control is later dropped (the resolved `theme` below already prefers it).
-  useEffect(() => {
-    if (controlled !== undefined) setInternal(controlled)
-  }, [controlled])
+  // Render-phase sync (not an effect) avoids set-state-in-effect churn.
+  const [lastControlled, setLastControlled] = useState(controlled)
+  if (controlled !== undefined && controlled !== lastControlled) {
+    setLastControlled(controlled)
+    setInternal(controlled)
+  }
 
   const theme = controlled ?? internal
   const isDark = theme === 'dark' || (theme === 'system' && systemDark)

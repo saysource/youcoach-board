@@ -236,7 +236,7 @@ export function InteractiveBoard() {
         return { ...el, transform: { ...gesture.t0, rotate: rotationFor(gesture.box0, gesture.t0, gesture.current, gesture.snap) } }
       }
       if (gesture.kind === 'resize') {
-        const { box, transform } = computeResize(gesture.box0, gesture.t0, gesture.handle as CornerId, gesture.current, MIN_SIZE, {
+        const { box, transform } = computeResize(gesture.box0, gesture.t0, gesture.handle as CornerId, clampToCanvas(gesture.current), MIN_SIZE, {
           fromCenter: gesture.alt,
           proportional: gesture.snap,
         })
@@ -246,7 +246,7 @@ export function InteractiveBoard() {
         return { ...el, x: box.x, y: box.y, width: box.width, height: box.height, transform } as BoardElement
       }
       if (gesture.kind === 'endpoint' && el.type === 'line') {
-        const lp = boardToElement(gesture.current, gesture.box0, gesture.t0)
+        const lp = boardToElement(clampToCanvas(gesture.current), gesture.box0, gesture.t0)
         return gesture.handle === 'start' ? { ...el, x1: lp.x, y1: lp.y } : { ...el, x2: lp.x, y2: lp.y }
       }
       if (gesture.kind === 'point' && el.type === 'polyline') {
@@ -419,7 +419,7 @@ export function InteractiveBoard() {
     if (g.kind === 'rotate') {
       updateElements([{ id: g.id, before: { transform: g.t0 }, after: { transform: { ...g.t0, rotate: rotationFor(g.box0, g.t0, g.current, g.snap) } } }])
     } else if (g.kind === 'resize') {
-      const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, g.current, MIN_SIZE, {
+      const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, clampToCanvas(g.current), MIN_SIZE, {
         fromCenter: g.alt,
         proportional: g.snap,
       })
@@ -437,7 +437,7 @@ export function InteractiveBoard() {
         ])
       }
     } else if (g.kind === 'endpoint' && el.type === 'line') {
-      const lp = boardToElement(g.current, g.box0, g.t0)
+      const lp = boardToElement(clampToCanvas(g.current), g.box0, g.t0)
       const before = g.handle === 'start' ? { x1: el.x1, y1: el.y1 } : { x2: el.x2, y2: el.y2 }
       const after = g.handle === 'start' ? { x1: lp.x, y1: lp.y } : { x2: lp.x, y2: lp.y }
       updateElements([{ id: g.id, before, after }])

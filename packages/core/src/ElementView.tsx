@@ -1,5 +1,5 @@
 import type { BoardElement } from './elements'
-import { getLocalBounds } from './elements'
+import { getLocalBounds, strokeDash } from './elements'
 
 // Renders a single board element to SVG. Presentational and shared: the viewer
 // renders elements through this directly, and the designer wraps it with
@@ -26,14 +26,20 @@ export function ElementView({ element }: { element: BoardElement }) {
 }
 
 function Shape({ element }: { element: BoardElement }) {
+  const dash = strokeDash(element.strokeStyle, element.strokeWidth)
+  // Dotted needs round caps to render as dots rather than vanishing.
+  const cap = element.strokeStyle === 'dotted' ? 'round' : undefined
   const paint = {
     fill: element.fill,
     stroke: element.stroke,
     strokeWidth: element.strokeWidth,
+    strokeDasharray: dash,
   }
 
   if (element.type === 'rect') {
-    return <rect x={element.x} y={element.y} width={element.width} height={element.height} {...paint} />
+    return (
+      <rect x={element.x} y={element.y} width={element.width} height={element.height} {...paint} strokeLinecap={cap} />
+    )
   }
 
   if (element.type === 'ellipse') {
@@ -44,6 +50,7 @@ function Shape({ element }: { element: BoardElement }) {
         rx={element.width / 2}
         ry={element.height / 2}
         {...paint}
+        strokeLinecap={cap}
       />
     )
   }
@@ -52,18 +59,19 @@ function Shape({ element }: { element: BoardElement }) {
     const pts = element.points.map((p) => `${p[0]},${p[1]}`).join(' ')
     const hit = Math.max(element.strokeWidth * 4, 16)
     // A transparent fat companion widens the hit area; closed → polygon (fillable).
-    if (element.closed) {
-      return (
-        <g>
-          <polygon points={pts} stroke="transparent" strokeWidth={hit} fill={element.fill} strokeLinejoin="round" />
-          <polygon points={pts} stroke={element.stroke} strokeWidth={element.strokeWidth} fill={element.fill} strokeLinejoin="round" />
-        </g>
-      )
-    }
+    const Tag = element.closed ? 'polygon' : 'polyline'
     return (
       <g>
-        <polyline points={pts} stroke="transparent" strokeWidth={hit} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <polyline points={pts} stroke={element.stroke} strokeWidth={element.strokeWidth} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Tag points={pts} stroke="transparent" strokeWidth={hit} fill={element.closed ? element.fill : 'none'} strokeLinecap="round" strokeLinejoin="round" />
+        <Tag
+          points={pts}
+          stroke={element.stroke}
+          strokeWidth={element.strokeWidth}
+          strokeDasharray={dash}
+          fill={element.closed ? element.fill : 'none'}
+          strokeLinecap={element.strokeStyle === 'dotted' ? 'round' : 'round'}
+          strokeLinejoin="round"
+        />
       </g>
     )
   }
@@ -89,6 +97,7 @@ function Shape({ element }: { element: BoardElement }) {
         y2={element.y2}
         stroke={element.stroke}
         strokeWidth={element.strokeWidth}
+        strokeDasharray={dash}
         strokeLinecap="round"
         fill="none"
       />

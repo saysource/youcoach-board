@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import '../styles/board.css'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { BoardRootProvider } from '../lib/board-root'
+import { BOARD_ASPECT } from '@youcoach-board/core'
 import { useTheme, type ThemeSetting } from '../lib/use-theme'
+import { useElementSize } from '../lib/use-element-size'
+import type { Breakpoint } from '../lib/use-breakpoint'
 import { cn } from '../lib/cn'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { isCreationTool } from '../store/editorStore'
@@ -13,6 +16,14 @@ import { LibraryDrawer } from './LibraryDrawer'
 import { ZoomBar } from './ZoomBar'
 import { UndoRedoBar } from './UndoRedoBar'
 import { InteractiveBoard } from './InteractiveBoard'
+import { PropertiesPanel, MobileBar } from './properties/PropertiesPanel'
+
+// Board area padding (px) and the space reserved on the left for the full
+// properties panel (panel width + margins).
+const BOARD_TOP_PAD = 40
+const BOARD_SIDE_PAD = 16
+// Left space reserved for the full panel: left-2 (8) + w-52 (208) + gap.
+const PANEL_RESERVE = 200
 
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
@@ -29,6 +40,7 @@ export interface BoardShellProps {
 export function BoardShell({ initialTheme, theme: controlledTheme, showThemeControl }: BoardShellProps) {
   const { theme, setTheme, isDark } = useTheme(initialTheme, controlledTheme)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerPinned, setDrawerPinned] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
 
   // Editor store: subscribe to what the chrome needs; actions via the api handle.
@@ -41,10 +53,41 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.pointer >= 0)
   const canRedo = useEditorStore((s) => s.pointer < s.stack.length - 1)
+  const hasSelection = useEditorStore((s) => s.selectedIds.length > 0)
 
   // The root is also the Radix portal container, so menus/tooltips stay inside
   // our scoped, theme-aware subtree. Tracked in state so context updates on mount.
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
+
+  // Responsive layout from the component's own size (container-query style).
+  const { width, height } = useElementSize(rootEl)
+  const innerH = Math.max(0, height - 2 * BOARD_TOP_PAD)
+  // Rendered field width: the 4:3 fit is height-driven when there's horizontal
+  // room, so derive it from height (minus the board's vertical padding).
+  const canvasWidth = Math.min(Math.max(0, width - 2 * BOARD_SIDE_PAD), innerH * BOARD_ASPECT)
+  const mobile = width < 768
+  // Full panel only when ~a panel's worth of free width sits beside the field;
+  // otherwise the compact toolbar (which overlays minimally).
+  const fullPanel = !mobile && width - canvasWidth >= PANEL_RESERVE
+  const breakpoint: Breakpoint = mobile ? 'mobile' : fullPanel ? 'full' : 'compact'
+  const showPanel = hasSelection && !isCreationTool(activeTool)
+  // The full panel is a permanent fixture (shows an empty state with no
+  // selection); the compact panel only appears on selection. So reserve the
+  // left space — shifting the field right — whenever in full mode.
+  const reserveLeft = fullPanel
+
+  // Field's rendered (height-driven) width within the current left reserve.
+  const leftPad = reserveLeft ? PANEL_RESERVE : BOARD_SIDE_PAD
+  const fieldW = Math.min(Math.max(0, width - leftPad - BOARD_SIDE_PAD), innerH * BOARD_ASPECT)
+
+  // When the drawer is OPEN as an overlay, lay the field out as if the container
+  // were only `leftPad + fieldW` wide: left-align it against the reserve and let
+  // all the freed width fall on the right, where the drawer floats. This removes
+  // the left margin and minimizes how much the drawer covers the field. A docked
+  // (pinned) drawer instead refits the board into the remaining width (right-72).
+  const overlayOpen = drawerOpen && !drawerPinned
+  const boardPaddingRight = overlayOpen ? Math.max(BOARD_SIDE_PAD, width - leftPad - fieldW) : BOARD_SIDE_PAD
+  const reserveRight = drawerOpen && drawerPinned
 
   // Keyboard: undo/redo, delete selection, escape to deselect / drop the tool.
   useEffect(() => {
@@ -86,8 +129,21 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     >
       <TooltipPrimitive.Provider delayDuration={300}>
         <BoardRootProvider value={rootEl}>
-          {/* Interactive board fills the workspace; the field self-centers. */}
-          <div className="absolute inset-0 py-10 px-2 sm:px-4 md:px-6 lg:px-8">
+          {/* Interactive board fills the workspace; the field self-centers in the
+              available area. The drawer (when docked) refits it from the right,
+              and the full properties panel reserves space on the left. */}
+          <div
+            className={cn(
+              'absolute inset-y-0 left-0 transition-all duration-200',
+              reserveRight ? 'right-72' : 'right-0',
+            )}
+            style={{
+              paddingTop: BOARD_TOP_PAD,
+              paddingBottom: BOARD_TOP_PAD,
+              paddingLeft: leftPad,
+              paddingRight: boardPaddingRight,
+            }}
+          >
             <InteractiveBoard />
           </div>
 
@@ -96,8 +152,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} />
           </div>
 
-          {/* Top-center toolbar */}
-          <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
+          {/* Main toolbar — top-center, or bottom-center in mobile mode. */}
+          <div className={cn('pointer-events-none absolute left-1/2 z-30 -translate-x-1/2', mobile ? 'bottom-3' : 'top-3')}>
             <Toolbar
               activeTool={activeTool}
               onToolChange={setActiveTool}
@@ -106,24 +162,45 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             />
           </div>
 
-          {/* Top-right controls */}
-          <div className="absolute right-3 top-3 z-30">
-            <TopRightControls
-              fullscreen={fullscreen}
-              onToggleFullscreen={() => setFullscreen((v) => !v)}
-              drawerOpen={drawerOpen}
-              onToggleDrawer={() => setDrawerOpen((v) => !v)}
-            />
-          </div>
+          {/* Properties panel: full is always present (empty when no selection);
+              compact appears only on selection. Mobile uses MobileBar below. */}
+          {!mobile && (fullPanel || showPanel) && <PropertiesPanel mode={breakpoint} />}
 
-          {/* Bottom-left zoom + undo/redo */}
-          <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
-            <ZoomBar />
-            <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
-          </div>
+          {/* Mobile: always-visible undo/redo (+ selection props/actions) above
+              the bottom toolbar, as translucent floating buttons. */}
+          {mobile && <MobileBar />}
 
-          {/* Right library drawer */}
-          <LibraryDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+          {/* Top-right controls. When the drawer is open they relocate into its
+              header, so the corner is hidden. */}
+          {!drawerOpen && (
+            <div className="absolute right-3 top-3 z-30">
+              <TopRightControls
+                fullscreen={fullscreen}
+                onToggleFullscreen={() => setFullscreen((v) => !v)}
+                drawerOpen={drawerOpen}
+                onToggleDrawer={() => setDrawerOpen((v) => !v)}
+              />
+            </div>
+          )}
+
+          {/* Bottom-left zoom + undo/redo. Hidden in mobile mode, where the main
+              toolbar occupies the bottom and undo/redo live in the property bar. */}
+          {!mobile && (
+            <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
+              <ZoomBar />
+              <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
+            </div>
+          )}
+
+          {/* Right library drawer (overlay, or docked sidebar when pinned). */}
+          <LibraryDrawer
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            pinned={drawerPinned}
+            onTogglePin={() => setDrawerPinned((v) => !v)}
+            fullscreen={fullscreen}
+            onToggleFullscreen={() => setFullscreen((v) => !v)}
+          />
         </BoardRootProvider>
       </TooltipPrimitive.Provider>
     </div>

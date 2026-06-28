@@ -22,6 +22,7 @@ export interface ElementPatch {
   transform?: ElementTransform
   stroke?: string
   strokeWidth?: number
+  strokeStyle?: 'solid' | 'dashed' | 'dotted'
   fill?: string
   // Geometry (for future resize); type-checked loosely since it varies by type.
   x?: number

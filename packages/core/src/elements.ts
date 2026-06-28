@@ -33,6 +33,8 @@ export const IDENTITY_TRANSFORM: ElementTransform = { x: 0, y: 0, rotate: 0, sca
 
 export type ElementType = 'rect' | 'ellipse' | 'line' | 'polyline'
 
+export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
+
 interface BaseElement {
   id: string
   transform: ElementTransform
@@ -40,8 +42,18 @@ interface BaseElement {
   stroke: string
   /** Stroke width, in board user-space units. */
   strokeWidth: number
+  /** Line style of the stroke. */
+  strokeStyle: StrokeStyle
   /** Fill (CSS color, or 'transparent'). */
   fill: string
+}
+
+/** Dash array (in board units) for a stroke style, or undefined for solid.
+ *  Dotted needs round line caps to render as dots. */
+export function strokeDash(style: StrokeStyle, strokeWidth: number): string | undefined {
+  if (style === 'dashed') return `${strokeWidth * 2.5} ${strokeWidth * 2}`
+  if (style === 'dotted') return `0 ${strokeWidth * 2}`
+  return undefined
 }
 
 /** Axis-aligned box figures (rect + ellipse) share a bounding-box geometry. */
@@ -155,6 +167,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     transform: parseTransform(o.transform),
     stroke: str(o.stroke, '#000000'),
     strokeWidth: num(o.strokeWidth) ?? 3,
+    strokeStyle: (o.strokeStyle === 'dashed' || o.strokeStyle === 'dotted' ? o.strokeStyle : 'solid') as StrokeStyle,
     fill: str(o.fill, 'transparent'),
   }
 

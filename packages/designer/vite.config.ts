@@ -15,7 +15,11 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     react(),
-    dts({ rollupTypes: true, tsconfigPath: './tsconfig.json', include: ['src/index.tsx', 'src/**/*.d.ts'] }),
+    // No `include` filter: rollupTypes needs the whole `src` in the dts program
+    // so it can follow src/index.tsx's imports and flatten the full prop types
+    // (e.g. BoardDesignerProps) into a single self-contained dist/index.d.ts.
+    // Restricting include to index.tsx left a dangling `import './BoardDesigner'`.
+    dts({ rollupTypes: true, tsconfigPath: './tsconfig.json' }),
   ],
   build: {
     lib: {

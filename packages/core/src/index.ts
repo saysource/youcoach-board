@@ -32,12 +32,14 @@ export {
   type PolylineElement,
   type ElementType,
   type ElementTransform,
+  type StrokeStyle,
   type Box,
   IDENTITY_TRANSFORM,
   getElementBounds,
   getLocalBounds,
   normalizeBox,
   parseElement,
+  strokeDash,
 } from './elements'
 export {
   type Operation,
