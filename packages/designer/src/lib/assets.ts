@@ -28,6 +28,9 @@ export interface CatalogFigure {
   facing?: string
   mirror?: boolean
   scale?: number
+  /** Per-figure size multiplier on top of the board-relative base (legacy quirk
+   *  for a handful of materials placed at 1/4 size). Defaults to 1. */
+  sizeFactor?: number
   color?: string
   /** App-managed element (no SVG to place) — e.g. "text". The app creates it. */
   tool?: string

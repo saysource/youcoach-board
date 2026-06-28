@@ -85,6 +85,43 @@ export function ShapesIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+// Logo-position icons (a rounded frame + a pill in the chosen corner/center),
+// converted from assets/logo_*.svg. The outer frame is shared.
+const LOGO_FRAME =
+  'M21,3C21,1.896 20.104,1 19,1L3,1C1.896,1 1,1.896 1,3L1,17.008C1,18.111 1.896,19.008 3,19.008L19,19.008C20.104,19.008 21,18.111 21,17.008L21,3Z'
+const LOGO_INNER = {
+  center: 'M15.827,10C15.827,11.104 14.931,12 13.827,12L8.173,12C7.069,12 6.173,11.104 6.173,10C6.173,8.896 7.069,8 8.173,8L13.827,8C14.931,8 15.827,8.896 15.827,10Z',
+  'top-left': 'M8.276,3C8.276,1.896 7.38,1 6.276,1L3,1C1.896,1 1,1.896 1,3C1,4.104 1.896,5 3,5L6.276,5C7.38,5 8.276,4.104 8.276,3Z',
+  'top-right': 'M13.724,3C13.724,1.896 14.62,1 15.724,1L19,1C20.104,1 21,1.896 21,3C21,4.104 20.104,5 19,5L15.724,5C14.62,5 13.724,4.104 13.724,3Z',
+  'bottom-left': 'M8.276,17.008C8.276,18.111 7.38,19.008 6.276,19.008L3,19.008C1.896,19.008 1,18.111 1,17.008C1,15.904 1.896,15.008 3,15.008L6.276,15.008C7.38,15.008 8.276,15.904 8.276,17.008Z',
+  'bottom-right': 'M13.724,17.008C13.724,18.111 14.62,19.008 15.724,19.008L19,19.008C20.104,19.008 21,18.111 21,17.008C21,15.904 20.104,15.008 19,15.008L15.724,15.008C14.62,15.008 13.724,15.904 13.724,17.008Z',
+}
+
+function LogoFrameIcon({ inner, ...props }: SVGProps<SVGSVGElement> & { inner: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 20" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d={LOGO_FRAME} />
+      <path d={inner} />
+    </svg>
+  )
+}
+
+export function LogoCenterIcon(props: SVGProps<SVGSVGElement>) {
+  return <LogoFrameIcon inner={LOGO_INNER.center} {...props} />
+}
+export function LogoTopLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return <LogoFrameIcon inner={LOGO_INNER['top-left']} {...props} />
+}
+export function LogoTopRightIcon(props: SVGProps<SVGSVGElement>) {
+  return <LogoFrameIcon inner={LOGO_INNER['top-right']} {...props} />
+}
+export function LogoBottomLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return <LogoFrameIcon inner={LOGO_INNER['bottom-left']} {...props} />
+}
+export function LogoBottomRightIcon(props: SVGProps<SVGSVGElement>) {
+  return <LogoFrameIcon inner={LOGO_INNER['bottom-right']} {...props} />
+}
+
 export function DiscsIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg

@@ -66,7 +66,7 @@ export function Swatches({
   )
 }
 
-function Segmented<T extends string | number>({
+export function Segmented<T extends string | number>({
   items,
   value,
   onChange,

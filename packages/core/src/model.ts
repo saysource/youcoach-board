@@ -32,6 +32,10 @@ export interface BoardBackground {
   /** Scale + translation of the field SVG within the board. */
   scale: number
   position: [number, number]
+  /** Default scale applied to figures added while this field is active (each
+   *  field declares the figure size that reads well on it — e.g. smaller on a
+   *  full pitch than on a half field). 1 = the figure's natural catalog size. */
+  figureScale: number
   /** YouCoach logo placement over the background, or null for none. */
   logo: LogoPosition | null
 }
@@ -63,7 +67,8 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   fieldColors: {},
   scale: 1,
   position: [0, 0],
-  logo: null,
+  figureScale: 1,
+  logo: 'center',
 }
 
 const LOGO_POSITIONS: LogoPosition[] = ['center', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
@@ -99,7 +104,9 @@ function parseBackground(raw: unknown): BoardBackground {
         : {},
     scale: num(o.scale, DEFAULT_BACKGROUND.scale),
     position: [num(pos[0], 0), num(pos[1], 0)],
-    logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : null,
+    figureScale: num(o.figureScale, DEFAULT_BACKGROUND.figureScale),
+    // Absent → default (center); explicit null → no logo; valid → that position.
+    logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : o.logo === null ? null : DEFAULT_BACKGROUND.logo,
   }
 }
 

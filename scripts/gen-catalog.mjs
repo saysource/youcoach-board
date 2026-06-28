@@ -42,6 +42,8 @@ const FLAT = {
 }
 const GROUP_PREFIX = { goalkeepers: 'por', goalkeepers_female: 'por' }
 const SKIP = new Set(['shapes']) // Arrows & Shapes are tools, not catalog figures
+// Materials the old editor placed at 1/4 the normal base size (palette.js).
+const SMALL_MATERIALS = new Set([10, 11, 12, 13, 14, 15, 16, 67, 68, 69, 70])
 const MATERIAL_COLORS = new Set(['materials', 'discs'])
 // Override the legacy category label (id stays 'discs').
 const CATEGORY_LABEL = { discs: 'Text and Tokens' }
@@ -107,14 +109,17 @@ function groupedFigures(name) {
     const acts = [...actions]
     const svg = `${IMG_BASE}/${rel}`
     const base = `${IMG_BASE}/${name}/${prefix}${num}`
+    // Legacy quirk (yceditor palette.js): these specific materials are placed at
+    // a quarter of the normal figure base size.
+    const small = name === 'materials' && SMALL_MATERIALS.has(num) ? { sizeFactor: 0.25 } : null
     if (dir === 'side') {
-      figures.push({ svg, thumb: `${base}_mini.png`, w: size.w, h: size.h, actions: acts, facing: 'left' })
-      figures.push({ svg, thumb: `${base}r_mini.png`, w: size.w, h: size.h, actions: acts, facing: 'right', mirror: true })
+      figures.push({ svg, thumb: `${base}_mini.png`, w: size.w, h: size.h, actions: acts, facing: 'left', ...small })
+      figures.push({ svg, thumb: `${base}r_mini.png`, w: size.w, h: size.h, actions: acts, facing: 'right', mirror: true, ...small })
       facingSet.add('left').add('right')
     } else if (dir === 'all') {
-      figures.push({ svg, thumb: `${base}_mini.png`, w: size.w, h: size.h, actions: acts })
+      figures.push({ svg, thumb: `${base}_mini.png`, w: size.w, h: size.h, actions: acts, ...small })
     } else {
-      figures.push({ svg, thumb: `${base}_mini.png`, w: size.w, h: size.h, actions: acts, facing: dir })
+      figures.push({ svg, thumb: `${base}_mini.png`, w: size.w, h: size.h, actions: acts, facing: dir, ...small })
       facingSet.add(dir)
     }
   }

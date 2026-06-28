@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { motion } from 'motion/react'
 import { BOARD_WIDTH, BOARD_HEIGHT, type BoardDoc, type LogoPosition } from '@youcoach-board/core'
 import { useAssets } from '../lib/assets'
 import { loadSvgTemplate, recoloredInnerHtml, type SvgTemplate } from '../lib/figure-svg'
@@ -6,25 +7,30 @@ import logoUrl from '../assets/youcoach-logo.svg'
 
 // Renders the document background into BoardCanvas's background layer: a solid
 // color (or the legacy grass image), the chosen field SVG (fetched, scaled and
-// panned), and the YouCoach logo at the chosen corner (0.2 opacity). The field
-// SVG injection is a designer/viewer concern — core only draws a placeholder.
+// panned), and the YouCoach logo (0.2 opacity) which animates between positions.
+// The field SVG injection is a designer/viewer concern — core only draws a
+// placeholder.
 
-const LOGO_W = 320
-const LOGO_H = (LOGO_W * 63) / 398 // logo viewBox is 398×63
-const LOGO_PAD = 40
+const LOGO_W = 280 // corner width; centered is 2× (see logoRect)
+const LOGO_RATIO = 63 / 398 // logo viewBox is 398×63
+const LOGO_PAD = 40 // identical inset from each relevant border
 
-function logoXY(pos: LogoPosition): { x: number; y: number } {
+// Logo box for a position. Centered is twice the size; corners keep a constant
+// LOGO_PAD inset from their two borders.
+function logoRect(pos: LogoPosition): { x: number; y: number; w: number; h: number } {
+  const w = pos === 'center' ? LOGO_W * 2 : LOGO_W
+  const h = w * LOGO_RATIO
   switch (pos) {
     case 'top-left':
-      return { x: LOGO_PAD, y: LOGO_PAD }
+      return { x: LOGO_PAD, y: LOGO_PAD, w, h }
     case 'top-right':
-      return { x: BOARD_WIDTH - LOGO_W - LOGO_PAD, y: LOGO_PAD }
+      return { x: BOARD_WIDTH - w - LOGO_PAD, y: LOGO_PAD, w, h }
     case 'bottom-left':
-      return { x: LOGO_PAD, y: BOARD_HEIGHT - LOGO_H - LOGO_PAD }
+      return { x: LOGO_PAD, y: BOARD_HEIGHT - h - LOGO_PAD, w, h }
     case 'bottom-right':
-      return { x: BOARD_WIDTH - LOGO_W - LOGO_PAD, y: BOARD_HEIGHT - LOGO_H - LOGO_PAD }
+      return { x: BOARD_WIDTH - w - LOGO_PAD, y: BOARD_HEIGHT - h - LOGO_PAD, w, h }
     default:
-      return { x: (BOARD_WIDTH - LOGO_W) / 2, y: (BOARD_HEIGHT - LOGO_H) / 2 }
+      return { x: (BOARD_WIDTH - w) / 2, y: (BOARD_HEIGHT - h) / 2, w, h }
   }
 }
 
@@ -77,17 +83,24 @@ export function BackgroundView({ doc }: { doc: BoardDoc }) {
         </g>
       )}
 
-      {bg.logo && (
-        <image
-          href={logoUrl}
-          {...logoXY(bg.logo)}
-          width={LOGO_W}
-          height={LOGO_H}
-          opacity={0.2}
-          preserveAspectRatio="xMidYMid meet"
-          pointerEvents="none"
-        />
-      )}
+      {bg.logo &&
+        (() => {
+          const r = logoRect(bg.logo)
+          // attrX/attrY animate the SVG x/y attributes (x/y are reserved for
+          // transforms in Motion); width/height animate the size — so moving the
+          // logo glides + resizes.
+          return (
+            <motion.image
+              href={logoUrl}
+              initial={false}
+              animate={{ attrX: r.x, attrY: r.y, width: r.w, height: r.h }}
+              transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+              opacity={0.2}
+              preserveAspectRatio="xMidYMid meet"
+              pointerEvents="none"
+            />
+          )
+        })()}
     </g>
   )
 }

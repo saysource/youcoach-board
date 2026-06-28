@@ -33,6 +33,8 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
   const setBackground = useEditorStore((s) => s.setBackground)
+  // Active field's default figure scale — applied to figures as they're added.
+  const figureScale = useEditorStore((s) => s.doc.background.figureScale)
 
   const [listOpen, setListOpen] = useState(false)
   const [facing, setFacing] = useState<string | null>(null)
@@ -71,7 +73,20 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   // category, so the board needn't know the source category).
   function descriptor(f: CatalogFigure): FigureDragData | null {
     if (!cat || cat.kind !== 'figure' || !catalog || !f.svg) return null
-    return { figureId: f.svg, w: f.w, h: f.h, mirror: !!f.mirror, colors: cat.colors ? { ...catalog.defaults[cat.colors] } : undefined }
+    // Legacy sizing (yceditor): a figure's longest side is the board-relative
+    // base (boardWidth/10), with the catalog SVG size only giving the aspect
+    // ratio; the active field's figureScale then multiplies that. Doing it this
+    // way keeps the on-field proportions identical across board sizes (the old
+    // editor used an 800×600 viewBox, we use 1200×900).
+    const longest = Math.max(f.w, f.h) || 1
+    const k = ((BOARD_WIDTH / 10) / longest) * figureScale * (f.sizeFactor ?? 1)
+    return {
+      figureId: f.svg,
+      w: Math.round(f.w * k),
+      h: Math.round(f.h * k),
+      mirror: !!f.mirror,
+      colors: cat.colors ? { ...catalog.defaults[cat.colors] } : undefined,
+    }
   }
 
   // Click a thumbnail: a field sets the board background; any other figure drops
@@ -79,7 +94,10 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   function drop(f: CatalogFigure) {
     if (cat?.kind === 'field') {
       if (!f.svg) return
-      setBackground({ fieldSvg: f.svg, scale: f.scale ?? 1, position: [0, 0], image: null, ...(f.color ? { color: f.color } : {}) })
+      // The field SVG overlays the base background (the field0 image by default)
+      // and always renders at its native scale (1). The catalog `scale` is the
+      // default scale for figures added while this field is active.
+      setBackground({ fieldSvg: f.svg, scale: 1, position: [0, 0], figureScale: f.scale ?? 1 })
       return
     }
     const d = descriptor(f)

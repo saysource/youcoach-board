@@ -15821,7 +15821,8 @@
           "h": 67,
           "actions": [
             "material.balls"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/15.svg",
@@ -15830,7 +15831,8 @@
           "h": 70,
           "actions": [
             "material.balls"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/16.svg",
@@ -15839,7 +15841,8 @@
           "h": 70,
           "actions": [
             "material.balls"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/1.svg",
@@ -15857,7 +15860,8 @@
           "h": 97,
           "actions": [
             "materials"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/11.svg",
@@ -15866,7 +15870,8 @@
           "h": 113,
           "actions": [
             "materials"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/12.svg",
@@ -15875,7 +15880,8 @@
           "h": 119,
           "actions": [
             "materials"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/13.svg",
@@ -15884,7 +15890,8 @@
           "h": 55,
           "actions": [
             "materials"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/33.svg",
@@ -15974,7 +15981,8 @@
           "h": 54,
           "actions": [
             "material.bose"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/68.svg",
@@ -15983,7 +15991,8 @@
           "h": 64,
           "actions": [
             "material.bose"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/69.svg",
@@ -15992,7 +16001,8 @@
           "h": 72,
           "actions": [
             "material.bose"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/70.svg",
@@ -16001,7 +16011,8 @@
           "h": 96,
           "actions": [
             "material.bose"
-          ]
+          ],
+          "sizeFactor": 0.25
         },
         {
           "svg": "images/optimized/materials/72.svg",
