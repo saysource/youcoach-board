@@ -88,6 +88,8 @@ export interface FigureDragData {
   h: number
   mirror: boolean
   colors?: Record<string, string>
+  /** Marks the figure as a ball (special-cased later, e.g. animation). */
+  ball?: boolean
 }
 
 /** Build a placed FigureElement from a drag descriptor, centered at (cx, cy). */
@@ -102,6 +104,7 @@ export function buildFigureElement(d: FigureDragData, cx: number, cy: number): B
     height: d.h,
     mirror: d.mirror || undefined,
     colors: d.colors,
+    ball: d.ball || undefined,
     transform: { ...IDENTITY_TRANSFORM },
     stroke: '#1e1e1e',
     strokeWidth: 3,

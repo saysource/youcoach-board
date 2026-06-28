@@ -469,4 +469,22 @@ The shortcuts will add a ball (the first item of the materials with action "mate
 Since the ball will have a special treatment when we will work on animantions, we want to flag the fact that a figure element is a ball in our model.
 
 
+## Background Settings
+
+While Field 11 and Futsal are actually two distinct categories, we may want to show them as both independent categories we may consider to add a virtual category All Fields, which will treat Field 11 and Futsal as subcategories/actions. This is to simplify the next step in which, we want to choose a background quickly by showing the drawer, without having the user to guess that for futsal it needs to change category.
+
+Change the More tools menu item "Background" in "Edit Background" and move it as last option in the current menu, with a separator.
+When the user clicks on Edit background we will show the All fields category
+
+When one of the categories of the fields macro-category is selected (which is all categories of kind "field"), 
+
+When a field category is selected, in the properties panel we show:
+
+- the ability to select a solid background and its color
+- the ability to scale the SVG representing the field
+- the ability to pan the SVG by showing the svg @assets/move_background.svg on top of the canvas
+- select a logo position
+
+The logo position refer to the position of the youcoach logo @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client/src/core/assets/youcoachapp_logo_dark.svg shown on top of the background image with 0.2 opacity.
+The positions are: center / top-left / top-right / bottom-left / bottom-right
 

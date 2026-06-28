@@ -19,6 +19,9 @@ interface LibraryDrawerProps {
   onTogglePin: () => void
   fullscreen: boolean
   onToggleFullscreen: () => void
+  /** Selected category (controlled — lives in the shell so the toolbar can jump). */
+  categoryId: string | null
+  onCategoryChange: (id: string) => void
 }
 
 // Right-side figures library. Header hosts the relocated AI / fill-viewport / pin
@@ -26,11 +29,10 @@ interface LibraryDrawerProps {
 // list) over the selected category's element palette: facet filters (action /
 // facing, or material type) + a thumbnail grid; clicking a thumbnail drops the
 // figure centered on the board. Categories come from the catalog (assets).
-export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen }: LibraryDrawerProps) {
+export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen, categoryId, onCategoryChange }: LibraryDrawerProps) {
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
 
-  const [catId, setCatId] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(false)
   const [facing, setFacing] = useState<string | null>(null)
   // Flash a section title when jumped to. `n` bumps each jump to replay the CSS
@@ -38,15 +40,16 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const [flash, setFlash] = useState({ id: '', n: 0 })
   const gridRef = useRef<HTMLDivElement | null>(null)
 
-  // Default to the first category once the catalog loads.
-  if (catalog && catId === null) setCatId(catalog.groups[0]?.categories[0] ?? null)
+  const catId = categoryId
   const cat: CatalogCategory | null = catId && catalog ? (catalog.categories[catId] ?? null) : null
 
-  // Reset the facing selection when the category changes (render-phase, no effect).
+  // When the category changes (here or via the toolbar's More-tools menu), reset
+  // the facing selection and collapse the category list (render-phase, no effect).
   const [facetCat, setFacetCat] = useState<string | null>(null)
   if (catId !== facetCat) {
     setFacetCat(catId)
     setFacing(cat?.facets?.facing?.[0]?.id ?? null)
+    setListOpen(false)
   }
 
   // Facing buttons (arrow-ordered) and action sections. Every action shows as a
@@ -155,10 +158,7 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                       <button
                         key={id}
                         type="button"
-                        onClick={() => {
-                          setCatId(id)
-                          setListOpen(false)
-                        }}
+                        onClick={() => onCategoryChange(id)}
                         className={cn('flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground', selected && 'font-medium text-foreground')}
                       >
                         <span className="truncate">{catalog.categories[id]?.name ?? id}</span>

@@ -119,6 +119,8 @@ export interface FigureElement extends BaseElement {
   colors?: Record<string, string>
   /** Render mirrored (artificial right-facing reuses a left-facing SVG). */
   mirror?: boolean
+  /** Marks this figure as a ball — special-cased later (e.g. animation). */
+  ball?: boolean
 }
 
 export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement
@@ -250,7 +252,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     const width = num(o.width)
     const height = num(o.height)
     if (!figureId || width === null || height === null) return null
-    return { ...base, type: 'figure', figureId, x: num(o.x) ?? 0, y: num(o.y) ?? 0, width, height, colors: parseColors(o.colors), mirror: o.mirror === true }
+    return { ...base, type: 'figure', figureId, x: num(o.x) ?? 0, y: num(o.y) ?? 0, width, height, colors: parseColors(o.colors), mirror: o.mirror === true, ball: o.ball === true || undefined }
   }
   return null
 }

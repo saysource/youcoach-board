@@ -7,6 +7,7 @@ import { useTheme, type ThemeSetting } from '../lib/use-theme'
 import { useElementSize } from '../lib/use-element-size'
 import type { Breakpoint } from '../lib/use-breakpoint'
 import { cn } from '../lib/cn'
+import { useAssets } from '../lib/assets'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { isCreationTool } from '../store/editorStore'
 import { Toolbar } from './Toolbar'
@@ -44,6 +45,16 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerPinned, setDrawerPinned] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+
+  // The library's selected category lives here (not in the drawer) so the
+  // toolbar's More-tools menu can jump to a category and open the drawer.
+  const { catalog } = useAssets()
+  const [libraryCatId, setLibraryCatId] = useState<string | null>(null)
+  if (catalog && libraryCatId === null) setLibraryCatId(catalog.groups[0]?.categories[0] ?? null)
+  function openCategory(catId: string) {
+    setLibraryCatId(catId)
+    setDrawerOpen(true)
+  }
 
   // Editor store: subscribe to what the chrome needs; actions via the api handle.
   const store = useEditorStoreApi()
@@ -174,6 +185,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               onToolChange={setActiveTool}
               locked={keepToolActive}
               onToggleLock={toggleKeepTool}
+              onOpenCategory={openCategory}
             />
           </div>
 
@@ -216,6 +228,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             onTogglePin={() => setDrawerPinned((v) => !v)}
             fullscreen={fullscreen}
             onToggleFullscreen={() => setFullscreen((v) => !v)}
+            categoryId={libraryCatId}
+            onCategoryChange={setLibraryCatId}
           />
         </BoardRootProvider>
       </TooltipPrimitive.Provider>

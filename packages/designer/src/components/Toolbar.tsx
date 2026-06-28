@@ -1,6 +1,7 @@
 import { type ElementType } from 'react'
-import { Lock, Hand, MousePointer2, Square, MoveRight, Minus, Pencil, Eraser, Shapes } from 'lucide-react'
-import { PlayersIcon, TrainingIcon, ShapesIcon, DiscsIcon, SoccerFieldIcon } from './icons'
+import { Lock, Hand, MousePointer2, Square, MoveRight, Minus, Pencil, Eraser, Shapes, Type } from 'lucide-react'
+import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
+import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon } from './icons'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Separator } from './ui/separator'
@@ -12,6 +13,11 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
+import { useAssets, buildFigureElement } from '../lib/assets'
+import { useEditorStore } from '../store/context'
+
+// Icon per catalog macro-group, for the More-tools menu.
+const GROUP_ICON: Record<string, ElementType> = { players: PlayersIcon, materials: TrainingIcon, fields: SoccerFieldIcon }
 
 export type ToolId =
   | 'select'
@@ -55,9 +61,11 @@ interface ToolbarProps {
   onToolChange: (tool: ToolId) => void
   locked: boolean
   onToggleLock: () => void
+  /** Open the library drawer at a category (from the More-tools menu). */
+  onOpenCategory: (catId: string) => void
 }
 
-export function Toolbar({ activeTool, onToolChange, locked, onToggleLock }: ToolbarProps) {
+export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory }: ToolbarProps) {
   return (
     <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
       <ToolButton label={locked ? 'Unlock' : 'Keep selected tool active'} active={locked} onClick={onToggleLock}>
@@ -78,7 +86,7 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock }: Tool
         </div>
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <MoreToolsMenu />
+      <MoreToolsMenu onOpenCategory={onOpenCategory} />
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ToolButton label="Eraser" active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
         <Eraser />
@@ -87,9 +95,22 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock }: Tool
   )
 }
 
-// The figure-library shortcut: a dropdown of element categories. Every item is
-// an inert placeholder for now (no creation wired up yet).
-function MoreToolsMenu() {
+// The figure-library shortcut: the catalog's macro-groups jump the drawer to a
+// category; below, quick "add" actions. ("Fields and Background" shows as
+// "Background" — it'll later open a background-settings mode.)
+function MoreToolsMenu({ onOpenCategory }: { onOpenCategory: (catId: string) => void }) {
+  const { catalog } = useAssets()
+  const createFigure = useEditorStore((s) => s.createFigure)
+  // The ball = the first material with the "balls" action; flagged so animation
+  // can special-case it later.
+  const ball = catalog?.categories.materials?.figures.find((f) => f.svg && (f.actions ?? []).includes('material.balls'))
+
+  function addBall() {
+    if (!catalog || !ball?.svg) return
+    const colors = { ...(catalog.defaults.materials ?? {}) }
+    createFigure(buildFigureElement({ figureId: ball.svg, w: ball.w, h: ball.h, mirror: false, colors, ball: true }, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
+  }
+
   return (
     <DropdownMenu>
       <Tooltip>
@@ -103,24 +124,22 @@ function MoreToolsMenu() {
         <TooltipContent>More tools</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-44">
-        <DropdownMenuItem disabled>
-          <PlayersIcon /> Players
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <TrainingIcon /> Materials
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <ShapesIcon /> Shapes
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <MoveRight /> Arrows
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <DiscsIcon /> Discs
-        </DropdownMenuItem>
+        {catalog?.groups.map((g) => {
+          const Icon = GROUP_ICON[g.id] ?? Shapes
+          const firstCat = g.categories[0]
+          return (
+            <DropdownMenuItem key={g.id} disabled={!firstCat} onSelect={() => firstCat && onOpenCategory(firstCat)}>
+              <Icon /> {g.id === 'fields' ? 'Background' : g.name}
+            </DropdownMenuItem>
+          )
+        })}
         <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={!ball} onSelect={addBall}>
+          <MatchIcon /> Add Ball
+        </DropdownMenuItem>
+        {/* Text element not implemented yet — placeholder. */}
         <DropdownMenuItem disabled>
-          <SoccerFieldIcon /> Background
+          <Type /> Add Text
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
