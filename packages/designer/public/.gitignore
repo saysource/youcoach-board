@@ -1,0 +1,9 @@
+# Static assets served by the standalone dev server (yarn dev) at "/".
+# The full figure set (~78 MB of SVGs + thumbnails) is too heavy for git: copy it
+# here locally for testing, but keep it out of the repo. A committed catalog.json
+# and a small `fixtures/` sample set are allowed so the dev server works for
+# everyone out of the box.
+*
+!.gitignore
+!catalog.json
+!fixtures/

@@ -33,7 +33,7 @@ export interface ElementTransform {
 
 export const IDENTITY_TRANSFORM: ElementTransform = { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1 }
 
-export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw'
+export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw' | 'figure'
 
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
 
@@ -99,7 +99,26 @@ export interface DrawElement extends BaseElement {
   points: Array<[number, number]>
 }
 
-export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement
+/** A catalog figure (player, material, field…) placed on the board. Stores a
+ *  REFERENCE to the catalog (`figureId`) plus per-slot color overrides and an
+ *  optional horizontal mirror — never the SVG itself, so documents stay small and
+ *  re-resolve through the host's asset URL. Its intrinsic `width`/`height` (from
+ *  the catalog) drive bounds/placement; geometry sits at the local origin and the
+ *  transform places it. The real SVG is fetched/recolored in the designer/viewer;
+ *  see specs/catalog.md. */
+export interface FigureElement extends BaseElement {
+  type: 'figure'
+  figureId: string
+  width: number
+  height: number
+  /** Recolor slot → CSS color (e.g. `yc-skin`); slots absent fall back to the
+   *  catalog defaults. */
+  colors?: Record<string, string>
+  /** Render mirrored (artificial right-facing reuses a left-facing SVG). */
+  mirror?: boolean
+}
+
+export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement
 
 export interface Box {
   x: number
@@ -120,6 +139,7 @@ export function normalizeBox(ax: number, ay: number, bx: number, by: number): Bo
 
 /** The element's bounding box in its OWN coordinates, ignoring the transform. */
 export function getLocalBounds(el: BoardElement): Box {
+  if (el.type === 'figure') return { x: 0, y: 0, width: el.width, height: el.height }
   if (el.type === 'polyline' || el.type === 'draw') {
     if (el.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
     const xs = el.points.map((p) => p[0])
@@ -223,9 +243,23 @@ export function parseElement(raw: unknown): BoardElement | null {
     if (points.length < 2) return null
     return { ...base, type: 'draw', points }
   }
+  if (o.type === 'figure') {
+    const figureId = typeof o.figureId === 'string' ? o.figureId : null
+    const width = num(o.width)
+    const height = num(o.height)
+    if (!figureId || width === null || height === null) return null
+    return { ...base, type: 'figure', figureId, width, height, colors: parseColors(o.colors), mirror: o.mirror === true }
+  }
   return null
 }
 
 function parseTip(v: unknown): ArrowTip {
   return v === 'arrow' ? 'arrow' : 'none'
+}
+
+function parseColors(v: unknown): Record<string, string> | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const out: Record<string, string> = {}
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) if (typeof val === 'string') out[k] = val
+  return Object.keys(out).length ? out : undefined
 }

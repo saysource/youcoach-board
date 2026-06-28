@@ -34,6 +34,10 @@ export interface ElementPatch {
   closed?: boolean
   startTip?: ArrowTip
   endTip?: ArrowTip
+  // Figure options.
+  figureId?: string
+  colors?: Record<string, string>
+  mirror?: boolean
 }
 
 /** A single element's change within an `update` operation. */

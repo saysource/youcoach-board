@@ -56,6 +56,39 @@ function Shape({ element }: { element: BoardElement }) {
     strokeDasharray: dash,
   }
 
+  if (element.type === 'figure') {
+    // Placeholder until the designer/viewer injects the recolored SVG: a dashed
+    // box at the figure's intrinsic size, labelled with its catalog id.
+    const { width, height } = element
+    const s = Math.max(width, height)
+    return (
+      <g>
+        <rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          rx={s * 0.05}
+          fill="rgba(0,0,0,0.05)"
+          stroke="rgba(0,0,0,0.35)"
+          strokeWidth={s * 0.01}
+          strokeDasharray={`${s * 0.04} ${s * 0.03}`}
+        />
+        <text
+          x={width / 2}
+          y={height / 2}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={Math.min(width, height) * 0.12}
+          fill="rgba(0,0,0,0.5)"
+          style={{ fontFamily: 'system-ui, sans-serif' }}
+        >
+          {element.figureId}
+        </text>
+      </g>
+    )
+  }
+
   if (element.type === 'rect') {
     return (
       <rect x={element.x} y={element.y} width={element.width} height={element.height} {...paint} strokeLinecap={cap} />

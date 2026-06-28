@@ -30,6 +30,7 @@ export {
   type EllipseElement,
   type PolylineElement,
   type DrawElement,
+  type FigureElement,
   type ElementType,
   type ElementTransform,
   type StrokeStyle,

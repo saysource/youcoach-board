@@ -22,6 +22,7 @@ function elementSubject(el: BoardElement): Subject {
   if (el.type === 'rect') return { icon: Square, label: 'Rectangle' }
   if (el.type === 'ellipse') return { icon: Circle, label: 'Ellipse' }
   if (el.type === 'draw') return { icon: Pencil, label: 'Drawing' }
+  if (el.type === 'figure') return { icon: Shapes, label: 'Figure' }
   return polylineSubject(el)
 }
 
