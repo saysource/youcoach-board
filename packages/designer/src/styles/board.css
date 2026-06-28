@@ -54,8 +54,8 @@
 .ycb-root {
   --radius: 0.45rem;
   /* Editor accents (theme-independent). */
-  --color-selection-frame: oklch(0.79 0.08 285.83);
-  --color-selection-handle: oklch(0.62 0.14 281.03);
+  --color-selection-frame: oklch(0.53 0.29 293.94);
+  --color-selection-handle: oklch(0.53 0.29 293.94);
   --background: oklch(1 0 0);
   --foreground: oklch(0.32 0 0);
   --card: oklch(0.98 0 0 / 1);

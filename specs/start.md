@@ -309,9 +309,41 @@ When the button is pressed, we show under the button the full list of categories
   - Materials
   - Text and Numbers
   - Arrows and Shapes
-- Fields
+- Fields and Background
   - Fields 11
   - Futsal
 
 By clicking on a category, we show all the available element for that category.
 We still need to define what to show in each category, for now use an empty div.
+
+
+
+## TODO
+- eraser tool
+- copy and paste
+- JSON export/import
+- background SVG adjust
+- canvas zoom
+- laser pointer
+- presentation mode
+- slider undo/redo aggregation (undo begin/commit)
+- color picker
+- Skin Editor
+- Kit Editor
+- Import image (where to save it?)
+- Line / arrow > support for quadratic and cubic beziers
+- Line / arrow > support for synoisodal rendering included for beziers
+- Line / arrow > support for double lines.
+- Shapes > Diamon, penthagon, triangle, isometric trpezoid
+- Text support with frame
+- Disc with text
+- Open/close polyline
+- Drawer and categories
+- auto-scale based on field
+- remember recent colors
+- proper color picker
+- export image
+- animation mode
+- watermark and wotermark position
+- snap to geometry
+- mini-tool help

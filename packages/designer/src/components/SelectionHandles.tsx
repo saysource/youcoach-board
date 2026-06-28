@@ -1,4 +1,4 @@
-import { getLocalBounds, type BoardElement } from '@youcoach-board/core'
+import { getLocalBounds, type BoardElement, type Box } from '@youcoach-board/core'
 import { elementToBoard, localCorners, type Pt, type CornerId } from '../lib/geometry-2d'
 
 export type HandleId = CornerId | 'rotate' | `point-${number}`
@@ -6,14 +6,15 @@ export type HandleId = CornerId | 'rotate' | `point-${number}`
 const FRAME = 'var(--color-selection-frame)' // bounding-box outline + rotation arm
 const HANDLE = 'var(--color-selection-handle)' // resize / rotation / endpoint handles
 // On-screen sizes (px); divided by `scale` to stay constant regardless of zoom.
-const HANDLE_PX = 10
+const HANDLE_PX = 8
 const ENDPOINT_R_PX = 6
 const ROT_R_PX = 5
 const ROT_OFFSET_PX = 20
-const STROKE_PX = 2
+const STROKE_PX = 1.5
 // Gap between the figure's bounding box and the selection frame, so the frame
-// sits just OUTSIDE the figure rather than on top of it.
-const PAD_PX = 6
+// sits just OUTSIDE the figure rather than on top of it. Exported so the board's
+// move-hit area can match the visible frame exactly.
+export const SELECTION_PAD_PX = 6
 
 interface Props {
   element: BoardElement
@@ -32,9 +33,11 @@ export function SelectionHandles({ element, scale, onHandleDown }: Props) {
   const box = getLocalBounds(element)
   const t = element.transform
 
-  // 2-point polyline = a straight line: endpoint handles only, no frame.
-  if (element.type === 'polyline' && element.points.length === 2) {
-    if (!interactive) return null // multi-select: nothing extra for a line
+  // 2-point polyline = a straight line: in SINGLE selection, draggable endpoint
+  // handles (no frame). In a MULTI selection it falls through to the box-like
+  // branch below, so it gets the same rectangular (dashed) frame as everything
+  // else and reads clearly as selected.
+  if (element.type === 'polyline' && element.points.length === 2 && interactive) {
     return (
       <g>
         {element.points.map((p, i) => (
@@ -55,7 +58,7 @@ export function SelectionHandles({ element, scale, onHandleDown }: Props) {
   // vertex (all handles live at once). The box is padded outward by a
   // screen-constant gap so the frame clears the figure; padding is symmetric,
   // so the rotation center is unchanged.
-  const pad = PAD_PX / scale
+  const pad = SELECTION_PAD_PX / scale
   const pbox = { x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 }
   const c = localCorners(pbox)
   const corners: Record<CornerId, Pt> = {
@@ -70,7 +73,8 @@ export function SelectionHandles({ element, scale, onHandleDown }: Props) {
   const r = ((t.rotate % 90) + 90) % 90
   const outlineRendering = r < 0.01 || r > 89.99 ? 'crispEdges' : 'geometricPrecision'
 
-  // Multi-select (non-interactive): just the bounding-box outline.
+  // Multi-select (non-interactive): just the bounding-box outline (solid — only
+  // the group frame is dashed).
   if (!interactive) {
     return (
       <polygon points={poly} fill="none" stroke={FRAME} strokeWidth={STROKE_PX} vectorEffect="non-scaling-stroke" shapeRendering={outlineRendering} pointerEvents="none" />
@@ -162,5 +166,77 @@ function EndpointHandle({
       data-handle={handle}
       onPointerDown={onDown}
     />
+  )
+}
+
+// Interactive chrome for a MULTI-selection's group: a dashed axis-aligned frame
+// with upright resize corners + a rotation handle. Resizing scales the whole set
+// uniformly about the opposite corner; rotating spins it about the center. The
+// box is already padded by the caller.
+export function GroupHandles({
+  box,
+  scale,
+  onDown,
+}: {
+  box: Box
+  scale: number
+  onDown: (handle: CornerId | 'rotate', e: React.PointerEvent) => void
+}) {
+  const corners: Record<CornerId, Pt> = {
+    nw: { x: box.x, y: box.y },
+    ne: { x: box.x + box.width, y: box.y },
+    se: { x: box.x + box.width, y: box.y + box.height },
+    sw: { x: box.x, y: box.y + box.height },
+  }
+  const handleSize = HANDLE_PX / scale
+  const topMid = { x: box.x + box.width / 2, y: box.y }
+  const rot = { x: topMid.x, y: topMid.y - ROT_OFFSET_PX / scale }
+  const cursorFor: Record<CornerId, string> = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' }
+  return (
+    <g>
+      <rect
+        x={box.x}
+        y={box.y}
+        width={box.width}
+        height={box.height}
+        fill="none"
+        stroke={FRAME}
+        strokeWidth={STROKE_PX}
+        strokeDasharray="5 4"
+        vectorEffect="non-scaling-stroke"
+        shapeRendering="crispEdges"
+        pointerEvents="none"
+      />
+      <line x1={topMid.x} y1={topMid.y} x2={rot.x} y2={rot.y} stroke={FRAME} strokeWidth={STROKE_PX} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+      <circle
+        cx={rot.x}
+        cy={rot.y}
+        r={ROT_R_PX / scale}
+        fill="#ffffff"
+        stroke={HANDLE}
+        strokeWidth={STROKE_PX}
+        vectorEffect="non-scaling-stroke"
+        style={{ cursor: 'grab' }}
+        data-handle="rotate"
+        onPointerDown={(e) => onDown('rotate', e)}
+      />
+      {(Object.keys(corners) as CornerId[]).map((id) => (
+        <rect
+          key={id}
+          x={corners[id].x - handleSize / 2}
+          y={corners[id].y - handleSize / 2}
+          width={handleSize}
+          height={handleSize}
+          rx={handleSize / 5}
+          fill="#ffffff"
+          stroke={HANDLE}
+          strokeWidth={STROKE_PX}
+          vectorEffect="non-scaling-stroke"
+          style={{ cursor: cursorFor[id] }}
+          data-handle={id}
+          onPointerDown={(e) => onDown(id, e)}
+        />
+      ))}
+    </g>
   )
 }

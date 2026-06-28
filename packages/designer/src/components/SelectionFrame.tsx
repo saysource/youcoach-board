@@ -5,8 +5,8 @@ const FRAME = 'var(--color-selection-frame)'
 // Desired ON-SCREEN sizes (px). Converted to board units via `scale` so the
 // chrome stays a constant size no matter how the board is fit/zoomed.
 const PAD_PX = 5 // gap between the figure and its frame
-const HANDLE_PX = 10
-const STROKE_PX = 2
+const HANDLE_PX = 8
+const STROKE_PX = 1.5
 
 // The selection frame around a figure's bounding box. Phase 2: purely
 // indicative — the corner handles are drawn but not yet draggable. Rendered in

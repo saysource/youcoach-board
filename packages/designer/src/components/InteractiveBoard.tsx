@@ -28,8 +28,8 @@ import {
   type DraftType,
   type Point,
 } from '../lib/draw'
-import { computeResize, rotationFor, boardToElement, elementToBoard, boardCorners, type CornerId } from '../lib/geometry-2d'
-import { SelectionHandles, type HandleId } from './SelectionHandles'
+import { computeResize, rotationFor, boardToElement, elementToBoard, localCorners, boardCorners, type CornerId } from '../lib/geometry-2d'
+import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -37,6 +37,7 @@ const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-ca
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
 const SNAP_PX = 8 // on-screen snap radius for shift-aligning a polyline vertex
 const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
+const MOVE_THRESHOLD_PX = 4 // on-screen drag distance before a move engages
 
 interface SnapGuide {
   x1: number
@@ -68,6 +69,9 @@ interface MoveState {
   start: Point
   current: Point
   origins: Record<string, ElementTransform>
+  // The move stays inert until the pointer travels MOVE_THRESHOLD_PX (so a click
+  // that selects doesn't nudge the figure). Sticky once engaged.
+  engaged: boolean
 }
 
 // A resize / rotate / polyline-vertex gesture on one element. (A straight line's
@@ -82,6 +86,29 @@ interface Gesture {
   current: Point
   snap: boolean // shift — rotation snap / proportional resize
   alt: boolean // option/alt — specular (from-center) resize
+}
+
+// A resize / rotate gesture on a MULTI-selection's group box. Resize scales every
+// element uniformly about the opposite corner; rotate spins them about the group
+// center. We snapshot each element's transform; geometry is untouched (only the
+// transform changes), so the same op is reversible.
+interface GroupGesture {
+  kind: 'resize' | 'rotate'
+  handle: CornerId | 'rotate'
+  box0: Box // group union (board space, unpadded) at start
+  start: Point
+  current: Point
+  snap: boolean
+  t0: Record<string, ElementTransform>
+}
+
+const GROUP_OPP: Record<CornerId, CornerId> = { nw: 'se', ne: 'sw', se: 'nw', sw: 'ne' }
+
+function boxCorner(box: Box, id: CornerId): Point {
+  if (id === 'nw') return { x: box.x, y: box.y }
+  if (id === 'ne') return { x: box.x + box.width, y: box.y }
+  if (id === 'se') return { x: box.x + box.width, y: box.y + box.height }
+  return { x: box.x, y: box.y + box.height }
 }
 
 interface Marquee {
@@ -116,6 +143,7 @@ export function InteractiveBoard() {
   const [move, setMove] = useState<MoveState | null>(null)
   const [gesture, setGesture] = useState<Gesture | null>(null)
   const [marquee, setMarquee] = useState<Marquee | null>(null)
+  const [groupGesture, setGroupGesture] = useState<GroupGesture | null>(null)
   const [polyDraft, setPolyDraft] = useState<PolyDraft | null>(null)
   // In-progress freehand stroke: the captured points (board coords).
   const [freeDraft, setFreeDraft] = useState<Point[] | null>(null)
@@ -208,6 +236,55 @@ export function InteractiveBoard() {
     ])
   }
 
+  // Union AABB (over rotated corners) of a set of elements, in board space.
+  function unionBounds(els: BoardElement[]): Box | null {
+    if (els.length === 0) return null
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const el of els) {
+      for (const c of boardCorners(el)) {
+        minX = Math.min(minX, c.x)
+        minY = Math.min(minY, c.y)
+        maxX = Math.max(maxX, c.x)
+        maxY = Math.max(maxY, c.y)
+      }
+    }
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+  }
+
+  // New transform for one element under a group gesture. Geometry is untouched —
+  // we move the element's center and adjust its scale/rotation so the whole set
+  // scales about the opposite corner (resize) or spins about the center (rotate).
+  function groupTransformFor(el: BoardElement, g: GroupGesture): ElementTransform {
+    const t0 = g.t0[el.id]
+    const lb = getLocalBounds(el)
+    const lc = { x: lb.x + lb.width / 2, y: lb.y + lb.height / 2 } // local center (const)
+    const c0 = { x: lc.x + t0.x, y: lc.y + t0.y } // board center at start
+    if (g.kind === 'rotate') {
+      const center = { x: g.box0.x + g.box0.width / 2, y: g.box0.y + g.box0.height / 2 }
+      const a0 = Math.atan2(g.start.y - center.y, g.start.x - center.x)
+      const a1 = Math.atan2(g.current.y - center.y, g.current.x - center.x)
+      let deg = ((a1 - a0) * 180) / Math.PI
+      if (g.snap) deg = Math.round(deg / 15) * 15
+      const rad = (deg * Math.PI) / 180
+      const dx = c0.x - center.x
+      const dy = c0.y - center.y
+      const c1 = { x: center.x + dx * Math.cos(rad) - dy * Math.sin(rad), y: center.y + dx * Math.sin(rad) + dy * Math.cos(rad) }
+      return { ...t0, rotate: t0.rotate + deg, x: c1.x - lc.x, y: c1.y - lc.y }
+    }
+    // resize: uniform scale about the opposite corner (projected ratio).
+    const pivot = boxCorner(g.box0, GROUP_OPP[g.handle as CornerId])
+    const corner = boxCorner(g.box0, g.handle as CornerId)
+    const sx = corner.x - pivot.x
+    const sy = corner.y - pivot.y
+    const len2 = sx * sx + sy * sy || 1
+    const s = Math.max(0.05, ((g.current.x - pivot.x) * sx + (g.current.y - pivot.y) * sy) / len2)
+    const c1 = { x: pivot.x + s * (c0.x - pivot.x), y: pivot.y + s * (c0.y - pivot.y) }
+    return { ...t0, scale: t0.scale * s, x: c1.x - lc.x, y: c1.y - lc.y }
+  }
+
   // Resolve a polyline vertex drag → the new LOCAL point, plus alignment guides.
   // With shift held, the vertex magnets (independently on X and Y) to the
   // nearest OTHER vertex sharing that axis, within SNAP_PX; a guide line is
@@ -241,7 +318,11 @@ export function InteractiveBoard() {
   // The element as it should render RIGHT NOW — committed state plus any
   // in-progress move / resize / rotate / endpoint gesture.
   function liveElement(el: BoardElement): BoardElement {
+    if (groupGesture && groupGesture.t0[el.id]) {
+      return { ...el, transform: groupTransformFor(el, groupGesture) }
+    }
     if (move && move.origins[el.id]) {
+      if (!move.engaged) return el // not dragged far enough yet — stay put
       const o = move.origins[el.id]
       const d = clampMoveDelta(move.current.x - move.start.x, move.current.y - move.start.y)
       return { ...el, transform: { ...o, x: o.x + d.x, y: o.y + d.y } }
@@ -279,7 +360,7 @@ export function InteractiveBoard() {
       const el = doc.elements.find((e) => e.id === id)
       if (el) origins[id] = el.transform
     }
-    setMove({ ids, start: from, current: from, origins })
+    setMove({ ids, start: from, current: from, origins, engaged: false })
     containerRef.current?.setPointerCapture(pointerId)
   }
 
@@ -376,6 +457,28 @@ export function InteractiveBoard() {
     containerRef.current?.setPointerCapture(e.pointerId)
   }
 
+  function onGroupHandleDown(handle: CornerId | 'rotate', e: React.PointerEvent) {
+    e.stopPropagation()
+    const svg = svgRef.current
+    if (!svg) return
+    const u = unionBounds(liveSelected)
+    if (!u) return
+    const t0: Record<string, ElementTransform> = {}
+    for (const el of liveSelected) t0[el.id] = el.transform
+    const p = clientToBoard(svg, e.clientX, e.clientY)
+    setGroupGesture({ kind: handle === 'rotate' ? 'rotate' : 'resize', handle, box0: u, start: p, current: p, snap: e.shiftKey, t0 })
+    containerRef.current?.setPointerCapture(e.pointerId)
+  }
+
+  // Pressing inside the group frame (between elements) drags the whole group.
+  function onGroupBodyPointerDown(e: React.PointerEvent) {
+    if (creating) return
+    e.stopPropagation()
+    const svg = svgRef.current
+    if (!svg) return
+    startMove(selectedIds, clientToBoard(svg, e.clientX, e.clientY), e.pointerId)
+  }
+
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const svg = svgRef.current
     if (!svg) return
@@ -391,8 +494,10 @@ export function InteractiveBoard() {
       })
     } else if (polyDraft) setPolyDraft((d) => (d ? { ...d, cursor: p } : d))
     else if (draft) setDraft((d) => (d ? { ...d, current: p } : d))
+    else if (groupGesture) setGroupGesture((g) => (g ? { ...g, current: p, snap: e.shiftKey } : g))
     else if (gesture) setGesture((g) => (g ? { ...g, current: p, snap: e.shiftKey, alt: e.altKey } : g))
-    else if (move) setMove((m) => (m ? { ...m, current: p } : m))
+    else if (move)
+      setMove((m) => (m ? { ...m, current: p, engaged: m.engaged || Math.hypot(p.x - m.start.x, p.y - m.start.y) * scale >= MOVE_THRESHOLD_PX } : m))
     else if (marquee) {
       const next = { ...marquee, current: p }
       setMarquee(next)
@@ -424,6 +529,18 @@ export function InteractiveBoard() {
       } else if (isDragSignificant(type, start, current)) {
         createFigure(applyFigureStyle(makeFigure(type, crypto.randomUUID(), start, current), toolDefaults))
       }
+    } else if (groupGesture) {
+      const g = groupGesture
+      setGroupGesture(null)
+      // Commit the group transform as one undoable update across all members.
+      if (Math.hypot(g.current.x - g.start.x, g.current.y - g.start.y) >= 1) {
+        const changes = []
+        for (const id of Object.keys(g.t0)) {
+          const el = doc.elements.find((e) => e.id === id)
+          if (el) changes.push({ id, before: { transform: g.t0[id] }, after: { transform: groupTransformFor(el, g) } })
+        }
+        if (changes.length) updateElements(changes)
+      }
     } else if (gesture) {
       const g = gesture
       setGesture(null)
@@ -431,9 +548,9 @@ export function InteractiveBoard() {
     } else if (move) {
       // Use the SAME clamped delta the preview showed, so the commit matches.
       const d = clampMoveDelta(move.current.x - move.start.x, move.current.y - move.start.y)
-      const { ids, origins } = move
+      const { ids, origins, engaged } = move
       setMove(null)
-      if (Math.hypot(d.x, d.y) >= MIN_DRAG) {
+      if (engaged) {
         updateElements(
           ids
             .filter((id) => origins[id])
@@ -485,8 +602,31 @@ export function InteractiveBoard() {
 
   const single = !creating && liveSelected.length === 1
   const marqueeBox = marquee ? normalizeBox(marquee.start.x, marquee.start.y, marquee.current.x, marquee.current.y) : null
-  const polyPoints = (el: BoardElement) => boardCorners(el).map((p) => `${p.x},${p.y}`).join(' ')
+  // The selection FRAME polygon (padded to match the visible frame), used as the
+  // move-hit area so clicking anywhere inside the frame — including the gap
+  // between the figure and its frame — drags rather than deselects.
+  const framePoints = (el: BoardElement) => {
+    const box = getLocalBounds(el)
+    const pad = SELECTION_PAD_PX / scale
+    const pbox = { x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 }
+    const c = localCorners(pbox)
+    const t = el.transform
+    return [c.nw, c.ne, c.se, c.sw]
+      .map((p) => {
+        const b = elementToBoard(p, pbox, t)
+        return `${b.x},${b.y}`
+      })
+      .join(' ')
+  }
   const snapGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
+
+  // Group frame box (padded for display) for a multi-selection — the interactive
+  // group resize/rotate chrome is drawn on it.
+  const groupUnion = liveSelected.length >= 2 ? unionBounds(liveSelected) : null
+  const groupPad = 6 / scale
+  const groupBox = groupUnion
+    ? { x: groupUnion.x - groupPad, y: groupUnion.y - groupPad, width: groupUnion.width + 2 * groupPad, height: groupUnion.height + 2 * groupPad }
+    : null
 
   return (
     <div
@@ -502,15 +642,30 @@ export function InteractiveBoard() {
         svgRef={svgRef}
         overlay={
           <>
-            {/* Whole-bounding-box grab areas (rotated polygon) for moving. Drawn
-                under the handles so handles win the pointer. Skipped for straight
-                lines (2-point polylines), which are grabbed by their own stroke. */}
+            {/* Group body grab area: pressing anywhere inside the group frame
+                (incl. gaps between elements) drags the whole group. Drawn first,
+                so the per-element grabs above it still take element clicks (e.g.
+                shift-toggle). */}
+            {groupBox && (
+              <rect
+                x={groupBox.x}
+                y={groupBox.y}
+                width={groupBox.width}
+                height={groupBox.height}
+                fill="transparent"
+                style={{ cursor: 'move' }}
+                onPointerDown={onGroupBodyPointerDown}
+              />
+            )}
+            {/* Per-element grab areas (the padded selection frame) for moving.
+                Drawn under the handles so handles win the pointer. Skipped for
+                straight lines (2-point polylines), grabbed by their own stroke. */}
             {!creating &&
               liveSelected.map((el) =>
                 el.type === 'polyline' && el.points.length === 2 ? null : (
                   <polygon
                     key={`hit-${el.id}`}
-                    points={polyPoints(el)}
+                    points={framePoints(el)}
                     fill="transparent"
                     style={{ cursor: 'move' }}
                     onPointerDown={(e) => onElementPointerDown(e, el)}
@@ -518,7 +673,7 @@ export function InteractiveBoard() {
                 ),
               )}
             {/* Selection chrome: full handles for a single selection, plain
-                outlines for a multi-selection. */}
+                outlines + a group frame for a multi-selection. */}
             {!creating &&
               liveSelected.map((el) => (
                 <SelectionHandles
@@ -528,6 +683,10 @@ export function InteractiveBoard() {
                   onHandleDown={single ? (handle, e) => onHandleDown(handle, e, el) : undefined}
                 />
               ))}
+            {/* Group resize/rotate chrome for a multi-selection. Hidden while
+                rotating (the box is an AABB that grows, so the handle would slide
+                out from under the pointer); the per-element frames stay. */}
+            {groupBox && groupGesture?.kind !== 'rotate' && <GroupHandles box={groupBox} scale={scale} onDown={onGroupHandleDown} />}
             {marqueeBox && (
               <rect
                 x={marqueeBox.x}
