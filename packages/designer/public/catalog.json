@@ -16626,10 +16626,16 @@
       }
     },
     "discs": {
-      "name": "Text and Numbers",
+      "name": "Text and Tokens",
       "kind": "figure",
       "colors": "materials",
       "figures": [
+        {
+          "thumb": "images/optimized/text/0_mini.png",
+          "w": 120,
+          "h": 48,
+          "tool": "text"
+        },
         {
           "svg": "images/optimized/discs/1.svg",
           "thumb": "images/optimized/discs/1_mini.png",

@@ -350,6 +350,8 @@ We still need to define what to show in each category, for now use an empty div.
 - keyboard shortcuts
 - create formation
 - i18n
+- colors persistance
+- favorites figures
 
 
 ## Properties element by element
@@ -410,9 +412,14 @@ The same for stroke and text colors.
 Once an element is selected, we keep its attributes as default values for the next creatio of element of the same category (fill, stroke, kit, skin, opacity, styles).
 
 
-## Copy and paset
+## Copy and paste
 
 Implement copy and paste, when one or more elements are selected.
+
+## Background editing mode
+
+If the user select a Field from the palette either by dragging or clicking, we show as background SVG the selected SVG.
+The very bottom of the background is our default field0 image. The user can modify the background SVG by enable "Edit background" which will show a 
 
 
 ## SVG player and figures
@@ -432,3 +439,24 @@ For materials:
 
 - yc-color-1
 - yc-color-2
+
+
+
+Kicking
+Running
+Standing
+Throw In
+Special
+Dribbling
+Pass
+
+Instead of using a select to filter the actions (which is not the right word for materials anyway), show all the actions, and add a category title similar to the one we used for the figures categories.
+Replace the labels of the up/down/right/left with arrows, and add a fifth button, with a dropdown to quickly go to a specific action type.
+
+
+When a player has been added to the canvas, and the drawer is not pinned, we can simply close the drawer. We want to remember the current 
+
+Now that the drawer is ready, enable the items in the More Tools dropdown in the main toolbar.
+In that menu we show as first items all the main categories.
+The Background is actually the fields category, but we want to call it background because we will activate a special "mode" to show in the properties the background properties when the fields category is activated.
+When the user click on the category we open the drawer (if closed or not pinned) and move to the selected category.

@@ -43,6 +43,8 @@ const FLAT = {
 const GROUP_PREFIX = { goalkeepers: 'por', goalkeepers_female: 'por' }
 const SKIP = new Set(['shapes']) // Arrows & Shapes are tools, not catalog figures
 const MATERIAL_COLORS = new Set(['materials', 'discs'])
+// Override the legacy category label (id stays 'discs').
+const CATEGORY_LABEL = { discs: 'Text and Tokens' }
 
 const ACTION_LABEL = {
   pass: 'Pass', kick: 'Kicking', run: 'Running', stand: 'Standing', throwin: 'Throw In',
@@ -127,6 +129,11 @@ function groupedFigures(name) {
 function flatFigures(name) {
   const { prefix, max } = FLAT[name]
   const figures = []
+  // The Tokens (discs) category leads with the app-managed Text element: a
+  // thumbnail only (text/0_mini.png), no SVG — the app creates the element.
+  if (name === 'discs') {
+    figures.push({ thumb: `${IMG_BASE}/text/0_mini.png`, w: 120, h: 48, tool: 'text' })
+  }
   for (let i = 1; i <= max; i++) {
     const rel = `${name}/${prefix}${i}.svg`
     if (!exists(rel)) { missing++; continue }
@@ -160,10 +167,11 @@ for (const macro of palette_categories) {
   for (const opt of macro.options) {
     const name = opt.name
     if (SKIP.has(name)) continue
+    const label = CATEGORY_LABEL[name] ?? opt.label
     let cat
-    if (name.startsWith('fields_')) cat = { name: opt.label, kind: 'field', ...fieldFigures(name) }
-    else if (figures_groups[name]) cat = { name: opt.label, kind: 'figure', colors: MATERIAL_COLORS.has(name) ? 'materials' : 'players', ...groupedFigures(name) }
-    else if (FLAT[name]) cat = { name: opt.label, kind: 'figure', colors: MATERIAL_COLORS.has(name) ? 'materials' : 'players', ...flatFigures(name) }
+    if (name.startsWith('fields_')) cat = { name: label, kind: 'field', ...fieldFigures(name) }
+    else if (figures_groups[name]) cat = { name: label, kind: 'figure', colors: MATERIAL_COLORS.has(name) ? 'materials' : 'players', ...groupedFigures(name) }
+    else if (FLAT[name]) cat = { name: label, kind: 'figure', colors: MATERIAL_COLORS.has(name) ? 'materials' : 'players', ...flatFigures(name) }
     else { console.warn('skip unknown category', name); continue }
     categories[name] = cat
     ids.push(name)

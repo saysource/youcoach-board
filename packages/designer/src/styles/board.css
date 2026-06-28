@@ -144,3 +144,18 @@
     transform: scale(1.6);
   }
 }
+
+/* Library: flash a section title (primary → base) when jumped to via the
+ * actions dropdown. `from`-only so it fades back to the title's own style.
+ * Uses the raw tokens (--primary, not --color-primary): with `@theme inline`
+ * Tailwind inlines the --color-* values into utilities and doesn't emit them
+ * as runtime CSS variables. */
+@keyframes ycb-flash {
+  from {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+.ycb-root .ycb-flash {
+  animation: ycb-flash 0.9s ease-out;
+}

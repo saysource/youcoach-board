@@ -53,6 +53,7 @@ export function FigureView({ element }: { element: FigureElement }) {
             viewBox={template.viewBox}
             preserveAspectRatio="xMidYMid meet"
             overflow="visible"
+            shapeRendering="crispEdges"
             dangerouslySetInnerHTML={{ __html: inner }}
           />
         </g>

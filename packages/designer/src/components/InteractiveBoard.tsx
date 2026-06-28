@@ -31,6 +31,7 @@ import {
 import { computeResize, rotationFor, boardToElement, elementToBoard, localCorners, boardCorners, type CornerId } from '../lib/geometry-2d'
 import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
 import { FigureView } from './FigureView'
+import { buildFigureElement, FIGURE_DND_MIME, type FigureDragData } from '../lib/assets'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -344,7 +345,8 @@ export function InteractiveBoard() {
       if (gesture.kind === 'resize') {
         const { box, transform } = computeResize(gesture.box0, gesture.t0, gesture.handle as CornerId, clampToCanvas(gesture.current), MIN_SIZE, {
           fromCenter: gesture.alt,
-          proportional: gesture.snap,
+          // Figures keep their SVG aspect ratio, so the frame always matches it.
+          proportional: gesture.snap || el.type === 'figure',
         })
         if (el.type === 'polyline' || el.type === 'draw') {
           return { ...el, points: scalePoints(el.points, gesture.box0, box), transform }
@@ -592,7 +594,8 @@ export function InteractiveBoard() {
     } else if (g.kind === 'resize') {
       const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, clampToCanvas(g.current), MIN_SIZE, {
         fromCenter: g.alt,
-        proportional: g.snap,
+        // Figures keep their SVG aspect ratio, so the frame always matches it.
+        proportional: g.snap || el.type === 'figure',
       })
       if (el.type === 'polyline' || el.type === 'draw') {
         updateElements([
@@ -635,6 +638,30 @@ export function InteractiveBoard() {
   }
   const snapGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
 
+  // Drag-and-drop a figure from the palette: allow the drop, then place it at the
+  // cursor (clamped to the canvas).
+  function onDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (e.dataTransfer.types.includes(FIGURE_DND_MIME)) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+    }
+  }
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    const raw = e.dataTransfer.getData(FIGURE_DND_MIME)
+    if (!raw) return
+    e.preventDefault()
+    const svg = svgRef.current
+    if (!svg) return
+    let d: FigureDragData
+    try {
+      d = JSON.parse(raw) as FigureDragData
+    } catch {
+      return
+    }
+    const c = clampToCanvas(clientToBoard(svg, e.clientX, e.clientY))
+    createFigure(buildFigureElement(d, c.x, c.y))
+  }
+
   // Group frame box (padded for display) for a multi-selection — the interactive
   // group resize/rotate chrome is drawn on it.
   const groupUnion = liveSelected.length >= 2 ? unionBounds(liveSelected) : null
@@ -651,6 +678,8 @@ export function InteractiveBoard() {
       onPointerDown={onContainerPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       <BoardCanvas
         doc={doc}

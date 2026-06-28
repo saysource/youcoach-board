@@ -1,11 +1,15 @@
-import { useState } from 'react'
-import { X, Sparkles, Maximize, Minimize, Pin, PinOff, ChevronDown, Check, type LucideIcon } from 'lucide-react'
-import { BOARD_WIDTH, BOARD_HEIGHT, IDENTITY_TRANSFORM, type BoardElement } from '@youcoach-board/core'
+import { useRef, useState } from 'react'
+import { X, Sparkles, Maximize, Minimize, Pin, PinOff, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, type LucideIcon } from 'lucide-react'
+import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
-import { useAssets, type CatalogCategory, type CatalogFigure } from '../lib/assets'
+import { useAssets, buildFigureElement, FIGURE_DND_MIME, type CatalogCategory, type CatalogFigure, type FigureDragData } from '../lib/assets'
 import { useEditorStore } from '../store/context'
+
+const FACING_ORDER = ['left', 'up', 'down', 'right']
+const FACING_ICON: Record<string, LucideIcon> = { left: ArrowLeft, up: ArrowUp, down: ArrowDown, right: ArrowRight }
 
 interface LibraryDrawerProps {
   open: boolean
@@ -28,54 +32,63 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
 
   const [catId, setCatId] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(false)
-  const [action, setAction] = useState('all')
   const [facing, setFacing] = useState<string | null>(null)
+  // Flash a section title when jumped to. `n` bumps each jump to replay the CSS
+  // animation (via the title's key) even when re-selecting the same section.
+  const [flash, setFlash] = useState({ id: '', n: 0 })
+  const gridRef = useRef<HTMLDivElement | null>(null)
 
   // Default to the first category once the catalog loads.
   if (catalog && catId === null) setCatId(catalog.groups[0]?.categories[0] ?? null)
   const cat: CatalogCategory | null = catId && catalog ? (catalog.categories[catId] ?? null) : null
 
-  // Reset facet selections when the category changes (render-phase, no effect).
+  // Reset the facing selection when the category changes (render-phase, no effect).
   const [facetCat, setFacetCat] = useState<string | null>(null)
   if (catId !== facetCat) {
     setFacetCat(catId)
-    setAction('all')
     setFacing(cat?.facets?.facing?.[0]?.id ?? null)
   }
 
-  const figures = (cat?.figures ?? []).filter((f) => {
-    if (cat?.facets?.facing && facing && (f.facing ?? null) !== facing) return false
-    if (action !== 'all' && !(f.actions ?? []).includes(action)) return false
-    return true
-  })
+  // Facing buttons (arrow-ordered) and action sections. Every action shows as a
+  // titled section; only the facing filter (if any) narrows the figures.
+  const actions = cat?.facets?.action ?? null
+  const facings = cat?.facets?.facing ? [...cat.facets.facing].sort((a, b) => FACING_ORDER.indexOf(a.id) - FACING_ORDER.indexOf(b.id)) : null
+  const inFacing = (f: CatalogFigure) => !facings || !facing || (f.facing ?? null) === facing
+  const sections = actions
+    ? actions.map((a) => ({ id: a.id, label: a.label, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && (f.actions ?? []).includes(a.id)) })).filter((sec) => sec.figures.length)
+    : [{ id: 'all', label: '', figures: (cat?.figures ?? []).filter(inFacing) }]
 
+  function jumpTo(id: string) {
+    gridRef.current?.querySelector(`[data-section="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setFlash((f) => ({ id, n: f.n + 1 }))
+  }
+
+  // Drag payload / drop descriptor for a figure (resolved colors from the
+  // category, so the board needn't know the source category).
+  function descriptor(f: CatalogFigure): FigureDragData | null {
+    if (!cat || cat.kind !== 'figure' || !catalog || !f.svg) return null
+    return { figureId: f.svg, w: f.w, h: f.h, mirror: !!f.mirror, colors: cat.colors ? { ...catalog.defaults[cat.colors] } : undefined }
+  }
+
+  // Click-to-drop: place centered on the board.
   function drop(f: CatalogFigure) {
-    if (!cat || cat.kind !== 'figure' || !catalog) return
-    const colors = cat.colors ? { ...catalog.defaults[cat.colors] } : undefined
-    const el: BoardElement = {
-      id: crypto.randomUUID(),
-      type: 'figure',
-      figureId: f.svg,
-      x: Math.round(BOARD_WIDTH / 2 - f.w / 2),
-      y: Math.round(BOARD_HEIGHT / 2 - f.h / 2),
-      width: f.w,
-      height: f.h,
-      mirror: f.mirror || undefined,
-      colors,
-      transform: { ...IDENTITY_TRANSFORM },
-      stroke: '#1e1e1e',
-      strokeWidth: 3,
-      strokeStyle: 'solid',
-      fill: 'transparent',
-    }
-    createFigure(el)
+    const d = descriptor(f)
+    if (d) createFigure(buildFigureElement(d, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
+  }
+
+  // Drag-to-drop: hand the descriptor to the board, which places it at the cursor.
+  function onDragStartFigure(e: React.DragEvent, f: CatalogFigure) {
+    const d = descriptor(f)
+    if (!d) return
+    e.dataTransfer.setData(FIGURE_DND_MIME, JSON.stringify(d))
+    e.dataTransfer.effectAllowed = 'copy'
   }
 
   return (
     <aside
       aria-hidden={!open}
       className={cn(
-        'pointer-events-auto absolute inset-y-0 right-0 z-20 flex w-72 flex-col border-l border-border bg-card transition-transform duration-200',
+        'pointer-events-auto absolute inset-y-0 right-0 z-20 flex w-72 flex-col border-l border-border bg-card/90 transition-transform duration-200',
         pinned ? 'shadow-none' : 'shadow-xl',
         open ? 'translate-x-0' : 'translate-x-full',
       )}
@@ -101,12 +114,33 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
         <div className="p-3 text-sm text-muted-foreground">Loading library…</div>
       ) : (
         <>
-          {/* Category selector */}
-          <div className="border-b border-border p-2">
-            <Button variant="outline" size="sm" aria-expanded={listOpen} onClick={() => setListOpen((v) => !v)} className="w-full justify-between font-normal">
+          {/* Category selector + the sub-categories (actions) jump dropdown. */}
+          <div className="flex items-center gap-1 border-b border-border p-2">
+            <Button variant="outline" size="sm" aria-expanded={listOpen} onClick={() => setListOpen((v) => !v)} className="flex-1 justify-between font-normal">
               <span className="truncate">{cat?.name ?? 'Select category'}</span>
               <ChevronDown className={cn('transition-transform', listOpen && 'rotate-180')} />
             </Button>
+            {!listOpen && actions && actions.length > 1 && (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon-sm" aria-label="Jump to type">
+                        <List />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Jump to…</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
+                  {actions.map((a) => (
+                    <DropdownMenuItem key={a.id} onSelect={() => jumpTo(a.id)}>
+                      {a.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           {listOpen ? (
@@ -114,7 +148,7 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
             <div className="flex-1 overflow-y-auto">
               {catalog.groups.map((g) => (
                 <div key={g.id}>
-                  <div className="sticky top-0 z-10 mt-4 bg-foreground/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{g.name}</div>
+                  <div className="sticky top-0 z-10 mt-4 bg-foreground/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm2">{g.name}</div>
                   {g.categories.map((id) => {
                     const selected = id === catId
                     return (
@@ -136,55 +170,64 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
               ))}
             </div>
           ) : (
-            /* Selected category's palette: facet filters + thumbnail grid. */
+            /* Selected category's palette: facing (arrows), then a thumbnail
+               grid split into a titled section per action. */
             <div className="flex flex-1 flex-col overflow-hidden">
-              {(cat?.facets?.action || cat?.facets?.facing) && (
-                <div className="flex flex-col gap-2 border-b border-border p-2">
-                  {cat.facets.action && (
-                    <select
-                      value={action}
-                      onChange={(e) => setAction(e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm outline-none"
-                    >
-                      <option value="all">All actions</option>
-                      {cat.facets.action.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {cat.facets.facing && (
-                    <div className="flex items-center gap-1">
-                      {cat.facets.facing.map((f) => (
-                        <button
-                          key={f.id}
-                          type="button"
-                          aria-pressed={facing === f.id}
-                          onClick={() => setFacing(f.id)}
-                          className={cn('flex-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent', facing === f.id && 'bg-primary/15 font-medium')}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              {facings && (
+                <div className="flex items-center gap-1 border-b border-border p-2">
+                  {facings.map((f) => {
+                    const Icon = FACING_ICON[f.id] ?? ArrowRight
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        aria-pressed={facing === f.id}
+                        title={f.label}
+                        onClick={() => setFacing(f.id)}
+                        className={cn('flex h-8 flex-1 items-center justify-center rounded-md border border-border hover:bg-accent [&_svg]:size-4', facing === f.id && 'bg-primary/15')}
+                      >
+                        <Icon />
+                      </button>
+                    )
+                  })}
                 </div>
               )}
 
-              <div className="grid flex-1 auto-rows-min grid-cols-3 gap-2 overflow-y-auto p-2">
-                {figures.map((f, i) => (
-                  <button
-                    key={`${f.thumb}-${i}`}
-                    type="button"
-                    title={cat?.name}
-                    onClick={() => drop(f)}
-                    className="flex aspect-square items-center justify-center border border-transparent rounded-md p-1 hover:border-primary hover:bg-primary/20"
-                  >
-                    <img src={url(f.thumb)} alt="" loading="lazy" className="max-h-full max-w-full object-contain" />
-                  </button>
+              <div ref={gridRef} className="flex-1 overflow-y-auto p-2 pt-0">
+                {sections.map((sec) => (
+                  <div key={sec.id} data-section={sec.id}>
+                    {sec.label && (
+                      <div
+                        key={`t-${sec.id}-${sec.id === flash.id ? flash.n : 0}`}
+                        className={cn(
+                          'sticky top-0 z-10 -mx-2 mb-1 bg-foreground/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm first:mt-0',
+                          sec.id === flash.id && 'ycb-flash',
+                        )}
+                      >
+                        {sec.label}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-2 mb-3 last:mb-0">
+                      {sec.figures.map((f, i) => (
+                        <button
+                          key={`${f.thumb}-${i}`}
+                          type="button"
+                          title={f.tool ? 'Text' : cat?.name}
+                          draggable={!!f.svg}
+                          onDragStart={(e) => onDragStartFigure(e, f)}
+                          onClick={() => drop(f)}
+                          className={cn(
+                            'flex aspect-square items-center justify-center rounded-md border border-transparent p-1 hover:border-primary hover:bg-primary/20',
+                            f.svg ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+                          )}
+                        >
+                          <img src={url(f.thumb)} alt="" loading="lazy" draggable={false} className="max-h-full max-w-full object-contain" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
-                {figures.length === 0 && <p className="col-span-3 px-1 py-6 text-center text-xs text-muted-foreground">No figures in this filter.</p>}
+                {sections.length === 0 && <p className="px-1 py-6 text-center text-xs text-muted-foreground">No figures here.</p>}
               </div>
             </div>
           )}

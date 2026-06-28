@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import { IDENTITY_TRANSFORM, type BoardElement } from '@youcoach-board/core'
 
 // Host-provided asset access (see specs/catalog.md). The board never hardcodes a
 // backend: the embedder says where figures/thumbnails/catalog live, and we
@@ -18,7 +19,8 @@ export interface AssetsConfig {
 
 // ── Catalog types (mirror catalog.json / gen-catalog.mjs) ──
 export interface CatalogFigure {
-  svg: string
+  /** Asset path to the SVG. Absent for app-managed `tool` entries (e.g. text). */
+  svg?: string
   thumb: string
   w: number
   h: number
@@ -27,6 +29,8 @@ export interface CatalogFigure {
   mirror?: boolean
   scale?: number
   color?: string
+  /** App-managed element (no SVG to place) — e.g. "text". The app creates it. */
+  tool?: string
 }
 export interface FacetValue {
   id: string
@@ -70,4 +74,38 @@ export function useAssets(): AssetsValue {
   const v = useContext(AssetsContext)
   if (!v) throw new Error('useAssets must be used within an AssetsProvider')
   return v
+}
+
+// ── Figure drag-and-drop (palette → board) ──
+/** dataTransfer MIME for a dragged catalog figure. */
+export const FIGURE_DND_MIME = 'application/x-ycb-figure'
+
+/** The minimal figure data carried in a palette drag (resolved colors included,
+ *  since the board doesn't know the source category). */
+export interface FigureDragData {
+  figureId: string
+  w: number
+  h: number
+  mirror: boolean
+  colors?: Record<string, string>
+}
+
+/** Build a placed FigureElement from a drag descriptor, centered at (cx, cy). */
+export function buildFigureElement(d: FigureDragData, cx: number, cy: number): BoardElement {
+  return {
+    id: crypto.randomUUID(),
+    type: 'figure',
+    figureId: d.figureId,
+    x: Math.round(cx - d.w / 2),
+    y: Math.round(cy - d.h / 2),
+    width: d.w,
+    height: d.h,
+    mirror: d.mirror || undefined,
+    colors: d.colors,
+    transform: { ...IDENTITY_TRANSFORM },
+    stroke: '#1e1e1e',
+    strokeWidth: 3,
+    strokeStyle: 'solid',
+    fill: 'transparent',
+  }
 }
