@@ -8,6 +8,7 @@ import { useEditorStore } from '../../store/context'
 import type { Breakpoint } from '../../lib/use-breakpoint'
 import { PropertyControls, Swatches } from './PropertyControls'
 import { usePropertyEditing } from './usePropertyEditing'
+import { SubjectHeader } from './SubjectHeader'
 import { STROKE_COLORS, BG_COLORS } from './palettes'
 
 const isTransparent = (c?: string) => !c || c === 'transparent'
@@ -24,36 +25,51 @@ export function PropertiesPanel({ mode }: { mode: Breakpoint }) {
 }
 
 function FullPanel() {
-  const { count } = usePropertyEditing()
+  const { editable, count } = usePropertyEditing()
   return (
     <div className="pointer-events-auto absolute left-2 top-16 z-30 max-h-[calc(100%-7rem)] w-52 overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-lg">
-      {count === 0 ? (
-        <p className="px-1 py-8 text-center text-xs text-muted-foreground">No elements selected</p>
-      ) : (
+      <SubjectHeader />
+      {editable ? (
         <>
-          <PropertyControls />
-          <div className="mt-3 flex items-center gap-1 border-t border-border pt-2">
-            <ActionButton icon={Copy} label="Duplicate" disabled />
-            <DeleteButton />
+          <div className="mt-3 border-t border-border pt-3">
+            <PropertyControls />
           </div>
+          {count > 0 && (
+            <div className="mt-3 flex items-center gap-1 border-t border-border pt-2">
+              <ActionButton icon={Copy} label="Duplicate" disabled />
+              <DeleteButton />
+            </div>
+          )}
         </>
+      ) : (
+        <p className="px-1 pt-3 text-xs text-muted-foreground">No elements selected</p>
       )}
     </div>
   )
 }
 
 function CompactPanel() {
-  const { values, hasClosed, setStroke, setFill } = usePropertyEditing()
+  const { editable, count, values, hasClosed, setStroke, setFill } = usePropertyEditing()
   return (
     <div className="pointer-events-auto absolute left-3 top-16 z-30 flex flex-col items-center gap-1 rounded-xl border border-border bg-card p-1.5 shadow-lg">
-      {hasClosed && (
-        <ColorButton icon={Palette} label="Background" colors={BG_COLORS} value={values.fill} onChange={setFill} side="right" />
+      <SubjectHeader compact />
+      {editable && (
+        <>
+          <span className="my-0.5 h-px w-6 bg-border" />
+          {hasClosed && (
+            <ColorButton icon={Palette} label="Background" colors={BG_COLORS} value={values.fill} onChange={setFill} side="right" />
+          )}
+          <ColorButton icon={PenLine} label="Stroke" colors={STROKE_COLORS} value={values.stroke} onChange={setStroke} side="right" />
+          <SettingsButton side="right" />
+        </>
       )}
-      <ColorButton icon={PenLine} label="Stroke" colors={STROKE_COLORS} value={values.stroke} onChange={setStroke} side="right" />
-      <SettingsButton side="right" />
-      <span className="my-0.5 h-px w-6 bg-border" />
-      <ActionButton icon={Copy} label="Duplicate" disabled />
-      <DeleteButton />
+      {count > 0 && (
+        <>
+          <span className="my-0.5 h-px w-6 bg-border" />
+          <ActionButton icon={Copy} label="Duplicate" disabled />
+          <DeleteButton />
+        </>
+      )}
     </div>
   )
 }
@@ -62,7 +78,7 @@ function CompactPanel() {
 // two translucent clusters: selection properties on the left, and undo/redo
 // (always) + copy/delete (when selected) on the right.
 export function MobileBar() {
-  const { count, values, hasClosed, setStroke, setFill } = usePropertyEditing()
+  const { editable, count, values, hasClosed, setStroke, setFill } = usePropertyEditing()
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.pointer >= 0)
@@ -71,13 +87,13 @@ export function MobileBar() {
   return (
     <div className="pointer-events-none absolute inset-x-2 bottom-16 z-30 flex items-center justify-between gap-2">
       <div className="pointer-events-auto flex items-center gap-1">
-        {selected && hasClosed && (
+        {editable && hasClosed && (
           <ColorButton icon={Palette} label="Background" colors={BG_COLORS} value={values.fill} onChange={setFill} side="top" small translucent />
         )}
-        {selected && (
+        {editable && (
           <ColorButton icon={PenLine} label="Stroke" colors={STROKE_COLORS} value={values.stroke} onChange={setStroke} side="top" small translucent />
         )}
-        {selected && <SettingsButton side="top" small translucent />}
+        {editable && <SettingsButton side="top" small translucent />}
       </div>
       <div className="pointer-events-auto flex items-center gap-1">
         <ActionButton icon={Undo2} label="Undo" small translucent onClick={undo} disabled={!canUndo} />

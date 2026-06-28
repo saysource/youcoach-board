@@ -5,6 +5,7 @@ import {
   getElementBounds,
   getLocalBounds,
   normalizeBox,
+  type ArrowTip,
   type BoardElement,
   type ElementTransform,
   type Box,
@@ -14,11 +15,15 @@ import { isCreationTool } from '../store/editorStore'
 import {
   clientToBoard,
   makeFigure,
+  makeLine,
   makePolyline,
+  makeDraw,
+  applyFigureStyle,
   isDragSignificant,
   boxesIntersect,
   boxContains,
   toolElementType,
+  toolEndTip,
   MIN_DRAG,
   type DraftType,
   type Point,
@@ -31,6 +36,7 @@ const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
 const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-canvas
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
 const SNAP_PX = 8 // on-screen snap radius for shift-aligning a polyline vertex
+const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
 
 interface SnapGuide {
   x1: number
@@ -43,12 +49,16 @@ interface Draft {
   type: DraftType
   start: Point
   current: Point
+  // For 'line' drafts: the end arrow tip (arrow tool → 'arrow').
+  endTip: ArrowTip
 }
 
 // In-progress polyline: committed vertices plus the live cursor (preview seg).
+// `endTip` carries the tool's arrow tip onto the finished open polyline.
 interface PolyDraft {
   points: Point[]
   cursor: Point
+  endTip: ArrowTip
 }
 
 // A move can drag several elements at once (group move). We snapshot each
@@ -60,9 +70,10 @@ interface MoveState {
   origins: Record<string, ElementTransform>
 }
 
-// A resize / rotate / line-endpoint / polyline-vertex gesture on one element.
+// A resize / rotate / polyline-vertex gesture on one element. (A straight line's
+// endpoints are just its two polyline vertices, so they use the 'point' kind.)
 interface Gesture {
-  kind: 'resize' | 'rotate' | 'endpoint' | 'point'
+  kind: 'resize' | 'rotate' | 'point'
   id: string
   handle: HandleId
   box0: Box
@@ -88,7 +99,8 @@ interface Marquee {
 //   - drag empty space → marquee-select (live; direction = contain vs touch);
 //   - drag a selected element → group move (one undo step);
 //   - drag a corner handle → resize (anchored at the opposite corner, even when
-//     rotated); drag the top circle → rotate; drag a line endpoint → reshape.
+//     rotated); drag the top circle → rotate; drag a polyline vertex (a straight
+//     line's endpoints are its two vertices) → reshape.
 export function InteractiveBoard() {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
@@ -96,6 +108,7 @@ export function InteractiveBoard() {
   const setSelection = useEditorStore((s) => s.setSelection)
   const createFigure = useEditorStore((s) => s.createFigure)
   const updateElements = useEditorStore((s) => s.updateElements)
+  const toolDefaults = useEditorStore((s) => s.toolDefaults)
 
   const svgRef = useRef<SVGSVGElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -104,6 +117,8 @@ export function InteractiveBoard() {
   const [gesture, setGesture] = useState<Gesture | null>(null)
   const [marquee, setMarquee] = useState<Marquee | null>(null)
   const [polyDraft, setPolyDraft] = useState<PolyDraft | null>(null)
+  // In-progress freehand stroke: the captured points (board coords).
+  const [freeDraft, setFreeDraft] = useState<Point[] | null>(null)
   // Screen pixels per board unit (CTM x-scale); selection chrome divides by it
   // to stay a constant on-screen size. Recomputed when the SVG resizes.
   const [scale, setScale] = useState(1)
@@ -121,12 +136,12 @@ export function InteractiveBoard() {
     return () => ro.disconnect()
   }, [])
 
-  // Abandon any in-progress polyline if the user switches tools (React's
-  // "adjust state when a value changes during render" pattern — no effect).
+  // Abandon any in-progress polyline if the user leaves the line/arrow tools
+  // (React's "adjust state when a value changes during render" pattern).
   const [polyTool, setPolyTool] = useState(activeTool)
   if (polyTool !== activeTool) {
     setPolyTool(activeTool)
-    if (polyDraft && activeTool !== 'polyline') setPolyDraft(null)
+    if (polyDraft && activeTool !== 'line' && activeTool !== 'arrow') setPolyDraft(null)
   }
 
   // ESC ends a polyline open (capture phase + stopPropagation so the shell's
@@ -137,12 +152,12 @@ export function InteractiveBoard() {
       if (e.key !== 'Escape') return
       e.preventDefault()
       e.stopPropagation()
-      if (polyDraft.points.length >= 2) createFigure(makePolyline(crypto.randomUUID(), polyDraft.points, false))
+      if (polyDraft.points.length >= 2) createFigure(applyFigureStyle(makePolyline(crypto.randomUUID(), polyDraft.points, false, 'none', polyDraft.endTip), toolDefaults))
       setPolyDraft(null)
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [polyDraft, createFigure])
+  }, [polyDraft, createFigure, toolDefaults])
 
   const creating = isCreationTool(activeTool)
   const selectedSet = new Set(selectedIds)
@@ -240,14 +255,10 @@ export function InteractiveBoard() {
           fromCenter: gesture.alt,
           proportional: gesture.snap,
         })
-        if (el.type === 'polyline') {
+        if (el.type === 'polyline' || el.type === 'draw') {
           return { ...el, points: scalePoints(el.points, gesture.box0, box), transform }
         }
         return { ...el, x: box.x, y: box.y, width: box.width, height: box.height, transform } as BoardElement
-      }
-      if (gesture.kind === 'endpoint' && el.type === 'line') {
-        const lp = boardToElement(clampToCanvas(gesture.current), gesture.box0, gesture.t0)
-        return gesture.handle === 'start' ? { ...el, x1: lp.x, y1: lp.y } : { ...el, x2: lp.x, y2: lp.y }
       }
       if (gesture.kind === 'point' && el.type === 'polyline') {
         const i = Number(gesture.handle.slice('point-'.length))
@@ -278,7 +289,8 @@ export function InteractiveBoard() {
   function finishPolyline(closed: boolean) {
     if (!polyDraft) return
     if (polyDraft.points.length >= (closed ? 3 : 2)) {
-      createFigure(makePolyline(crypto.randomUUID(), polyDraft.points, closed))
+      // Closed polygons carry no tips; an open polyline keeps the tool's end tip.
+      createFigure(applyFigureStyle(makePolyline(crypto.randomUUID(), polyDraft.points, closed, 'none', closed ? 'none' : polyDraft.endTip), toolDefaults))
     }
     setPolyDraft(null)
   }
@@ -288,15 +300,25 @@ export function InteractiveBoard() {
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
 
-    // Polyline: click-to-add-vertices (finishing is handled by the end dots/ESC).
-    if (activeTool === 'polyline') {
-      setPolyDraft((d) => (d ? { ...d, points: [...d.points, p] } : { points: [p], cursor: p }))
+    // Freehand: start capturing a stroke (points appended on move).
+    if (activeTool === 'draw') {
+      setFreeDraft([clampToCanvas(p)])
+      containerRef.current?.setPointerCapture(e.pointerId)
+      return
+    }
+
+    // Already mid-polyline (entered by a click with the line/arrow tool):
+    // each further click drops a vertex; finishing is via the end dots / ESC.
+    if (polyDraft) {
+      setPolyDraft((d) => (d ? { ...d, points: [...d.points, p] } : d))
       return
     }
 
     const type = toolElementType(activeTool)
     if (type) {
-      setDraft({ type, start: p, current: p })
+      // line/arrow start as a 'line' draft: a drag → straight line, a click →
+      // multi-point polyline (resolved on pointer-up). rect/ellipse → box draft.
+      setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool) })
       containerRef.current?.setPointerCapture(e.pointerId)
     } else {
       setMarquee({ start: p, current: p, additive: e.shiftKey, base: selectedIds })
@@ -348,14 +370,7 @@ export function InteractiveBoard() {
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
-    const kind: Gesture['kind'] =
-      handle === 'rotate'
-        ? 'rotate'
-        : handle === 'start' || handle === 'end'
-          ? 'endpoint'
-          : handle.startsWith('point-')
-            ? 'point'
-            : 'resize'
+    const kind: Gesture['kind'] = handle === 'rotate' ? 'rotate' : handle.startsWith('point-') ? 'point' : 'resize'
     const p = clientToBoard(svg, e.clientX, e.clientY)
     setGesture({ kind, id: el.id, handle, box0: getLocalBounds(el), t0: el.transform, start: p, current: p, snap: e.shiftKey, alt: e.altKey })
     containerRef.current?.setPointerCapture(e.pointerId)
@@ -365,7 +380,16 @@ export function InteractiveBoard() {
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
-    if (polyDraft) setPolyDraft((d) => (d ? { ...d, cursor: p } : d))
+    if (freeDraft) {
+      const cp = clampToCanvas(p)
+      setFreeDraft((pts) => {
+        if (!pts) return pts
+        // Skip near-duplicate samples so the point list stays manageable.
+        const last = pts[pts.length - 1]
+        if (Math.hypot(cp.x - last.x, cp.y - last.y) < FREEHAND_MIN_STEP) return pts
+        return [...pts, cp]
+      })
+    } else if (polyDraft) setPolyDraft((d) => (d ? { ...d, cursor: p } : d))
     else if (draft) setDraft((d) => (d ? { ...d, current: p } : d))
     else if (gesture) setGesture((g) => (g ? { ...g, current: p, snap: e.shiftKey, alt: e.altKey } : g))
     else if (move) setMove((m) => (m ? { ...m, current: p } : m))
@@ -381,10 +405,25 @@ export function InteractiveBoard() {
     if (containerRef.current?.hasPointerCapture?.(e.pointerId)) {
       containerRef.current.releasePointerCapture(e.pointerId)
     }
-    if (draft) {
-      const { type, start, current } = draft
+    if (freeDraft) {
+      const pts = freeDraft
+      setFreeDraft(null)
+      // Need at least a short stroke (≥2 distinct points) to keep it.
+      if (pts.length >= 2) createFigure(applyFigureStyle(makeDraw(crypto.randomUUID(), pts), toolDefaults))
+    } else if (draft) {
+      const { type, start, current, endTip } = draft
       setDraft(null)
-      if (isDragSignificant(type, start, current)) createFigure(makeFigure(type, crypto.randomUUID(), start, current))
+      if (type === 'line') {
+        if (isDragSignificant('line', start, current)) {
+          // A real drag → a straight line (2-point polyline, end-tipped if arrow).
+          createFigure(applyFigureStyle(makeLine(crypto.randomUUID(), start, current, endTip), toolDefaults))
+        } else {
+          // A click → switch to multi-point polyline mode, seeded with this point.
+          setPolyDraft({ points: [start], cursor: current, endTip })
+        }
+      } else if (isDragSignificant(type, start, current)) {
+        createFigure(applyFigureStyle(makeFigure(type, crypto.randomUUID(), start, current), toolDefaults))
+      }
     } else if (gesture) {
       const g = gesture
       setGesture(null)
@@ -423,7 +462,7 @@ export function InteractiveBoard() {
         fromCenter: g.alt,
         proportional: g.snap,
       })
-      if (el.type === 'polyline') {
+      if (el.type === 'polyline' || el.type === 'draw') {
         updateElements([
           { id: g.id, before: { points: el.points, transform: g.t0 }, after: { points: scalePoints(el.points, g.box0, box), transform } },
         ])
@@ -436,11 +475,6 @@ export function InteractiveBoard() {
           },
         ])
       }
-    } else if (g.kind === 'endpoint' && el.type === 'line') {
-      const lp = boardToElement(clampToCanvas(g.current), g.box0, g.t0)
-      const before = g.handle === 'start' ? { x1: el.x1, y1: el.y1 } : { x2: el.x2, y2: el.y2 }
-      const after = g.handle === 'start' ? { x1: lp.x, y1: lp.y } : { x2: lp.x, y2: lp.y }
-      updateElements([{ id: g.id, before, after }])
     } else if (g.kind === 'point' && el.type === 'polyline') {
       const i = Number(g.handle.slice('point-'.length))
       const { lp } = resolvePointDrag(g)
@@ -469,11 +503,11 @@ export function InteractiveBoard() {
         overlay={
           <>
             {/* Whole-bounding-box grab areas (rotated polygon) for moving. Drawn
-                under the handles so handles win the pointer. Skipped for lines,
-                which are grabbed by their own stroke. */}
+                under the handles so handles win the pointer. Skipped for straight
+                lines (2-point polylines), which are grabbed by their own stroke. */}
             {!creating &&
               liveSelected.map((el) =>
-                el.type === 'line' ? null : (
+                el.type === 'polyline' && el.points.length === 2 ? null : (
                   <polygon
                     key={`hit-${el.id}`}
                     points={polyPoints(el)}
@@ -525,11 +559,19 @@ export function InteractiveBoard() {
                 pointerEvents="none"
               />
             ))}
-            {draft && <ElementView element={makeFigure(draft.type, 'draft', draft.start, draft.current)} />}
+            {freeDraft && freeDraft.length >= 1 && (
+              <ElementView element={applyFigureStyle(makeDraw('draw-draft', freeDraft), toolDefaults)} />
+            )}
+            {draft &&
+              (draft.type === 'line' ? (
+                <ElementView element={applyFigureStyle(makeLine('draft', draft.start, draft.current, draft.endTip), toolDefaults)} />
+              ) : (
+                <ElementView element={applyFigureStyle(makeFigure(draft.type, 'draft', draft.start, draft.current), toolDefaults)} />
+              ))}
             {polyDraft && (
               <>
                 {/* Live preview: placed segments + the segment to the cursor. */}
-                <ElementView element={makePolyline('poly-draft', [...polyDraft.points, polyDraft.cursor], false)} />
+                <ElementView element={applyFigureStyle(makePolyline('poly-draft', [...polyDraft.points, polyDraft.cursor], false, 'none', polyDraft.endTip), toolDefaults)} />
                 {/* First dot → close; last dot → end open. Hover bounce via CSS. */}
                 <circle
                   className="ycb-poly-end"

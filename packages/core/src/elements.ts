@@ -10,11 +10,13 @@
 //     coordinates stay put. This is what makes keyframe animation (which will
 //     interpolate the transform over time) clean, and lets one "move" operation
 //     touch the same two attributes for every element type.
-//   - Geometry is type-specific (box for rect/ellipse, endpoints for line, and
-//     later svg/points/text for figures, polygons and labels).
+//   - Geometry is type-specific (box for rect/ellipse, points for polyline, and
+//     later svg/text for figures and labels).
 //
-// Phase 2 ships rect / ellipse / line; new element types slot in by extending
-// the union + adding a case to ElementView and the parser.
+// Lines and arrows are NOT their own types: they are the 2-point case of a
+// polyline (with optional arrow tips), so one element/gesture/render path covers
+// straight lines, multi-segment paths, arrows and closed polygons. New element
+// types slot in by extending the union + a case in ElementView and the parser.
 
 /** Placement of an element — the animatable part, applied on top of geometry. */
 export interface ElementTransform {
@@ -31,9 +33,13 @@ export interface ElementTransform {
 
 export const IDENTITY_TRANSFORM: ElementTransform = { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1 }
 
-export type ElementType = 'rect' | 'ellipse' | 'line' | 'polyline'
+export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw'
 
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
+
+/** Arrow tip drawn at a polyline endpoint. Extensible (triangle/circle/bar…);
+ *  for now a plain filled arrowhead or none. Only meaningful on OPEN polylines. */
+export type ArrowTip = 'none' | 'arrow'
 
 interface BaseElement {
   id: string
@@ -73,23 +79,27 @@ export interface EllipseElement extends BaseElement {
   height: number
 }
 
-export interface LineElement extends BaseElement {
-  type: 'line'
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-}
-
-/** A multi-point line. `closed` joins the last point back to the first (and the
- *  shape can be filled). Points are in local coordinates. */
+/** A point sequence (≥2 points). The 2-point case is a straight line; with arrow
+ *  tips it's an arrow. `closed` (only with ≥3 points) joins last→first into a
+ *  fillable polygon. Tips apply at the first/last point of an OPEN polyline.
+ *  Points are in local coordinates. */
 export interface PolylineElement extends BaseElement {
   type: 'polyline'
   points: Array<[number, number]>
   closed: boolean
+  startTip: ArrowTip
+  endTip: ArrowTip
 }
 
-export type BoardElement = RectElement | EllipseElement | LineElement | PolylineElement
+/** A freehand stroke: a dense point path, always open and unfilled, rendered
+ *  smoothed. Like a polyline but with no per-vertex editing — it's selected and
+ *  transformed (move/resize/rotate) as a whole. */
+export interface DrawElement extends BaseElement {
+  type: 'draw'
+  points: Array<[number, number]>
+}
+
+export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement
 
 export interface Box {
   x: number
@@ -110,8 +120,7 @@ export function normalizeBox(ax: number, ay: number, bx: number, by: number): Bo
 
 /** The element's bounding box in its OWN coordinates, ignoring the transform. */
 export function getLocalBounds(el: BoardElement): Box {
-  if (el.type === 'line') return normalizeBox(el.x1, el.y1, el.x2, el.y2)
-  if (el.type === 'polyline') {
+  if (el.type === 'polyline' || el.type === 'draw') {
     if (el.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
     const xs = el.points.map((p) => p[0])
     const ys = el.points.map((p) => p[1])
@@ -180,12 +189,13 @@ export function parseElement(raw: unknown): BoardElement | null {
     return { ...base, type: o.type, x, y, width, height }
   }
   if (o.type === 'line') {
+    // Legacy: a 2-point line is now a 2-point (open, untipped) polyline.
     const x1 = num(o.x1)
     const y1 = num(o.y1)
     const x2 = num(o.x2)
     const y2 = num(o.y2)
     if (x1 === null || y1 === null || x2 === null || y2 === null) return null
-    return { ...base, type: 'line', x1, y1, x2, y2 }
+    return { ...base, type: 'polyline', points: [[x1, y1], [x2, y2]], closed: false, startTip: 'none', endTip: 'none' }
   }
   if (o.type === 'polyline') {
     if (!Array.isArray(o.points)) return null
@@ -198,7 +208,24 @@ export function parseElement(raw: unknown): BoardElement | null {
       points.push([x, y])
     }
     if (points.length < 2) return null
-    return { ...base, type: 'polyline', points, closed: o.closed === true }
+    return { ...base, type: 'polyline', points, closed: o.closed === true, startTip: parseTip(o.startTip), endTip: parseTip(o.endTip) }
+  }
+  if (o.type === 'draw') {
+    if (!Array.isArray(o.points)) return null
+    const points: Array<[number, number]> = []
+    for (const p of o.points) {
+      if (!Array.isArray(p)) return null
+      const x = num(p[0])
+      const y = num(p[1])
+      if (x === null || y === null) return null
+      points.push([x, y])
+    }
+    if (points.length < 2) return null
+    return { ...base, type: 'draw', points }
   }
   return null
+}
+
+function parseTip(v: unknown): ArrowTip {
+  return v === 'arrow' ? 'arrow' : 'none'
 }

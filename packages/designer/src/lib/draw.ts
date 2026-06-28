@@ -1,4 +1,4 @@
-import type { BoardElement, ElementType, Box } from '@youcoach-board/core'
+import type { ArrowTip, BoardElement, Box, StrokeStyle } from '@youcoach-board/core'
 import { normalizeBox, IDENTITY_TRANSFORM } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 
@@ -12,15 +12,67 @@ export const FIGURE_STROKE = '#111111'
 export const FIGURE_STROKE_WIDTH = 3
 export const FIGURE_FILL = 'transparent'
 
+/** The styling a newly-created element gets — the editable "next figure" defaults
+ *  shown in the properties panel before anything is selected, and the
+ *  last-used style after a create/edit. */
+export interface FigureStyle {
+  stroke: string
+  strokeWidth: number
+  strokeStyle: StrokeStyle
+  fill: string
+  opacity: number
+}
+
+export const DEFAULT_FIGURE_STYLE: FigureStyle = {
+  stroke: FIGURE_STROKE,
+  strokeWidth: FIGURE_STROKE_WIDTH,
+  strokeStyle: 'solid',
+  fill: FIGURE_FILL,
+  opacity: 1,
+}
+
+/** Read an element's style into a FigureStyle (e.g. to remember last-used). */
+export function figureStyleOf(el: BoardElement): FigureStyle {
+  return {
+    stroke: el.stroke,
+    strokeWidth: el.strokeWidth,
+    strokeStyle: el.strokeStyle,
+    fill: el.fill,
+    opacity: el.transform.opacity,
+  }
+}
+
+/** Overlay a FigureStyle onto an element (stroke/fill/… + transform opacity),
+ *  preserving its geometry. Used so drafts/creations adopt the tool defaults. */
+export function applyFigureStyle(el: BoardElement, st: FigureStyle): BoardElement {
+  return {
+    ...el,
+    stroke: st.stroke,
+    strokeWidth: st.strokeWidth,
+    strokeStyle: st.strokeStyle,
+    fill: st.fill,
+    transform: { ...el.transform, opacity: st.opacity },
+  } as BoardElement
+}
+
+/** Whether the figure a tool creates is a closed (fillable) shape — drives
+ *  whether the panel offers a Background color for the tool's future element. */
+export function toolCreatesClosed(tool: ToolId): boolean {
+  return tool === 'rectangle' || tool === 'ellipse'
+}
+
 /** Below this drag distance (board units) a press is treated as a click, not a
  *  figure — so a stray click with a creation tool doesn't drop a zero-size shape. */
 export const MIN_DRAG = 4
 
-export type DraftType = Extract<ElementType, 'rect' | 'ellipse' | 'line'>
+// What a drag with a creation tool drafts. 'line' isn't an element type — it's
+// the 2-point-polyline draft shared by the line and arrow tools (which on a mere
+// click instead start a multi-point polyline; see InteractiveBoard).
+export type DraftType = 'rect' | 'ellipse' | 'line'
 
-/** Map a toolbar tool id to the element type it creates, or null if the tool
- *  isn't a figure-creation tool. Note the deliberate 'rectangle' → 'rect'
- *  rename: tool ids are UI labels, element types are model names. */
+/** Map a toolbar tool id to what it drafts on drag, or null if not a creation
+ *  tool. Both line and arrow draft a 'line' (the arrow tip is added separately,
+ *  see toolEndTip). 'rectangle' → 'rect': tool ids are UI labels, not types. */
 export function toolElementType(tool: ToolId): DraftType | null {
   switch (tool) {
     case 'rectangle':
@@ -28,10 +80,16 @@ export function toolElementType(tool: ToolId): DraftType | null {
     case 'ellipse':
       return 'ellipse'
     case 'line':
+    case 'arrow':
       return 'line'
     default:
       return null
   }
+}
+
+/** The end arrow tip a creation tool gives its line/polyline. */
+export function toolEndTip(tool: ToolId): ArrowTip {
+  return tool === 'arrow' ? 'arrow' : 'none'
 }
 
 /** Map a screen (client) coordinate into board user-space via the SVG's CTM.
@@ -43,36 +101,51 @@ export function clientToBoard(svg: SVGSVGElement, clientX: number, clientY: numb
   return { x: p.x, y: p.y }
 }
 
-/** Build a figure from a drag (two corners). Used both for the live draft
- *  preview and the committed element. */
-export function makeFigure(type: DraftType, id: string, start: Point, current: Point): BoardElement {
-  const base = {
-    id,
-    transform: { ...IDENTITY_TRANSFORM },
-    stroke: FIGURE_STROKE,
-    strokeWidth: FIGURE_STROKE_WIDTH,
-    strokeStyle: 'solid' as const,
-    fill: FIGURE_FILL,
-  }
-  if (type === 'line') {
-    return { ...base, type: 'line', x1: start.x, y1: start.y, x2: current.x, y2: current.y }
-  }
+const figureBase = (id: string) => ({
+  id,
+  transform: { ...IDENTITY_TRANSFORM },
+  stroke: FIGURE_STROKE,
+  strokeWidth: FIGURE_STROKE_WIDTH,
+  strokeStyle: 'solid' as const,
+  fill: FIGURE_FILL,
+})
+
+/** Build a box figure (rect / ellipse) from a drag (two corners). Used for both
+ *  the live draft preview and the committed element. */
+export function makeFigure(type: 'rect' | 'ellipse', id: string, start: Point, current: Point): BoardElement {
   const box = normalizeBox(start.x, start.y, current.x, current.y)
-  return { ...base, type, ...box }
+  return { ...figureBase(id), type, ...box }
 }
 
-/** Build a polyline from clicked vertices (board coords). */
-export function makePolyline(id: string, points: Point[], closed: boolean): BoardElement {
+/** Build a straight line as a 2-point (open) polyline, optionally end-tipped. */
+export function makeLine(id: string, start: Point, current: Point, endTip: ArrowTip = 'none'): BoardElement {
+  return makePolyline(id, [start, current], false, 'none', endTip)
+}
+
+/** Build a polyline from vertices (board coords). */
+export function makePolyline(
+  id: string,
+  points: Point[],
+  closed: boolean,
+  startTip: ArrowTip = 'none',
+  endTip: ArrowTip = 'none',
+): BoardElement {
   return {
-    id,
+    ...figureBase(id),
     type: 'polyline',
-    transform: { ...IDENTITY_TRANSFORM },
-    stroke: FIGURE_STROKE,
-    strokeWidth: FIGURE_STROKE_WIDTH,
-    strokeStyle: 'solid',
-    fill: FIGURE_FILL,
     points: points.map((p) => [p.x, p.y] as [number, number]),
     closed,
+    startTip,
+    endTip,
+  }
+}
+
+/** Build a freehand stroke from captured points (board coords). */
+export function makeDraw(id: string, points: Point[]): BoardElement {
+  return {
+    ...figureBase(id),
+    type: 'draw',
+    points: points.map((p) => [p.x, p.y] as [number, number]),
   }
 }
 

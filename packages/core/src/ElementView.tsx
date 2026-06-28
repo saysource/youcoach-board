@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { BoardElement } from './elements'
 import { getLocalBounds, strokeDash } from './elements'
 
@@ -25,7 +26,26 @@ export function ElementView({ element }: { element: BoardElement }) {
   )
 }
 
+// A smoothed SVG path through freehand points: quadratic segments whose control
+// point is each sample and whose endpoints are the midpoints between samples —
+// a cheap, stable way to round off the polyline of captured points.
+function freehandPath(pts: Array<[number, number]>): string {
+  if (pts.length === 0) return ''
+  if (pts.length < 3) return `M ${pts.map((p) => `${p[0]},${p[1]}`).join(' L ')}`
+  let d = `M ${pts[0][0]},${pts[0][1]}`
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i][0] + pts[i + 1][0]) / 2
+    const my = (pts[i][1] + pts[i + 1][1]) / 2
+    d += ` Q ${pts[i][0]},${pts[i][1]} ${mx},${my}`
+  }
+  const last = pts[pts.length - 1]
+  d += ` L ${last[0]},${last[1]}`
+  return d
+}
+
 function Shape({ element }: { element: BoardElement }) {
+  // Unique per instance, so each element's arrow marker def doesn't collide.
+  const markerId = useId()
   const dash = strokeDash(element.strokeStyle, element.strokeWidth)
   // Dotted needs round caps to render as dots rather than vanishing.
   const cap = element.strokeStyle === 'dotted' ? 'round' : undefined
@@ -55,51 +75,62 @@ function Shape({ element }: { element: BoardElement }) {
     )
   }
 
-  if (element.type === 'polyline') {
-    const pts = element.points.map((p) => `${p[0]},${p[1]}`).join(' ')
+  if (element.type === 'draw') {
+    const d = freehandPath(element.points)
     const hit = Math.max(element.strokeWidth * 4, 16)
-    // A transparent fat companion widens the hit area; closed → polygon (fillable).
-    const Tag = element.closed ? 'polygon' : 'polyline'
     return (
       <g>
-        <Tag points={pts} stroke="transparent" strokeWidth={hit} fill={element.closed ? element.fill : 'none'} strokeLinecap="round" strokeLinejoin="round" />
-        <Tag
-          points={pts}
+        <path d={d} stroke="transparent" strokeWidth={hit} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d={d}
           stroke={element.stroke}
           strokeWidth={element.strokeWidth}
           strokeDasharray={dash}
-          fill={element.closed ? element.fill : 'none'}
-          strokeLinecap={element.strokeStyle === 'dotted' ? 'round' : 'round'}
+          fill="none"
+          strokeLinecap="round"
           strokeLinejoin="round"
         />
       </g>
     )
   }
 
-  // line — a transparent fat companion stroke widens the hit area so a thin
-  // line is still easy to click for selection.
+  // polyline — covers straight lines, multi-segment paths, arrows and (closed)
+  // polygons. A transparent fat companion stroke widens the hit area; arrow tips
+  // are drawn as a marker at the first/last point of an OPEN polyline.
+  const pts = element.points.map((p) => `${p[0]},${p[1]}`).join(' ')
+  const hit = Math.max(element.strokeWidth * 4, 16)
+  const Tag = element.closed ? 'polygon' : 'polyline'
+  const tips = !element.closed && (element.startTip === 'arrow' || element.endTip === 'arrow')
   return (
     <g>
-      <line
-        x1={element.x1}
-        y1={element.y1}
-        x2={element.x2}
-        y2={element.y2}
-        stroke="transparent"
-        strokeWidth={Math.max(element.strokeWidth * 4, 16)}
-        strokeLinecap="round"
-        fill="none"
-      />
-      <line
-        x1={element.x1}
-        y1={element.y1}
-        x2={element.x2}
-        y2={element.y2}
+      {tips && (
+        <defs>
+          {/* orient="auto-start-reverse" lets one marker serve both ends; sized
+              in stroke-width units so the arrowhead scales with the stroke. */}
+          <marker
+            id={markerId}
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth={5}
+            markerHeight={5}
+            orient="auto-start-reverse"
+          >
+            <path d="M0,0 L10,5 L0,10 z" fill={element.stroke} />
+          </marker>
+        </defs>
+      )}
+      <Tag points={pts} stroke="transparent" strokeWidth={hit} fill={element.closed ? element.fill : 'none'} strokeLinecap="round" strokeLinejoin="round" />
+      <Tag
+        points={pts}
         stroke={element.stroke}
         strokeWidth={element.strokeWidth}
         strokeDasharray={dash}
+        fill={element.closed ? element.fill : 'none'}
         strokeLinecap="round"
-        fill="none"
+        strokeLinejoin="round"
+        markerStart={tips && element.startTip === 'arrow' ? `url(#${markerId})` : undefined}
+        markerEnd={tips && element.endTip === 'arrow' ? `url(#${markerId})` : undefined}
       />
     </g>
   )

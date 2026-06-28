@@ -24,6 +24,8 @@ const BOARD_TOP_PAD = 40
 const BOARD_SIDE_PAD = 16
 // Left space reserved for the full panel: left-2 (8) + w-52 (208) + gap.
 const PANEL_RESERVE = 200
+// Right-side library drawer width (Tailwind w-72 = 18rem).
+const DRAWER_WIDTH = 288
 
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
@@ -53,7 +55,6 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.pointer >= 0)
   const canRedo = useEditorStore((s) => s.pointer < s.stack.length - 1)
-  const hasSelection = useEditorStore((s) => s.selectedIds.length > 0)
 
   // The root is also the Radix portal container, so menus/tooltips stay inside
   // our scoped, theme-aware subtree. Tracked in state so context updates on mount.
@@ -70,23 +71,27 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // otherwise the compact toolbar (which overlays minimally).
   const fullPanel = !mobile && width - canvasWidth >= PANEL_RESERVE
   const breakpoint: Breakpoint = mobile ? 'mobile' : fullPanel ? 'full' : 'compact'
-  const showPanel = hasSelection && !isCreationTool(activeTool)
-  // The full panel is a permanent fixture (shows an empty state with no
-  // selection); the compact panel only appears on selection. So reserve the
-  // left space — shifting the field right — whenever in full mode.
+  // The full panel is a permanent fixture, so reserve the left space (shifting
+  // the field right) whenever in full mode. The compact panel overlays instead.
   const reserveLeft = fullPanel
 
   // Field's rendered (height-driven) width within the current left reserve.
   const leftPad = reserveLeft ? PANEL_RESERVE : BOARD_SIDE_PAD
-  const fieldW = Math.min(Math.max(0, width - leftPad - BOARD_SIDE_PAD), innerH * BOARD_ASPECT)
+  const availWidth = Math.max(0, width - leftPad - BOARD_SIDE_PAD)
+  const fieldW = Math.min(availWidth, innerH * BOARD_ASPECT)
 
-  // When the drawer is OPEN as an overlay, lay the field out as if the container
-  // were only `leftPad + fieldW` wide: left-align it against the reserve and let
-  // all the freed width fall on the right, where the drawer floats. This removes
-  // the left margin and minimizes how much the drawer covers the field. A docked
+  // When the drawer is OPEN as an overlay, keep the field centered but pull its
+  // right edge no further than the drawer's left edge, so the drawer doesn't
+  // cover it — without ever pushing the field's left edge past the reserve. The
+  // upshot: wide containers don't move (already clear); mid widths slide left
+  // just enough to meet the drawer; widths too tight to fully clear it sit
+  // flush-left, minimizing BOTH the overlap and the unused space on the left.
+  // (We grow the right padding to shift the centered field left.) A docked
   // (pinned) drawer instead refits the board into the remaining width (right-72).
   const overlayOpen = drawerOpen && !drawerPinned
-  const boardPaddingRight = overlayOpen ? Math.max(BOARD_SIDE_PAD, width - leftPad - fieldW) : BOARD_SIDE_PAD
+  const naturalRight = leftPad + (availWidth + fieldW) / 2 // centered field's right edge
+  const targetRight = Math.max(leftPad + fieldW, Math.min(naturalRight, width - DRAWER_WIDTH))
+  const boardPaddingRight = overlayOpen ? Math.max(BOARD_SIDE_PAD, width + leftPad - 2 * targetRight + fieldW) : BOARD_SIDE_PAD
   const reserveRight = drawerOpen && drawerPinned
 
   // Keyboard: undo/redo, delete selection, escape to deselect / drop the tool.
@@ -162,9 +167,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             />
           </div>
 
-          {/* Properties panel: full is always present (empty when no selection);
-              compact appears only on selection. Mobile uses MobileBar below. */}
-          {!mobile && (fullPanel || showPanel) && <PropertiesPanel mode={breakpoint} />}
+          {/* Properties panel: always present (both the full and the compact
+              form), showing the selection's or the active tool's properties.
+              Mobile uses MobileBar below. */}
+          {!mobile && <PropertiesPanel mode={breakpoint} />}
 
           {/* Mobile: always-visible undo/redo (+ selection props/actions) above
               the bottom toolbar, as translucent floating buttons. */}

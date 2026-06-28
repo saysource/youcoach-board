@@ -13,7 +13,7 @@
 // testable; the Zustand editor store drives the stack + pointer.
 
 import type { BoardDoc } from './model'
-import type { BoardElement, ElementTransform } from './elements'
+import type { ArrowTip, BoardElement, ElementTransform } from './elements'
 
 /** A partial set of attributes to overwrite on an element. `transform` is
  *  replaced wholesale (the patch carries the full transform), so applying is a
@@ -29,11 +29,11 @@ export interface ElementPatch {
   y?: number
   width?: number
   height?: number
-  x1?: number
-  y1?: number
-  x2?: number
-  y2?: number
   points?: Array<[number, number]>
+  // Polyline shape options.
+  closed?: boolean
+  startTip?: ArrowTip
+  endTip?: ArrowTip
 }
 
 /** A single element's change within an `update` operation. */

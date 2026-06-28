@@ -1,7 +1,7 @@
 import { getLocalBounds, type BoardElement } from '@youcoach-board/core'
 import { elementToBoard, localCorners, type Pt, type CornerId } from '../lib/geometry-2d'
 
-export type HandleId = CornerId | 'rotate' | 'start' | 'end' | `point-${number}`
+export type HandleId = CornerId | 'rotate' | `point-${number}`
 
 const FRAME = 'var(--color-selection-frame)' // bounding-box outline + rotation arm
 const HANDLE = 'var(--color-selection-handle)' // resize / rotation / endpoint handles
@@ -25,21 +25,27 @@ interface Props {
 
 // Selection chrome for one element, drawn in board space so corner squares stay
 // upright (axis-aligned) even when the element is rotated — only the outline
-// rotates with it (the Excalidraw touch). Lines are the exception: no box, just
-// a circular handle at each endpoint.
+// rotates with it (the Excalidraw touch). A straight line (2-point polyline) is
+// the exception: no box, just a draggable handle at each endpoint.
 export function SelectionHandles({ element, scale, onHandleDown }: Props) {
   const interactive = !!onHandleDown
   const box = getLocalBounds(element)
   const t = element.transform
 
-  if (element.type === 'line') {
+  // 2-point polyline = a straight line: endpoint handles only, no frame.
+  if (element.type === 'polyline' && element.points.length === 2) {
     if (!interactive) return null // multi-select: nothing extra for a line
-    const p1 = elementToBoard({ x: element.x1, y: element.y1 }, box, t)
-    const p2 = elementToBoard({ x: element.x2, y: element.y2 }, box, t)
     return (
       <g>
-        <EndpointHandle at={p1} scale={scale} handle="start" onDown={(e) => onHandleDown!('start', e)} />
-        <EndpointHandle at={p2} scale={scale} handle="end" onDown={(e) => onHandleDown!('end', e)} />
+        {element.points.map((p, i) => (
+          <EndpointHandle
+            key={`pt-${i}`}
+            at={elementToBoard({ x: p[0], y: p[1] }, box, t)}
+            scale={scale}
+            handle={`point-${i}`}
+            onDown={(e) => onHandleDown!(`point-${i}`, e)}
+          />
+        ))}
       </g>
     )
   }

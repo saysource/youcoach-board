@@ -8,12 +8,14 @@ import {
   invertOperation,
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
+import { type FigureStyle, DEFAULT_FIGURE_STYLE, figureStyleOf } from '../lib/draw'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
- *  elements non-interactive, selection cleared). Note: polyline is click-based,
- *  not drag-based — see toolElementType for the drag-create subset. */
+ *  elements non-interactive, selection cleared). The line/arrow tools draft a
+ *  straight line on drag, or a multi-point polyline on click (see
+ *  InteractiveBoard); see toolElementType for the drag-create mapping. */
 export function isCreationTool(tool: ToolId): boolean {
-  return tool === 'rectangle' || tool === 'ellipse' || tool === 'line' || tool === 'polyline'
+  return tool === 'rectangle' || tool === 'ellipse' || tool === 'line' || tool === 'arrow' || tool === 'draw'
 }
 
 export interface EditorState {
@@ -25,6 +27,11 @@ export interface EditorState {
    *  otherwise the editor falls back to the selection tool, per the spec. */
   keepToolActive: boolean
 
+  /** Style for the next element to be created — editable in the properties panel
+   *  before anything is selected (so the user can pre-set stroke/fill/… ), and
+   *  refreshed to the last created/edited element's style. */
+  toolDefaults: FigureStyle
+
   // Undo/redo: a flat operation stack + a pointer to the last applied operation
   // (VA's model). Everything before/at `pointer` is "done"; everything after is
   // the redo branch, truncated on the next push.
@@ -33,6 +40,8 @@ export interface EditorState {
 
   setActiveTool: (tool: ToolId) => void
   toggleKeepTool: () => void
+  /** Merge changes into the next-element style defaults. */
+  setToolDefaults: (patch: Partial<FigureStyle>) => void
   /** Replace the current selection (pass [] to clear). */
   setSelection: (ids: string[]) => void
   /** Create a figure (records it on the undo stack), select it, and — unless
@@ -68,6 +77,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       activeTool: 'select',
       selectedIds: [],
       keepToolActive: false,
+      toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       stack: [],
       pointer: -1,
 
@@ -80,6 +90,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       toggleKeepTool: () => set((s) => ({ keepToolActive: !s.keepToolActive })),
 
+      setToolDefaults: (patch) => set((s) => ({ toolDefaults: { ...s.toolDefaults, ...patch } })),
+
       setSelection: (ids) => set({ selectedIds: ids }),
 
       createFigure: (element) => {
@@ -88,6 +100,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         set({
           selectedIds: [element.id],
           activeTool: keepToolActive ? activeTool : 'select',
+          // Remember the created element's style as the next-figure default.
+          toolDefaults: figureStyleOf(element),
         })
       },
 

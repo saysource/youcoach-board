@@ -164,6 +164,23 @@ When we will introduce pre-build svg based figure, we will keep the ratio of res
 The same will be for text.
 
 
+## Implement resize
+
+All figure showing the 4 handles can be resized. Please note that shapes (rectangle, circe, closed polylines) should not scale when resized, but the points needs to be recalculated.
+In case of complex figures (pre-made svg based figures) the element will keep its proportion (but we still don't have this type of figures).
+Also implement rotation for figures supporting it (which are all )
+
+## Canvas bounds
+
+elements can be moved and resize freely, but a piece of the figure should always remain inside the canvas, otherwise the user would loose that element, and we want prevent that. Also the elements (maybe not the selection frames) should not overflow the canvas size when drawn. It would probably be good to mark the border of the canvas (ligth 0.4 opacity kind of border, not rounded).
+
+## Polyline
+
+We want to implement a polyline element, which can be either closed or not.
+While creating the polyline, the user will click different points on the canvas.
+The first and the last points will have a circle. If the user click on one of the two circles (with a bounce animation of the circle on enter with the pointer), the line will end.
+If the user press ESC, the line ends open.
+
 
 # Elements
 
@@ -222,3 +239,79 @@ The file @specs/sample_old_json.json contains all the type of object we do suppo
 Currently all the resources are located in @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/yceditor/images/optimized/. For each type of figure we have a thumbnail (png) and the actual SVG file.
 
 
+## Properties panel and responsive design
+
+Let's work on the properties panel, which should show up when an element is selected.
+The properties panel allows to set element properties, suche as background color, stroke, stroke width, opacity, etc.
+
+Excalidraw does an incredible job in terms of responsive design, both for what concerns the properties panel and the overall economic of the toobars.
+
+In this task we will create the properties panel. We will just handle the following element properties:
+
+- background color (for closed shapes)
+- stroke color
+- Stroke width and style
+- Opacity
+
+The properties panel should show when an element is selected.
+
+On container >= 1180px, like Excalidraw does, we want to show a full panel.
+On container < 1180, the panel becomes a vertical toolbar which group properties in a limited set accessed via a button:
+ - background color (for closed shapes)
+ - stroke color
+ - settings (which opens a full panel with the main settings)
+ - other operations usually shown at the bottom of the panel
+
+On container < 768, we enter some sort of mobile mode: the toolbar goes to the bottom with a smaller set of operations and smaller icons,  just on top of this main toolbar, are shown the buttons to access the main properties of the element, instead of using the vertical toolbar, also on the right are shown the undo/redo buttons and the copy and delete icons, useful when no right click or keyboard is available.
+
+Implement this logic, leaving icons for which we still don't have requirements inactive.
+
+We will refine later all the individual properties we want to show in the properties panel and how to group them.
+
+
+- Add a separator after the Selection tool
+- replace the text tool icon with the PlayersIcon available here @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client/src/core/components/season-dashboard/icons.tsx
+- replace the image icon with the TrainingIcon available here @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client/src/core/components/season-dashboard/icons.tsx
+- Add a separator before the erase icon
+
+- The more tools icon should show a dropdown menu with the following items
+
+- Players (with the PlayersIcon)
+- Materials (with the TrainingIcon)
+- Shapes (with the icon defined here @assets/shapes.svg , which must be trasfromed in a Lucide kind of icon)
+- Arrows (Lucide move-right icon)
+- Discs (with the icon defined here @assets/disc.svg , which must be trasfromed in a Lucide kind of icon)
+- a divider
+- Background (with the Soccer field icon available here: @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client/src/core/components/icons/SoccerFieldIcon.tsx )
+
+
+All icons are not operative right now.
+
+## The drawer content
+
+In the drawer, remove the search and add a button which uses as a label the current selected category.
+By default, the selected category is "Players (Male)".
+When the button is pressed, we show under the button the full list of categories with the macro-category titles:
+
+- Players
+  - Players (Male)
+  - Players (Female)
+  - Goalkeepers (Male)
+  - Goalkeepers (Female)
+  - Futsal
+  - Coaches
+  - Referees
+  - Children
+  - Preparation (Male)
+  - Preparation (Female)
+  - Players (from top)
+- Materials
+  - Materials
+  - Text and Numbers
+  - Arrows and Shapes
+- Fields
+  - Fields 11
+  - Futsal
+
+By clicking on a category, we show all the available element for that category.
+We still need to define what to show in each category, for now use an empty div.
