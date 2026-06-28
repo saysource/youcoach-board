@@ -55,6 +55,9 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     setLibraryCatId(catId)
     setDrawerOpen(true)
   }
+  // The properties panel switches to background settings while a field category
+  // is the active library category.
+  const backgroundMode = !!(libraryCatId && catalog?.categories[libraryCatId]?.kind === 'field')
 
   // Editor store: subscribe to what the chrome needs; actions via the api handle.
   const store = useEditorStoreApi()
@@ -192,7 +195,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {/* Properties panel: always present (both the full and the compact
               form), showing the selection's or the active tool's properties.
               Mobile uses MobileBar below. */}
-          {!mobile && <PropertiesPanel mode={breakpoint} />}
+          {!mobile && <PropertiesPanel mode={breakpoint} backgroundMode={backgroundMode} />}
 
           {/* Mobile: always-visible undo/redo (+ selection props/actions) above
               the bottom toolbar, as translucent floating buttons. */}

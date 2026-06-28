@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla'
 import {
   type BoardDoc,
   type BoardElement,
+  type BoardBackground,
   type Operation,
   type ElementChange,
   applyOperation,
@@ -55,6 +56,8 @@ export interface EditorState {
   /** Apply a set of element attribute changes as one undoable operation — the
    *  workhorse for move (and later resize / restyle). */
   updateElements: (changes: ElementChange[]) => void
+  /** Merge changes into the document background (not on the undo stack for now). */
+  setBackground: (patch: Partial<BoardBackground>) => void
   undo: () => void
   redo: () => void
 }
@@ -133,6 +136,13 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       updateElements: (changes) => {
         if (changes.length === 0) return
         push({ kind: 'update', changes })
+      },
+
+      setBackground: (patch) => {
+        const { doc } = get()
+        const next = { ...doc, background: { ...doc.background, ...patch } }
+        set({ doc: next })
+        onChange?.(next)
       },
 
       undo: () => {

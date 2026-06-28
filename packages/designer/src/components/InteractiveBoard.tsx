@@ -31,6 +31,7 @@ import {
 import { computeResize, rotationFor, boardToElement, elementToBoard, localCorners, boardCorners, type CornerId } from '../lib/geometry-2d'
 import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
 import { FigureView } from './FigureView'
+import { BackgroundView } from './BackgroundView'
 import { buildFigureElement, FIGURE_DND_MIME, type FigureDragData } from '../lib/assets'
 import { cn } from '../lib/cn'
 
@@ -684,6 +685,7 @@ export function InteractiveBoard() {
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
+        background={<BackgroundView doc={doc} />}
         overlay={
           <>
             {/* Group body grab area: pressing anywhere inside the group frame

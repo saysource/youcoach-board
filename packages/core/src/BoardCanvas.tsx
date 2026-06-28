@@ -26,6 +26,12 @@ export interface BoardCanvasProps {
    * participates in export of the artwork.
    */
   overlay?: ReactNode
+  /**
+   * Content for the background layer (solid color, field SVG, logo). The designer
+   * injects a live, recolorable background here; when omitted, a default pitch is
+   * drawn (used by the viewer/exporter until they provide their own).
+   */
+  background?: ReactNode
 }
 
 // The single shared 2D render primitive — the SVG board layer that the viewer,
@@ -46,7 +52,7 @@ export interface BoardCanvasProps {
 //
 // Kept export-safe: no <foreignObject>, no external references, self-contained
 // styles — so a serialize → rasterize pass reproduces it faithfully.
-export function BoardCanvas({ doc, className, svgRef, children, overlay }: BoardCanvasProps) {
+export function BoardCanvas({ doc, className, svgRef, children, overlay, background }: BoardCanvasProps) {
   const label = doc.title.trim() || 'Untitled board'
   // Unique per instance so multiple embedded boards don't share a clip id.
   const clipId = `ycb-canvas-clip-${useId()}`
@@ -64,9 +70,7 @@ export function BoardCanvas({ doc, className, svgRef, children, overlay }: Board
           <rect x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} />
         </clipPath>
       </defs>
-      <g data-layer="background">
-        <FieldBackground image={doc.background.image} />
-      </g>
+      <g data-layer="background">{background ?? <FieldBackground image={doc.background.image} />}</g>
       {/* Elements are clipped to the canvas so figures never draw past its edge
           (overflow when moved/resized is hidden). The overlay is NOT clipped, so
           selection frames/handles can still extend beyond the board. */}

@@ -6,9 +6,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { cn } from '../../lib/cn'
 import { useEditorStore } from '../../store/context'
 import type { Breakpoint } from '../../lib/use-breakpoint'
+import { SquareDashedBottom } from 'lucide-react'
 import { PropertyControls, Swatches } from './PropertyControls'
 import { usePropertyEditing } from './usePropertyEditing'
 import { SubjectHeader } from './SubjectHeader'
+import { BackgroundSettings } from './BackgroundSettings'
 import { STROKE_COLORS, BG_COLORS } from './palettes'
 
 const isTransparent = (c?: string) => !c || c === 'transparent'
@@ -18,14 +20,30 @@ const TRANSLUCENT = 'border border-border/60 bg-card/75 shadow-sm backdrop-blur-
 
 // Selection properties for the full and compact layouts. Mobile is handled by
 // MobileBar (which must stay visible — undo/redo — even with no selection).
-export function PropertiesPanel({ mode }: { mode: Breakpoint }) {
-  if (mode === 'full') return <FullPanel />
-  if (mode === 'compact') return <CompactPanel />
+// `backgroundMode` (a field category is active) shows background settings when
+// nothing is selected.
+export function PropertiesPanel({ mode, backgroundMode = false }: { mode: Breakpoint; backgroundMode?: boolean }) {
+  if (mode === 'full') return <FullPanel backgroundMode={backgroundMode} />
+  if (mode === 'compact') return <CompactPanel backgroundMode={backgroundMode} />
   return null
 }
 
-function FullPanel() {
+function FullPanel({ backgroundMode }: { backgroundMode: boolean }) {
   const { editable, count } = usePropertyEditing()
+  // Background settings take over only when nothing is selected (so you can still
+  // edit a clicked element while a field category is active).
+  if (backgroundMode && count === 0) {
+    return (
+      <div className="pointer-events-auto absolute left-2 top-16 z-30 max-h-[calc(100%-7rem)] w-52 overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-lg">
+        <div className="flex items-center gap-2 px-1 text-sm font-medium text-foreground [&_svg]:size-4 [&_svg]:text-muted-foreground">
+          <SquareDashedBottom /> <span>Background</span>
+        </div>
+        <div className="mt-3 border-t border-border pt-3">
+          <BackgroundSettings />
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="pointer-events-auto absolute left-2 top-16 z-30 max-h-[calc(100%-7rem)] w-52 overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-lg">
       <SubjectHeader />
@@ -48,8 +66,20 @@ function FullPanel() {
   )
 }
 
-function CompactPanel() {
+function CompactPanel({ backgroundMode }: { backgroundMode: boolean }) {
   const { editable, count, values, hasClosed, setStroke, setFill } = usePropertyEditing()
+  if (backgroundMode && count === 0) {
+    return (
+      <div className="pointer-events-auto absolute left-2 top-16 z-30 max-h-[calc(100%-7rem)] w-52 overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-lg">
+        <div className="flex items-center gap-2 px-1 text-sm font-medium text-foreground [&_svg]:size-4 [&_svg]:text-muted-foreground">
+          <SquareDashedBottom /> <span>Background</span>
+        </div>
+        <div className="mt-3 border-t border-border pt-3">
+          <BackgroundSettings />
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="pointer-events-auto absolute left-3 top-16 z-30 flex flex-col items-center gap-1 rounded-xl border border-border bg-card p-1.5 shadow-lg">
       <SubjectHeader compact />

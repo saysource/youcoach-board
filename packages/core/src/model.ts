@@ -16,6 +16,9 @@ import { BOARD_WIDTH, BOARD_HEIGHT } from './geometry'
 
 export const BOARD_VERSION = 3
 
+/** Where the YouCoach logo sits over the background (0.2 opacity), or null. */
+export type LogoPosition = 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+
 /** Background configuration: a solid color, an optional raster image, and an
  *  optional field SVG overlay whose declared colors the user can tweak. */
 export interface BoardBackground {
@@ -29,6 +32,8 @@ export interface BoardBackground {
   /** Scale + translation of the field SVG within the board. */
   scale: number
   position: [number, number]
+  /** YouCoach logo placement over the background, or null for none. */
+  logo: LogoPosition | null
 }
 
 /** Animation settings for the whole drill (keyframes live on each element). */
@@ -58,7 +63,10 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   fieldColors: {},
   scale: 1,
   position: [0, 0],
+  logo: null,
 }
+
+const LOGO_POSITIONS: LogoPosition[] = ['center', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
 
 export const DEFAULT_ANIMATION: BoardAnimation = { animated: false, duration: 10 }
 
@@ -91,6 +99,7 @@ function parseBackground(raw: unknown): BoardBackground {
         : {},
     scale: num(o.scale, DEFAULT_BACKGROUND.scale),
     position: [num(pos[0], 0), num(pos[1], 0)],
+    logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : null,
   }
 }
 

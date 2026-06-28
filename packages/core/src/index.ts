@@ -10,6 +10,7 @@ export type {
   BoardDoc,
   BoardBackground,
   BoardAnimation,
+  LogoPosition,
 } from './model'
 export {
   EMPTY_BOARD,

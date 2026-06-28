@@ -32,6 +32,7 @@ interface LibraryDrawerProps {
 export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen, categoryId, onCategoryChange }: LibraryDrawerProps) {
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
+  const setBackground = useEditorStore((s) => s.setBackground)
 
   const [listOpen, setListOpen] = useState(false)
   const [facing, setFacing] = useState<string | null>(null)
@@ -73,8 +74,14 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
     return { figureId: f.svg, w: f.w, h: f.h, mirror: !!f.mirror, colors: cat.colors ? { ...catalog.defaults[cat.colors] } : undefined }
   }
 
-  // Click-to-drop: place centered on the board.
+  // Click a thumbnail: a field sets the board background; any other figure drops
+  // centered on the board.
   function drop(f: CatalogFigure) {
+    if (cat?.kind === 'field') {
+      if (!f.svg) return
+      setBackground({ fieldSvg: f.svg, scale: f.scale ?? 1, position: [0, 0], image: null, ...(f.color ? { color: f.color } : {}) })
+      return
+    }
     const d = descriptor(f)
     if (d) createFigure(buildFigureElement(d, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
   }
@@ -213,7 +220,7 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                           key={`${f.thumb}-${i}`}
                           type="button"
                           title={f.tool ? 'Text' : cat?.name}
-                          draggable={!!f.svg}
+                          draggable={!!descriptor(f)}
                           onDragStart={(e) => onDragStartFigure(e, f)}
                           onClick={() => drop(f)}
                           className={cn(
