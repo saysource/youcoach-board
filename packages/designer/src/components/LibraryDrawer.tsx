@@ -1,4 +1,5 @@
-import { Search, X, LibraryBig, Sparkles, Maximize, Minimize, Pin, PinOff, type LucideIcon } from 'lucide-react'
+import { useState } from 'react'
+import { X, Sparkles, Maximize, Minimize, Pin, PinOff, ChevronDown, Check, type LucideIcon } from 'lucide-react'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/cn'
@@ -13,10 +14,44 @@ interface LibraryDrawerProps {
   onToggleFullscreen: () => void
 }
 
-// Right-side figures library. When open it hosts the controls that otherwise
-// live top-right (AI, fill-viewport), plus a pin (dock/undock) and a close
-// button. Content is still a placeholder until the figures palette lands.
+// The library's categories, grouped by macro-category. A category is identified
+// by (group, name) — `name` alone isn't unique ("Futsal" appears twice).
+const CATEGORY_GROUPS: { title: string; items: string[] }[] = [
+  { title: 'Materials', items: ['Materials', 'Text and Numbers', 'Arrows and Shapes'] },
+  {
+    title: 'Players',
+    items: [
+      'Players (Male)',
+      'Players (Female)',
+      'Goalkeepers (Male)',
+      'Goalkeepers (Female)',
+      'Futsal',
+      'Coaches',
+      'Referees',
+      'Children',
+      'Preparation (Male)',
+      'Preparation (Female)',
+      'Players (from top)',
+    ],
+  },
+  { title: 'Fields and Background', items: ['Fields 11', 'Futsal'] },
+]
+
+interface Category {
+  group: string
+  name: string
+}
+
+const DEFAULT_CATEGORY: Category = { group: 'Players', name: 'Players (Male)' }
+
+// Right-side figures library. When open it hosts the controls that otherwise live
+// top-right (AI, fill-viewport), plus a pin (dock/undock) and close. The body is
+// a category selector (button → collapsible category list) over the category's
+// element palette — empty for now until the palettes land.
 export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen }: LibraryDrawerProps) {
+  const [category, setCategory] = useState<Category>(DEFAULT_CATEGORY)
+  const [listOpen, setListOpen] = useState(false)
+
   return (
     <aside
       aria-hidden={!open}
@@ -36,33 +71,61 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
             active={fullscreen}
             onClick={onToggleFullscreen}
           />
-          <HeaderButton
-            icon={pinned ? PinOff : Pin}
-            label={pinned ? 'Undock' : 'Dock as sidebar'}
-            active={pinned}
-            onClick={onTogglePin}
-          />
+          <HeaderButton icon={pinned ? PinOff : Pin} label={pinned ? 'Undock' : 'Dock as sidebar'} active={pinned} onClick={onTogglePin} />
           <HeaderButton icon={X} label="Close library" onClick={onClose} />
         </div>
       </div>
 
-      <div className="p-3">
-        <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5 py-1.5 text-muted-foreground">
-          <Search className="size-4" />
-          <input
-            type="text"
-            placeholder="Search library"
-            disabled
-            className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
+      {/* Category selector: the button shows the current category; pressing it
+          swaps the panel body for the full categorized list (and back). */}
+      <div className="border-b border-border p-2">
+        <Button
+          variant="outline"
+          size="sm"
+          aria-expanded={listOpen}
+          onClick={() => setListOpen((v) => !v)}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate">{category.name}</span>
+          <ChevronDown className={cn('transition-transform', listOpen && 'rotate-180')} />
+        </Button>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
-        <LibraryBig className="size-8 opacity-50" />
-        <p className="text-sm">No figures yet</p>
-        <p className="text-xs">Players, materials and fields will appear here.</p>
-      </div>
+      {listOpen ? (
+        /* The full categorized list fills the panel so it uses all the space. */
+        <div className="flex-1 overflow-y-auto">
+          {CATEGORY_GROUPS.map((g) => (
+            <div key={g.title}>
+              <div className="sticky top-0 z-10 bg-foreground/10 px-3 py-1 mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {g.title}
+              </div>
+              {g.items.map((name) => {
+                const selected = category.group === g.title && category.name === name
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      setCategory({ group: g.title, name })
+                      setListOpen(false)
+                    }}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground',
+                      selected && 'font-medium text-foreground',
+                    )}
+                  >
+                    <span className="truncate">{name}</span>
+                    {selected && <Check className="size-4 shrink-0 text-primary" />}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Elements for the selected category — empty placeholder for now. */
+        <div className="flex-1 overflow-y-auto p-3" />
+      )}
     </aside>
   )
 }

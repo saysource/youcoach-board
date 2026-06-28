@@ -347,3 +347,88 @@ We still need to define what to show in each category, for now use an empty div.
 - watermark and wotermark position
 - snap to geometry
 - mini-tool help
+- keyboard shortcuts
+- create formation
+- i18n
+
+
+## Properties element by element
+
+- Rectangle and ellipse
+  - fill color
+  - stroke color (with opacity)
+  - stroke style (thin / medium / think)
+  - opacity (overall opacity)
+  - Special actions: Lock proportions
+
+- Line 
+  - fill color (if closed)
+  - stroke color (with opacity)
+  - stroke style (thin / medium / think)
+  - opacity (overall opacity)
+  - start tip (none / arrow / circle)
+  - end tip (none / arrow / circle)
+  - style (solid / dashed / dotted)
+  - type (streight / quadratic bezier / cubic bezier)
+  - Special actions: open / close, if the line has more than 3 points
+
+- Player
+  - kit config
+  - skin config
+  - opacity
+  - scale (the default value of the scale may be tied to the type of field we are working with)
+  - Special actions: flip horizontally, copy style (for kit and skin)
+
+- Material
+  - color (apply only to selected materials)
+  - scale (the default value of the scale may be tied to the type of field we are working with)
+  - Special actions: flip horizontally
+  
+- Text
+  - text color (with opacity)
+  - fill color (with opacity)
+  - text padding
+  - opacity (overall opacity)
+  - text (it must support multiline text)
+
+- Disc
+  - color1 (with opacity), by default used for the center of the disc
+  - color2 (with opacity), by default the ring color
+  - disc style (disc / tshirt)
+  - opacity (overall opacity)
+  - text (single line)
+
+## Color picker
+
+Avoid using the browser default color picker, instead use the react-colorful and includes opacity information in stroke and fill colors.
+We also want to provide the ability for the user to use the color picker tool.
+The proposed 5 colors shown when editing the fill color should remember the last selection, with a FIFO strategy.
+The same for stroke and text colors.
+
+## Remembering color and styles
+
+Once an element is selected, we keep its attributes as default values for the next creatio of element of the same category (fill, stroke, kit, skin, opacity, styles).
+
+
+## Copy and paset
+
+Implement copy and paste, when one or more elements are selected.
+
+
+## SVG player and figures
+
+All the SVG are made of paths, some of which are clearly marked with a special class name to be dinamycally coloured.
+The classes are:
+
+- yc-hair
+- yc-skin
+- base_tshirt
+- shorts
+- socks
+- v_stripe
+- h_stripe
+
+For materials:
+
+- yc-color-1
+- yc-color-2

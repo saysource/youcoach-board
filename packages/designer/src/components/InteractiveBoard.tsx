@@ -35,7 +35,6 @@ import { cn } from '../lib/cn'
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
 const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-canvas
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
-const SNAP_PX = 8 // on-screen snap radius for shift-aligning a polyline vertex
 const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
 const MOVE_THRESHOLD_PX = 4 // on-screen drag distance before a move engages
 
@@ -52,6 +51,21 @@ interface Draft {
   current: Point
   // For 'line' drafts: the end arrow tip (arrow tool → 'arrow').
   endTip: ArrowTip
+  // Shift held — snap a line's angle to 15° steps (see snapLineEnd).
+  snap: boolean
+}
+
+// Snap a line's end so its angle from `start` is a multiple of 15° (so it also
+// locks exactly horizontal/vertical), preserving length. Used while drawing with
+// Shift held.
+function snapLineEnd(start: Point, current: Point): Point {
+  const dx = current.x - start.x
+  const dy = current.y - start.y
+  const len = Math.hypot(dx, dy)
+  if (len === 0) return current
+  const step = Math.PI / 12 // 15°
+  const ang = Math.round(Math.atan2(dy, dx) / step) * step
+  return { x: start.x + Math.cos(ang) * len, y: start.y + Math.sin(ang) * len }
 }
 
 // In-progress polyline: committed vertices plus the live cursor (preview seg).
@@ -60,6 +74,14 @@ interface PolyDraft {
   points: Point[]
   cursor: Point
   endTip: ArrowTip
+  // Shift held — angle-snap the next segment (from the last point) to 15°.
+  snap: boolean
+}
+
+// The polyline draft's live end point: the cursor, angle-snapped to the last
+// placed point when Shift is held.
+function polyDraftEnd(d: PolyDraft): Point {
+  return d.snap && d.points.length > 0 ? snapLineEnd(d.points[d.points.length - 1], d.cursor) : d.cursor
 }
 
 // A move can drag several elements at once (group move). We snapshot each
@@ -285,34 +307,21 @@ export function InteractiveBoard() {
     return { ...t0, scale: t0.scale * s, x: c1.x - lc.x, y: c1.y - lc.y }
   }
 
-  // Resolve a polyline vertex drag → the new LOCAL point, plus alignment guides.
-  // With shift held, the vertex magnets (independently on X and Y) to the
-  // nearest OTHER vertex sharing that axis, within SNAP_PX; a guide line is
-  // emitted between the aligned points. Snapping is done in board space.
+  // Resolve a polyline/line vertex drag → the new LOCAL point. With shift held,
+  // the dragged vertex angle-snaps (15° steps, incl. horizontal/vertical)
+  // relative to its adjacent vertex — the same snapping as line creation.
   function resolvePointDrag(g: Gesture): { lp: Point; guides: SnapGuide[] } {
     const el = doc.elements.find((e) => e.id === g.id)
     const i = Number(g.handle.slice('point-'.length))
-    let board = clampToCanvas(g.current)
-    const guides: SnapGuide[] = []
-    if (g.snap && el?.type === 'polyline') {
-      const thr = SNAP_PX / scale
-      const others = el.points
-        .map((p, idx) => ({ idx, b: elementToBoard({ x: p[0], y: p[1] }, g.box0, g.t0) }))
-        .filter((o) => o.idx !== i)
-      let bx: { d: number; x: number; refY: number } | null = null
-      let by: { d: number; y: number; refX: number } | null = null
-      for (const o of others) {
-        const dx = Math.abs(o.b.x - board.x)
-        if (dx <= thr && (bx === null || dx < bx.d)) bx = { d: dx, x: o.b.x, refY: o.b.y }
-        const dy = Math.abs(o.b.y - board.y)
-        if (dy <= thr && (by === null || dy < by.d)) by = { d: dy, y: o.b.y, refX: o.b.x }
-      }
-      if (bx) board = { x: bx.x, y: board.y }
-      if (by) board = { x: board.x, y: by.y }
-      if (bx) guides.push({ x1: bx.x, y1: bx.refY, x2: board.x, y2: board.y })
-      if (by) guides.push({ x1: by.refX, y1: by.y, x2: board.x, y2: board.y })
+    let board = g.current
+    if (g.snap && el?.type === 'polyline' && el.points.length >= 2) {
+      // Reference the previous vertex (or the next one for the first vertex).
+      const ni = i > 0 ? i - 1 : 1
+      const neighbor = elementToBoard({ x: el.points[ni][0], y: el.points[ni][1] }, g.box0, g.t0)
+      board = snapLineEnd(neighbor, board)
     }
-    return { lp: boardToElement(board, g.box0, g.t0), guides }
+    board = clampToCanvas(board)
+    return { lp: boardToElement(board, g.box0, g.t0), guides: [] }
   }
 
   // The element as it should render RIGHT NOW — committed state plus any
@@ -391,7 +400,11 @@ export function InteractiveBoard() {
     // Already mid-polyline (entered by a click with the line/arrow tool):
     // each further click drops a vertex; finishing is via the end dots / ESC.
     if (polyDraft) {
-      setPolyDraft((d) => (d ? { ...d, points: [...d.points, p] } : d))
+      setPolyDraft((d) => {
+        if (!d) return d
+        const np = e.shiftKey && d.points.length > 0 ? snapLineEnd(d.points[d.points.length - 1], p) : p
+        return { ...d, points: [...d.points, np], cursor: p, snap: e.shiftKey }
+      })
       return
     }
 
@@ -399,7 +412,7 @@ export function InteractiveBoard() {
     if (type) {
       // line/arrow start as a 'line' draft: a drag → straight line, a click →
       // multi-point polyline (resolved on pointer-up). rect/ellipse → box draft.
-      setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool) })
+      setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool), snap: e.shiftKey })
       containerRef.current?.setPointerCapture(e.pointerId)
     } else {
       setMarquee({ start: p, current: p, additive: e.shiftKey, base: selectedIds })
@@ -492,8 +505,8 @@ export function InteractiveBoard() {
         if (Math.hypot(cp.x - last.x, cp.y - last.y) < FREEHAND_MIN_STEP) return pts
         return [...pts, cp]
       })
-    } else if (polyDraft) setPolyDraft((d) => (d ? { ...d, cursor: p } : d))
-    else if (draft) setDraft((d) => (d ? { ...d, current: p } : d))
+    } else if (polyDraft) setPolyDraft((d) => (d ? { ...d, cursor: p, snap: e.shiftKey } : d))
+    else if (draft) setDraft((d) => (d ? { ...d, current: p, snap: e.shiftKey } : d))
     else if (groupGesture) setGroupGesture((g) => (g ? { ...g, current: p, snap: e.shiftKey } : g))
     else if (gesture) setGesture((g) => (g ? { ...g, current: p, snap: e.shiftKey, alt: e.altKey } : g))
     else if (move)
@@ -516,15 +529,16 @@ export function InteractiveBoard() {
       // Need at least a short stroke (≥2 distinct points) to keep it.
       if (pts.length >= 2) createFigure(applyFigureStyle(makeDraw(crypto.randomUUID(), pts), toolDefaults))
     } else if (draft) {
-      const { type, start, current, endTip } = draft
+      const { type, start, current, endTip, snap } = draft
       setDraft(null)
       if (type === 'line') {
         if (isDragSignificant('line', start, current)) {
           // A real drag → a straight line (2-point polyline, end-tipped if arrow).
-          createFigure(applyFigureStyle(makeLine(crypto.randomUUID(), start, current, endTip), toolDefaults))
+          const end = snap ? snapLineEnd(start, current) : current
+          createFigure(applyFigureStyle(makeLine(crypto.randomUUID(), start, end, endTip), toolDefaults))
         } else {
           // A click → switch to multi-point polyline mode, seeded with this point.
-          setPolyDraft({ points: [start], cursor: current, endTip })
+          setPolyDraft({ points: [start], cursor: current, endTip, snap })
         }
       } else if (isDragSignificant(type, start, current)) {
         createFigure(applyFigureStyle(makeFigure(type, crypto.randomUUID(), start, current), toolDefaults))
@@ -723,14 +737,14 @@ export function InteractiveBoard() {
             )}
             {draft &&
               (draft.type === 'line' ? (
-                <ElementView element={applyFigureStyle(makeLine('draft', draft.start, draft.current, draft.endTip), toolDefaults)} />
+                <ElementView element={applyFigureStyle(makeLine('draft', draft.start, draft.snap ? snapLineEnd(draft.start, draft.current) : draft.current, draft.endTip), toolDefaults)} />
               ) : (
                 <ElementView element={applyFigureStyle(makeFigure(draft.type, 'draft', draft.start, draft.current), toolDefaults)} />
               ))}
             {polyDraft && (
               <>
-                {/* Live preview: placed segments + the segment to the cursor. */}
-                <ElementView element={applyFigureStyle(makePolyline('poly-draft', [...polyDraft.points, polyDraft.cursor], false, 'none', polyDraft.endTip), toolDefaults)} />
+                {/* Live preview: placed segments + the segment to the (snapped) cursor. */}
+                <ElementView element={applyFigureStyle(makePolyline('poly-draft', [...polyDraft.points, polyDraftEnd(polyDraft)], false, 'none', polyDraft.endTip), toolDefaults)} />
                 {/* First dot → close; last dot → end open. Hover bounce via CSS. */}
                 <circle
                   className="ycb-poly-end"
