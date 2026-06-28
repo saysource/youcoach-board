@@ -109,6 +109,9 @@ export interface DrawElement extends BaseElement {
 export interface FigureElement extends BaseElement {
   type: 'figure'
   figureId: string
+  /** Box geometry (like rect) so move/resize/group reuse the same paths. */
+  x: number
+  y: number
   width: number
   height: number
   /** Recolor slot → CSS color (e.g. `yc-skin`); slots absent fall back to the
@@ -139,7 +142,6 @@ export function normalizeBox(ax: number, ay: number, bx: number, by: number): Bo
 
 /** The element's bounding box in its OWN coordinates, ignoring the transform. */
 export function getLocalBounds(el: BoardElement): Box {
-  if (el.type === 'figure') return { x: 0, y: 0, width: el.width, height: el.height }
   if (el.type === 'polyline' || el.type === 'draw') {
     if (el.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
     const xs = el.points.map((p) => p[0])
@@ -248,7 +250,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     const width = num(o.width)
     const height = num(o.height)
     if (!figureId || width === null || height === null) return null
-    return { ...base, type: 'figure', figureId, width, height, colors: parseColors(o.colors), mirror: o.mirror === true }
+    return { ...base, type: 'figure', figureId, x: num(o.x) ?? 0, y: num(o.y) ?? 0, width, height, colors: parseColors(o.colors), mirror: o.mirror === true }
   }
   return null
 }

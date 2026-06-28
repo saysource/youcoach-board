@@ -30,6 +30,7 @@ import {
 } from '../lib/draw'
 import { computeResize, rotationFor, boardToElement, elementToBoard, localCorners, boardCorners, type CornerId } from '../lib/geometry-2d'
 import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
+import { FigureView } from './FigureView'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -784,11 +785,14 @@ export function InteractiveBoard() {
         }
       >
         <g style={{ pointerEvents: creating ? 'none' : 'auto' }}>
-          {doc.elements.map((el) => (
-            <g key={el.id} style={{ cursor: 'move' }} onPointerDown={(e) => onElementPointerDown(e, el)}>
-              <ElementView element={liveElement(el)} />
-            </g>
-          ))}
+          {doc.elements.map((el) => {
+            const live = liveElement(el)
+            return (
+              <g key={el.id} style={{ cursor: 'move' }} onPointerDown={(e) => onElementPointerDown(e, el)}>
+                {live.type === 'figure' ? <FigureView element={live} /> : <ElementView element={live} />}
+              </g>
+            )
+          })}
         </g>
       </BoardCanvas>
     </div>

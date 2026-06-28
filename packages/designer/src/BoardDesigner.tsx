@@ -1,6 +1,8 @@
 import { type BoardDoc } from '@youcoach-board/core'
 import { BoardShell } from './components/BoardShell'
 import { EditorStoreProvider } from './store/EditorStoreProvider'
+import { AssetsProvider } from './lib/AssetsProvider'
+import { type AssetsConfig } from './lib/assets'
 import type { ThemeSetting } from './lib/use-theme'
 // TEMPORARY default field background. Will be replaced once asset locations are
 // defined/loaded dynamically (the URL just feeds the doc's background.image).
@@ -17,21 +19,26 @@ export interface BoardDesignerProps {
   theme?: ThemeSetting
   /** Whether to show the in-menu theme switch. Later driven by embed config. */
   showThemeControl?: boolean
+  /** Where figures/thumbnails/catalog load from. Defaults to the dev server's
+   *  public/ folder. Memoize this if you pass it (it keys the catalog fetch). */
+  assets?: AssetsConfig
   /** Called whenever the document changes (create / delete / undo / redo). */
   onChange?: (doc: BoardDoc) => void
 }
 
 // The editor's public entry point: a per-instance editor store wrapping the
 // floating-chrome shell + interactive board.
-export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, onChange }: BoardDesignerProps) {
+export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, assets, onChange }: BoardDesignerProps) {
   // Default the field background to the bundled image unless the caller set one.
   const docWithBackground = {
     ...initialDoc,
     background: { ...initialDoc?.background, image: initialDoc?.background?.image ?? defaultFieldImage },
   }
   return (
-    <EditorStoreProvider initialDoc={docWithBackground} onChange={onChange}>
-      <BoardShell initialTheme={initialTheme} theme={theme} showThemeControl={showThemeControl} />
-    </EditorStoreProvider>
+    <AssetsProvider config={assets}>
+      <EditorStoreProvider initialDoc={docWithBackground} onChange={onChange}>
+        <BoardShell initialTheme={initialTheme} theme={theme} showThemeControl={showThemeControl} />
+      </EditorStoreProvider>
+    </AssetsProvider>
   )
 }

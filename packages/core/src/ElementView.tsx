@@ -58,14 +58,14 @@ function Shape({ element }: { element: BoardElement }) {
 
   if (element.type === 'figure') {
     // Placeholder until the designer/viewer injects the recolored SVG: a dashed
-    // box at the figure's intrinsic size, labelled with its catalog id.
-    const { width, height } = element
+    // box at the figure's box, labelled with its catalog id.
+    const { x, y, width, height } = element
     const s = Math.max(width, height)
     return (
       <g>
         <rect
-          x={0}
-          y={0}
+          x={x}
+          y={y}
           width={width}
           height={height}
           rx={s * 0.05}
@@ -75,8 +75,8 @@ function Shape({ element }: { element: BoardElement }) {
           strokeDasharray={`${s * 0.04} ${s * 0.03}`}
         />
         <text
-          x={width / 2}
-          y={height / 2}
+          x={x + width / 2}
+          y={y + height / 2}
           textAnchor="middle"
           dominantBaseline="middle"
           fontSize={Math.min(width, height) * 0.12}
