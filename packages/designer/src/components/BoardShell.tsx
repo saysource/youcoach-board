@@ -55,6 +55,16 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.pointer >= 0)
   const canRedo = useEditorStore((s) => s.pointer < s.stack.length - 1)
+  const figureAddedTick = useEditorStore((s) => s.figureAddedTick)
+
+  // Adding a figure (click or drag-drop) closes the drawer when it's a floating
+  // overlay — a quick "pick one and go". Pin it to keep it open for several. The
+  // drawer stays mounted, so its category/scroll are remembered on reopen.
+  const [seenFigureTick, setSeenFigureTick] = useState(figureAddedTick)
+  if (figureAddedTick !== seenFigureTick) {
+    setSeenFigureTick(figureAddedTick)
+    if (drawerOpen && !drawerPinned) setDrawerOpen(false)
+  }
 
   // The root is also the Radix portal container, so menus/tooltips stay inside
   // our scoped, theme-aware subtree. Tracked in state so context updates on mount.

@@ -450,13 +450,23 @@ Special
 Dribbling
 Pass
 
-Instead of using a select to filter the actions (which is not the right word for materials anyway), show all the actions, and add a category title similar to the one we used for the figures categories.
-Replace the labels of the up/down/right/left with arrows, and add a fifth button, with a dropdown to quickly go to a specific action type.
 
 
-When a player has been added to the canvas, and the drawer is not pinned, we can simply close the drawer. We want to remember the current 
 
 Now that the drawer is ready, enable the items in the More Tools dropdown in the main toolbar.
 In that menu we show as first items all the main categories.
-The Background is actually the fields category, but we want to call it background because we will activate a special "mode" to show in the properties the background properties when the fields category is activated.
-When the user click on the category we open the drawer (if closed or not pinned) and move to the selected category.
+
+When the user clicks on the category we open the drawer (if closed or not pinned) and move to the selected category.
+
+The Background menu point to the Fields category: we want to call it background because we will activate a special "mode" to show in the properties the background settings/properties when the fields category is activated.
+
+
+Under the list of categories, after a separator, we want to also the following actions/shortcuts:
+- Add Ball (with the MatchIcon from @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client/src/core/components/season-dashboard/icons.tsx )
+- Add Text
+
+The shortcuts will add a ball (the first item of the materials with action "material.balls").
+Since the ball will have a special treatment when we will work on animantions, we want to flag the fact that a figure element is a ball in our model.
+
+
+

@@ -32,6 +32,10 @@ export interface EditorState {
    *  refreshed to the last created/edited element's style. */
   toolDefaults: FigureStyle
 
+  /** Bumped whenever a `figure` element is created — lets the shell auto-close
+   *  the (overlay) library drawer after a figure is dropped. */
+  figureAddedTick: number
+
   // Undo/redo: a flat operation stack + a pointer to the last applied operation
   // (VA's model). Everything before/at `pointer` is "done"; everything after is
   // the redo branch, truncated on the next push.
@@ -78,6 +82,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       selectedIds: [],
       keepToolActive: false,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
+      figureAddedTick: 0,
       stack: [],
       pointer: -1,
 
@@ -97,12 +102,13 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       createFigure: (element) => {
         const { doc, keepToolActive, activeTool } = get()
         push({ kind: 'add', element, index: doc.elements.length })
-        set({
+        set((s) => ({
           selectedIds: [element.id],
           activeTool: keepToolActive ? activeTool : 'select',
           // Remember the created element's style as the next-figure default.
           toolDefaults: figureStyleOf(element),
-        })
+          figureAddedTick: s.figureAddedTick + (element.type === 'figure' ? 1 : 0),
+        }))
       },
 
       deleteSelected: () => {
