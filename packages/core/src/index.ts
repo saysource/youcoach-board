@@ -37,11 +37,15 @@ export {
   type StrokeStyle,
   type ArrowTip,
   type Box,
+  type Cubic,
   IDENTITY_TRANSFORM,
   getElementBounds,
   getLocalBounds,
   normalizeBox,
   parseElement,
+  catmullRomCubics,
+  cubicPointAt,
+  curvedPathD,
   strokeDash,
 } from './elements'
 export {

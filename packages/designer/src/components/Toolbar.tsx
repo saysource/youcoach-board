@@ -1,8 +1,8 @@
 import { type ElementType, useState } from 'react'
 import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
-import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon } from './icons'
-import { isShapeTool, type ShapeTool } from '../lib/draw'
+import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon } from './icons'
+import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Separator } from './ui/separator'
@@ -31,8 +31,12 @@ export type ToolId =
   | 'pentagon'
   | 'triangle'
   | 'trapezoid'
+  // The line/arrow tools live behind the Lines menu (see LinesMenu / draw.ts
+  // LINE_TOOLS). Elbow = smooth (curved); the others are straight.
   | 'arrow'
   | 'line'
+  | 'elbow-arrow'
+  | 'elbow-line'
   | 'draw'
   | 'eraser'
 
@@ -46,6 +50,15 @@ const SHAPE_ITEMS: { id: ShapeTool; label: string; icon: ElementType }[] = [
   { id: 'trapezoid', label: 'Trapezoid', icon: TrapezoidIcon },
 ]
 const SHAPE_ICON: Record<ShapeTool, ElementType> = Object.fromEntries(SHAPE_ITEMS.map((s) => [s.id, s.icon])) as Record<ShapeTool, ElementType>
+
+// Lines-menu entries (order shown in the dropdown). The first is the default.
+const LINE_ITEMS: { id: LineTool; label: string; icon: ElementType }[] = [
+  { id: 'arrow', label: 'Arrow', icon: MoveRight },
+  { id: 'line', label: 'Line', icon: Minus },
+  { id: 'elbow-arrow', label: 'Elbow arrow', icon: ElbowArrowIcon },
+  { id: 'elbow-line', label: 'Elbow line', icon: ElbowLineIcon },
+]
+const LINE_ICON: Record<LineTool, ElementType> = Object.fromEntries(LINE_ITEMS.map((s) => [s.id, s.icon])) as Record<LineTool, ElementType>
 
 interface Tool {
   id: ToolId
@@ -62,14 +75,9 @@ const NAV_TOOLS: Tool[] = [
   { id: 'select', label: 'Selection', icon: MousePointer2, shortcut: 1 },
 ]
 
-// Figure-creation tools rendered after the Shapes menu (same group). The arrow
-// and line tools draw a straight line on drag, or a multi-point polyline on
-// click (arrow = end-tipped). Box shapes are behind the Shapes menu.
-const DRAW_TOOLS: Tool[] = [
-  { id: 'arrow', label: 'Arrow', icon: MoveRight, shortcut: 3 },
-  { id: 'line', label: 'Line', icon: Minus, shortcut: 4 },
-  { id: 'draw', label: 'Draw', icon: Pencil, shortcut: 5 },
-]
+// Free-draw tool, rendered after the Shapes + Lines menus (same group). Box
+// shapes are behind the Shapes menu; lines/arrows behind the Lines menu.
+const DRAW_TOOLS: Tool[] = [{ id: 'draw', label: 'Draw', icon: Pencil, shortcut: 5 }]
 
 interface ToolbarProps {
   activeTool: ToolId
@@ -88,6 +96,11 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
     setLastShape(tool)
     onToolChange(tool)
   }
+  const [lastLine, setLastLine] = useState<LineTool | null>(null)
+  function pickLine(tool: LineTool) {
+    setLastLine(tool)
+    onToolChange(tool)
+  }
   return (
     <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
       <ToolButton label={locked ? 'Unlock' : 'Keep selected tool active'} active={locked} onClick={onToggleLock}>
@@ -101,6 +114,7 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ShapesMenu activeTool={activeTool} lastShape={lastShape} onPick={pickShape} />
+      <LinesMenu activeTool={activeTool} lastLine={lastLine} onPick={pickLine} />
       {DRAW_TOOLS.map((tool) => (
         <ToolButton key={tool.id} label={tool.label} active={activeTool === tool.id} shortcut={tool.shortcut} onClick={() => onToolChange(tool.id)}>
           <tool.icon />
@@ -151,6 +165,49 @@ function ShapesMenu({
       </Tooltip>
       <DropdownMenuContent align="start" className="min-w-40">
         {SHAPE_ITEMS.map((it) => (
+          <DropdownMenuItem key={it.id} onSelect={() => onPick(it.id)}>
+            <it.icon /> {it.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+// The Lines menu: same pattern as ShapesMenu, for the line/arrow tools (Arrow,
+// Line, Elbow arrow, Elbow line). Default icon is the generic Lines glyph; the
+// trigger shows the active/last-used line tool's icon.
+function LinesMenu({
+  activeTool,
+  lastLine,
+  onPick,
+}: {
+  activeTool: ToolId
+  lastLine: LineTool | null
+  onPick: (tool: LineTool) => void
+}) {
+  const active = isLineTool(activeTool)
+  const current = active ? activeTool : lastLine
+  const Icon = current ? LINE_ICON[current] : LinesIcon
+  return (
+    <DropdownMenu onOpenChange={(open) => open && onPick(lastLine ?? 'arrow')}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon-sm"
+              aria-label="Lines"
+              aria-pressed={active}
+              className={cn('relative hover:bg-primary/25', active && 'bg-primary/40 hover:bg-primary/40')}
+            >
+              <Icon />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Lines</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="min-w-40">
+        {LINE_ITEMS.map((it) => (
           <DropdownMenuItem key={it.id} onSelect={() => onPick(it.id)}>
             <it.icon /> {it.label}
           </DropdownMenuItem>

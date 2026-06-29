@@ -9,14 +9,14 @@ import {
   invertOperation,
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
-import { type FigureStyle, DEFAULT_FIGURE_STYLE, figureStyleOf, isShapeTool } from '../lib/draw'
+import { type FigureStyle, DEFAULT_FIGURE_STYLE, figureStyleOf, isShapeTool, isLineTool } from '../lib/draw'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
  *  elements non-interactive, selection cleared). The line/arrow tools draft a
  *  straight line on drag, or a multi-point polyline on click (see
  *  InteractiveBoard); see toolElementType for the drag-create mapping. */
 export function isCreationTool(tool: ToolId): boolean {
-  return isShapeTool(tool) || tool === 'line' || tool === 'arrow' || tool === 'draw'
+  return isShapeTool(tool) || isLineTool(tool) || tool === 'draw'
 }
 
 export interface EditorState {

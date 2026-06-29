@@ -1,6 +1,6 @@
 import { type ComponentType } from 'react'
 import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Hand, Pencil, Eraser } from 'lucide-react'
-import { TrapezoidIcon } from '../icons'
+import { TrapezoidIcon, ElbowLineIcon, ElbowArrowIcon } from '../icons'
 import type { BoardElement } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
 import type { ToolId } from '../Toolbar'
@@ -12,10 +12,9 @@ type Subject = { icon: ComponentType<{ className?: string }>; label: string }
 // multi-point polyline), so the header reflects the actual element.
 function polylineSubject(el: Extract<BoardElement, { type: 'polyline' }>): Subject {
   if (el.closed) return { icon: Shapes, label: 'Shape' }
-  if (el.points.length === 2) {
-    if (el.startTip === 'arrow' || el.endTip === 'arrow') return { icon: MoveRight, label: 'Arrow' }
-    return { icon: Minus, label: 'Line' }
-  }
+  const arrow = el.startTip === 'arrow' || el.endTip === 'arrow'
+  if (el.curve) return { icon: arrow ? ElbowArrowIcon : ElbowLineIcon, label: arrow ? 'Curved arrow' : 'Curved line' }
+  if (el.points.length === 2) return arrow ? { icon: MoveRight, label: 'Arrow' } : { icon: Minus, label: 'Line' }
   return { icon: Spline, label: 'Polyline' }
 }
 
@@ -42,6 +41,8 @@ const TOOL_SUBJECT: Record<ToolId, Subject> = {
   trapezoid: { icon: TrapezoidIcon, label: 'Trapezoid' },
   arrow: { icon: MoveRight, label: 'Arrow' },
   line: { icon: Minus, label: 'Line' },
+  'elbow-arrow': { icon: ElbowArrowIcon, label: 'Elbow arrow' },
+  'elbow-line': { icon: ElbowLineIcon, label: 'Elbow line' },
   draw: { icon: Pencil, label: 'Draw' },
   eraser: { icon: Eraser, label: 'Eraser' },
 }

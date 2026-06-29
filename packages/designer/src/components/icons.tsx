@@ -107,6 +107,35 @@ export function TrapezoidIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+// Lines-menu generic icon (assets/lines.svg): an arrow over a line.
+export function LinesIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <g transform="translate(-1,-4.74777)"><path d="M18,8L22,12L18,16" /></g>
+      <g transform="translate(-1,-4.74777)"><path d="M2,12L22,12" /></g>
+      <g transform="translate(-1.25114,4.43643)"><path d="M5,12L19,12" /></g>
+    </svg>
+  )
+}
+
+// Elbow (curved/smooth) line + arrow icons — a smooth curve, with an arrowhead
+// for the arrow variant. Lucide style (24×24, fill none, round joins).
+export function ElbowLineIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M3 18 C 9 6, 15 6, 21 14" />
+    </svg>
+  )
+}
+export function ElbowArrowIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M3 18 C 9 6, 15 6, 21 14" />
+      <path d="M21 14 L 15 13 M21 14 L 18.5 8.5" />
+    </svg>
+  )
+}
+
 // Logo-position icons (a rounded frame + a pill in the chosen corner/center),
 // converted from assets/logo_*.svg. The outer frame is shared.
 const LOGO_FRAME =

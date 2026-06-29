@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import type { BoardElement } from './elements'
-import { getLocalBounds, strokeDash } from './elements'
+import { getLocalBounds, curvedPathD, strokeDash } from './elements'
 
 // Renders a single board element to SVG. Presentational and shared: the viewer
 // renders elements through this directly, and the designer wraps it with
@@ -128,12 +128,18 @@ function Shape({ element }: { element: BoardElement }) {
   }
 
   // polyline — covers straight lines, multi-segment paths, arrows and (closed)
-  // polygons. A transparent fat companion stroke widens the hit area; arrow tips
-  // are drawn as a marker at the first/last point of an OPEN polyline.
-  const pts = element.points.map((p) => `${p[0]},${p[1]}`).join(' ')
+  // polygons, optionally curved (a smooth path through the points). A transparent
+  // fat companion stroke widens the hit area; arrow tips are drawn as a marker at
+  // the first/last point of an OPEN polyline.
   const hit = Math.max(element.strokeWidth * 4, 16)
-  const Tag = element.closed ? 'polygon' : 'polyline'
+  const fill = element.closed ? element.fill : 'none'
   const tips = !element.closed && (element.startTip === 'arrow' || element.endTip === 'arrow')
+  // Curved → a single <path>; straight → <polyline>/<polygon>. Both take the same
+  // paint + marker props (markers work on path and polyline alike).
+  const geom = element.curve
+    ? { Tag: 'path' as const, attr: { d: curvedPathD(element.points, element.closed) } }
+    : { Tag: (element.closed ? 'polygon' : 'polyline') as 'polygon' | 'polyline', attr: { points: element.points.map((p) => `${p[0]},${p[1]}`).join(' ') } }
+  const Tag = geom.Tag
   return (
     <g>
       {tips && (
@@ -153,13 +159,13 @@ function Shape({ element }: { element: BoardElement }) {
           </marker>
         </defs>
       )}
-      <Tag points={pts} stroke="transparent" strokeWidth={hit} fill={element.closed ? element.fill : 'none'} strokeLinecap="round" strokeLinejoin="round" />
+      <Tag {...geom.attr} stroke="transparent" strokeWidth={hit} fill={fill} strokeLinecap="round" strokeLinejoin="round" />
       <Tag
-        points={pts}
+        {...geom.attr}
         stroke={element.stroke}
         strokeWidth={element.strokeWidth}
         strokeDasharray={dash}
-        fill={element.closed ? element.fill : 'none'}
+        fill={fill}
         strokeLinecap="round"
         strokeLinejoin="round"
         markerStart={tips && element.startTip === 'arrow' ? `url(#${markerId})` : undefined}

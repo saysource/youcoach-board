@@ -82,11 +82,13 @@ export interface EllipseElement extends BaseElement {
 /** A point sequence (≥2 points). The 2-point case is a straight line; with arrow
  *  tips it's an arrow. `closed` (only with ≥3 points) joins last→first into a
  *  fillable polygon. Tips apply at the first/last point of an OPEN polyline.
- *  Points are in local coordinates. */
+ *  `curve` renders a smooth (auto, Catmull-Rom → cubic bézier) path through the
+ *  points instead of straight segments. Points are in local coordinates. */
 export interface PolylineElement extends BaseElement {
   type: 'polyline'
   points: Array<[number, number]>
   closed: boolean
+  curve: boolean
   startTip: ArrowTip
   endTip: ArrowTip
 }
@@ -124,6 +126,54 @@ export interface FigureElement extends BaseElement {
 }
 
 export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement
+
+// ── Smooth curves (auto, no user handles) ───────────────────────────────────
+// A polyline with `curve` renders as a Catmull-Rom spline through its points,
+// realized as one cubic bézier per segment. The same per-segment cubics position
+// the mid-segment edit anchors (evaluated at t=0.5), so rendering and editing
+// agree exactly.
+
+/** A cubic bézier segment: start, two controls, end. */
+export type Cubic = [[number, number], [number, number], [number, number], [number, number]]
+
+/** Catmull-Rom → cubic béziers through `pts`. Open curves clamp the phantom end
+ *  neighbors to the endpoints; closed curves wrap (and include the last→first
+ *  segment). Returns one cubic per segment (open: n-1, closed: n). */
+export function catmullRomCubics(pts: Array<[number, number]>, closed: boolean): Cubic[] {
+  const n = pts.length
+  if (n < 2) return []
+  const segs = closed ? n : n - 1
+  const out: Cubic[] = []
+  for (let i = 0; i < segs; i++) {
+    const p1 = pts[i]
+    const p2 = pts[(i + 1) % n]
+    const prev = !closed && i === 0 ? p1 : pts[(i - 1 + n) % n]
+    const next = !closed && i === segs - 1 ? p2 : pts[(i + 2) % n]
+    const c1: [number, number] = [p1[0] + (p2[0] - prev[0]) / 6, p1[1] + (p2[1] - prev[1]) / 6]
+    const c2: [number, number] = [p2[0] - (next[0] - p1[0]) / 6, p2[1] - (next[1] - p1[1]) / 6]
+    out.push([p1, c1, c2, p2])
+  }
+  return out
+}
+
+/** Evaluate a cubic bézier at parameter t (0..1). */
+export function cubicPointAt(c: Cubic, t: number): [number, number] {
+  const m = 1 - t
+  const a = m * m * m
+  const b = 3 * m * m * t
+  const d = 3 * m * t * t
+  const e = t * t * t
+  return [a * c[0][0] + b * c[1][0] + d * c[2][0] + e * c[3][0], a * c[0][1] + b * c[1][1] + d * c[2][1] + e * c[3][1]]
+}
+
+/** SVG path `d` for a smooth curve through `pts`. */
+export function curvedPathD(pts: Array<[number, number]>, closed: boolean): string {
+  if (pts.length < 2) return ''
+  let d = `M ${pts[0][0]},${pts[0][1]}`
+  for (const c of catmullRomCubics(pts, closed)) d += ` C ${c[1][0]},${c[1][1]} ${c[2][0]},${c[2][1]} ${c[3][0]},${c[3][1]}`
+  if (closed) d += ' Z'
+  return d
+}
 
 export interface Box {
   x: number
@@ -219,7 +269,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     const x2 = num(o.x2)
     const y2 = num(o.y2)
     if (x1 === null || y1 === null || x2 === null || y2 === null) return null
-    return { ...base, type: 'polyline', points: [[x1, y1], [x2, y2]], closed: false, startTip: 'none', endTip: 'none' }
+    return { ...base, type: 'polyline', points: [[x1, y1], [x2, y2]], closed: false, curve: false, startTip: 'none', endTip: 'none' }
   }
   if (o.type === 'polyline') {
     if (!Array.isArray(o.points)) return null
@@ -232,7 +282,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       points.push([x, y])
     }
     if (points.length < 2) return null
-    return { ...base, type: 'polyline', points, closed: o.closed === true, startTip: parseTip(o.startTip), endTip: parseTip(o.endTip) }
+    return { ...base, type: 'polyline', points, closed: o.closed === true, curve: o.curve === true, startTip: parseTip(o.startTip), endTip: parseTip(o.endTip) }
   }
   if (o.type === 'draw') {
     if (!Array.isArray(o.points)) return null

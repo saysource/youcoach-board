@@ -68,6 +68,18 @@ export function toolCreatesClosed(tool: ToolId): boolean {
   return isShapeTool(tool)
 }
 
+/** The line/arrow tools (the Lines menu). Straight: line/arrow; curved (smooth):
+ *  elbow-line/elbow-arrow. arrow + elbow-arrow get an end arrow tip. */
+export const LINE_TOOLS = ['arrow', 'line', 'elbow-arrow', 'elbow-line'] as const
+export type LineTool = (typeof LINE_TOOLS)[number]
+export function isLineTool(tool: ToolId): tool is LineTool {
+  return (LINE_TOOLS as readonly string[]).includes(tool)
+}
+/** Whether a line tool draws a smooth (curved) line rather than straight. */
+export function toolIsCurved(tool: ToolId): boolean {
+  return tool === 'elbow-arrow' || tool === 'elbow-line'
+}
+
 /** Below this drag distance (board units) a press is treated as a click, not a
  *  figure — so a stray click with a creation tool doesn't drop a zero-size shape. */
 export const MIN_DRAG = 4
@@ -95,6 +107,8 @@ export function toolElementType(tool: ToolId): DraftType | null {
       return tool
     case 'line':
     case 'arrow':
+    case 'elbow-line':
+    case 'elbow-arrow':
       return 'line'
     default:
       return null
@@ -103,7 +117,7 @@ export function toolElementType(tool: ToolId): DraftType | null {
 
 /** The end arrow tip a creation tool gives its line/polyline. */
 export function toolEndTip(tool: ToolId): ArrowTip {
-  return tool === 'arrow' ? 'arrow' : 'none'
+  return tool === 'arrow' || tool === 'elbow-arrow' ? 'arrow' : 'none'
 }
 
 /** Map a screen (client) coordinate into board user-space via the SVG's CTM.
@@ -156,9 +170,10 @@ export function squareCorner(start: Point, current: Point): Point {
   return { x: start.x + (dx < 0 ? -s : s), y: start.y + (dy < 0 ? -s : s) }
 }
 
-/** Build a straight line as a 2-point (open) polyline, optionally end-tipped. */
-export function makeLine(id: string, start: Point, current: Point, endTip: ArrowTip = 'none'): BoardElement {
-  return makePolyline(id, [start, current], false, 'none', endTip)
+/** Build a straight line as a 2-point (open) polyline, optionally end-tipped and
+ *  curved (a 2-point curve is straight; the curve shows once points are added). */
+export function makeLine(id: string, start: Point, current: Point, endTip: ArrowTip = 'none', curve = false): BoardElement {
+  return makePolyline(id, [start, current], false, 'none', endTip, curve)
 }
 
 /** Build a polyline from vertices (board coords). */
@@ -168,12 +183,14 @@ export function makePolyline(
   closed: boolean,
   startTip: ArrowTip = 'none',
   endTip: ArrowTip = 'none',
+  curve = false,
 ): BoardElement {
   return {
     ...figureBase(id),
     type: 'polyline',
     points: points.map((p) => [p.x, p.y] as [number, number]),
     closed,
+    curve,
     startTip,
     endTip,
   }

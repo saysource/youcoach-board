@@ -1,13 +1,14 @@
-import { getLocalBounds, type BoardElement, type Box } from '@youcoach-board/core'
+import { getLocalBounds, catmullRomCubics, cubicPointAt, type BoardElement, type Box } from '@youcoach-board/core'
 import { elementToBoard, localCorners, type Pt, type CornerId } from '../lib/geometry-2d'
 
-export type HandleId = CornerId | 'rotate' | `point-${number}`
+export type HandleId = CornerId | 'rotate' | `point-${number}` | `anchor-${number}`
 
 const FRAME = 'var(--color-selection-frame)' // bounding-box outline + rotation arm
 const HANDLE = 'var(--color-selection-handle)' // resize / rotation / endpoint handles
 // On-screen sizes (px); divided by `scale` to stay constant regardless of zoom.
 const HANDLE_PX = 8
 const ENDPOINT_R_PX = 6
+const ANCHOR_R_PX = 4.5 // mid-segment "add point" anchors — smaller, filled
 const ROT_R_PX = 5
 const ROT_OFFSET_PX = 20
 const STROKE_PX = 1.5
@@ -22,24 +23,65 @@ interface Props {
   /** Provided for single selection → renders interactive handles. Omitted for
    *  multi selection → renders just the outline. */
   onHandleDown?: (handle: HandleId, e: React.PointerEvent) => void
+  /** Hide the bounding-box frame (outline + corners + rotation) — used while a
+   *  vertex/anchor is being dragged so only the point handles show. */
+  hideFrame?: boolean
+}
+
+// Local-coordinate positions of the mid-segment anchors for a polyline: the
+// midpoint of each straight segment, or the curve's midpoint (t=0.5) when curved.
+// Anchor `i` sits on the segment between vertex i and i+1 (closed wraps).
+function polylineAnchors(el: Extract<BoardElement, { type: 'polyline' }>): Array<{ seg: number; at: Pt }> {
+  const pts = el.points
+  const n = pts.length
+  if (n < 2) return []
+  const segs = el.closed ? n : n - 1
+  const cubics = el.curve ? catmullRomCubics(pts, el.closed) : null
+  const out: Array<{ seg: number; at: Pt }> = []
+  for (let i = 0; i < segs; i++) {
+    if (cubics) {
+      const m = cubicPointAt(cubics[i], 0.5)
+      out.push({ seg: i, at: { x: m[0], y: m[1] } })
+    } else {
+      const a = pts[i]
+      const b = pts[(i + 1) % n]
+      out.push({ seg: i, at: { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2 } })
+    }
+  }
+  return out
 }
 
 // Selection chrome for one element, drawn in board space so corner squares stay
 // upright (axis-aligned) even when the element is rotated — only the outline
 // rotates with it (the Excalidraw touch). A straight line (2-point polyline) is
 // the exception: no box, just a draggable handle at each endpoint.
-export function SelectionHandles({ element, scale, onHandleDown }: Props) {
+export function SelectionHandles({ element, scale, onHandleDown, hideFrame = false }: Props) {
   const interactive = !!onHandleDown
   const box = getLocalBounds(element)
   const t = element.transform
 
+  // Mid-segment anchors (drag to split / add a curve point) for the selected
+  // polyline, drawn under the vertex handles so vertices win the pointer.
+  const anchors =
+    interactive && element.type === 'polyline'
+      ? polylineAnchors(element).map((a) => (
+          <AnchorHandle
+            key={`an-${a.seg}`}
+            at={elementToBoard(a.at, box, t)}
+            scale={scale}
+            onDown={(e) => onHandleDown!(`anchor-${a.seg}`, e)}
+          />
+        ))
+      : null
+
   // 2-point polyline = a straight line: in SINGLE selection, draggable endpoint
-  // handles (no frame). In a MULTI selection it falls through to the box-like
-  // branch below, so it gets the same rectangular (dashed) frame as everything
-  // else and reads clearly as selected.
+  // handles + a mid anchor (no frame). In a MULTI selection it falls through to
+  // the box-like branch below, so it gets the same rectangular (dashed) frame as
+  // everything else and reads clearly as selected.
   if (element.type === 'polyline' && element.points.length === 2 && interactive) {
     return (
       <g>
+        {anchors}
         {element.points.map((p, i) => (
           <EndpointHandle
             key={`pt-${i}`}
@@ -93,40 +135,48 @@ export function SelectionHandles({ element, scale, onHandleDown }: Props) {
 
   return (
     <g>
-      <polygon points={poly} fill="none" stroke={FRAME} strokeWidth={STROKE_PX} vectorEffect="non-scaling-stroke" shapeRendering={outlineRendering} pointerEvents="none" />
-      {/* rotation arm + handle */}
-      <line x1={topMid.x} y1={topMid.y} x2={rot.x} y2={rot.y} stroke={FRAME} strokeWidth={STROKE_PX} vectorEffect="non-scaling-stroke" pointerEvents="none" />
-      <circle
-        cx={rot.x}
-        cy={rot.y}
-        r={ROT_R_PX / scale}
-        fill="#ffffff"
-        stroke={HANDLE}
-        strokeWidth={STROKE_PX}
-        vectorEffect="non-scaling-stroke"
-        style={{ cursor: 'grab' }}
-        data-handle="rotate"
-        onPointerDown={(e) => onHandleDown!('rotate', e)}
-      />
-      {/* corner resize squares (kept axis-aligned / upright) */}
-      {(Object.keys(corners) as CornerId[]).map((id) => (
-        <rect
-          key={id}
-          x={corners[id].x - handleSize / 2}
-          y={corners[id].y - handleSize / 2}
-          width={handleSize}
-          height={handleSize}
-          rx={handleSize / 5}
-          fill="#ffffff"
-          stroke={HANDLE}
-          strokeWidth={STROKE_PX}
-          vectorEffect="non-scaling-stroke"
-          style={{ cursor: cursorFor[id] }}
-          data-handle={id}
-          onPointerDown={(e) => onHandleDown!(id, e)}
-        />
-      ))}
-      {/* polyline vertex handles — drawn last so they sit above the corners. */}
+      {/* The bounding-box frame (outline + rotation + corner resize) is hidden
+          while a vertex/anchor is being dragged — only the point handles stay. */}
+      {!hideFrame && (
+        <>
+          <polygon points={poly} fill="none" stroke={FRAME} strokeWidth={STROKE_PX} vectorEffect="non-scaling-stroke" shapeRendering={outlineRendering} pointerEvents="none" />
+          {/* rotation arm + handle */}
+          <line x1={topMid.x} y1={topMid.y} x2={rot.x} y2={rot.y} stroke={FRAME} strokeWidth={STROKE_PX} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+          <circle
+            cx={rot.x}
+            cy={rot.y}
+            r={ROT_R_PX / scale}
+            fill="#ffffff"
+            stroke={HANDLE}
+            strokeWidth={STROKE_PX}
+            vectorEffect="non-scaling-stroke"
+            style={{ cursor: 'grab' }}
+            data-handle="rotate"
+            onPointerDown={(e) => onHandleDown!('rotate', e)}
+          />
+          {/* corner resize squares (kept axis-aligned / upright) */}
+          {(Object.keys(corners) as CornerId[]).map((id) => (
+            <rect
+              key={id}
+              x={corners[id].x - handleSize / 2}
+              y={corners[id].y - handleSize / 2}
+              width={handleSize}
+              height={handleSize}
+              rx={handleSize / 5}
+              fill="#ffffff"
+              stroke={HANDLE}
+              strokeWidth={STROKE_PX}
+              vectorEffect="non-scaling-stroke"
+              style={{ cursor: cursorFor[id] }}
+              data-handle={id}
+              onPointerDown={(e) => onHandleDown!(id, e)}
+            />
+          ))}
+        </>
+      )}
+      {/* mid-segment anchors (under the vertices) + polyline vertex handles,
+          drawn last so they sit above the corners. */}
+      {anchors}
       {element.type === 'polyline' &&
         element.points.map((p, i) => (
           <EndpointHandle
@@ -164,6 +214,24 @@ function EndpointHandle({
       vectorEffect="non-scaling-stroke"
       style={onDown ? { cursor: 'move' } : undefined}
       data-handle={handle}
+      onPointerDown={onDown}
+    />
+  )
+}
+
+// A mid-segment anchor: a smaller, filled dot. Dragging it inserts a vertex on
+// that segment (split a straight segment / add a curve point on a curved one).
+function AnchorHandle({ at, scale, onDown }: { at: Pt; scale: number; onDown: (e: React.PointerEvent) => void }) {
+  return (
+    <circle
+      cx={at.x}
+      cy={at.y}
+      r={ANCHOR_R_PX / scale}
+      fill={HANDLE}
+      stroke="#ffffff"
+      strokeWidth={STROKE_PX}
+      vectorEffect="non-scaling-stroke"
+      style={{ cursor: 'copy' }}
       onPointerDown={onDown}
     />
   )
