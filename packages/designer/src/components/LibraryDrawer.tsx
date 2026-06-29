@@ -5,7 +5,7 @@ import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
-import { useAssets, buildFigureElement, FIGURE_DND_MIME, type CatalogCategory, type CatalogFigure, type FigureDragData } from '../lib/assets'
+import { useAssets, buildFigureElement, FIGURE_DND_MIME, FIELD_DND_MIME, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { useEditorStore } from '../store/context'
 
 const FACING_ORDER = ['left', 'up', 'down', 'right']
@@ -104,8 +104,27 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
     if (d) createFigure(buildFigureElement(d, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
   }
 
-  // Drag-to-drop: hand the descriptor to the board, which places it at the cursor.
-  function onDragStartFigure(e: React.DragEvent, f: CatalogFigure) {
+  // Drag payload for a field thumbnail (background category). Dropping it on the
+  // board has the same effect as clicking it.
+  function fieldDescriptor(f: CatalogFigure): FieldDragData | null {
+    if (cat?.kind !== 'field' || !f.svg) return null
+    return { fieldSvg: f.svg, figureScale: f.scale ?? 1 }
+  }
+
+  // Whether a thumbnail can be dragged onto the board (figures and fields can).
+  function draggable(f: CatalogFigure): boolean {
+    return !!descriptor(f) || !!fieldDescriptor(f)
+  }
+
+  // Drag-to-drop: hand the descriptor to the board, which places a figure at the
+  // cursor or applies a field as the background.
+  function onDragStart(e: React.DragEvent, f: CatalogFigure) {
+    const field = fieldDescriptor(f)
+    if (field) {
+      e.dataTransfer.setData(FIELD_DND_MIME, JSON.stringify(field))
+      e.dataTransfer.effectAllowed = 'copy'
+      return
+    }
     const d = descriptor(f)
     if (!d) return
     e.dataTransfer.setData(FIGURE_DND_MIME, JSON.stringify(d))
@@ -238,8 +257,8 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                           key={`${f.thumb}-${i}`}
                           type="button"
                           title={f.tool ? 'Text' : cat?.name}
-                          draggable={!!descriptor(f)}
-                          onDragStart={(e) => onDragStartFigure(e, f)}
+                          draggable={draggable(f)}
+                          onDragStart={(e) => onDragStart(e, f)}
                           onClick={() => drop(f)}
                           className={cn(
                             'flex aspect-square items-center justify-center rounded-md border border-transparent p-1 hover:border-primary hover:bg-primary/20',

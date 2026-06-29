@@ -83,6 +83,17 @@ export function useAssets(): AssetsValue {
 /** dataTransfer MIME for a dragged catalog figure. */
 export const FIGURE_DND_MIME = 'application/x-ycb-figure'
 
+/** dataTransfer MIME for a dragged catalog field. Dropping a field anywhere on
+ *  the board has the same effect as clicking it (sets the background). */
+export const FIELD_DND_MIME = 'application/x-ycb-field'
+
+/** Payload carried when dragging a field from the palette. */
+export interface FieldDragData {
+  fieldSvg: string
+  /** Default scale for figures added while this field is active. */
+  figureScale: number
+}
+
 /** The minimal figure data carried in a palette drag (resolved colors included,
  *  since the board doesn't know the source category). */
 export interface FigureDragData {

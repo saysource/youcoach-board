@@ -16809,331 +16809,484 @@
           "thumb": "images/optimized/fields/11/0_mini.png",
           "w": 1300,
           "h": 1000,
-          "scale": 1
+          "scale": 1,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/1.svg",
           "thumb": "images/optimized/fields/11/1_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.5
+          "scale": 0.5,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/2.svg",
           "thumb": "images/optimized/fields/11/2_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 1.1
+          "scale": 1.1,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/3.svg",
           "thumb": "images/optimized/fields/11/3_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.8
+          "scale": 0.8,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/4.svg",
           "thumb": "images/optimized/fields/11/4_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.8
+          "scale": 0.8,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/5.svg",
           "thumb": "images/optimized/fields/11/5_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.8
+          "scale": 0.8,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/6.svg",
           "thumb": "images/optimized/fields/11/6_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 1
+          "scale": 1,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/7.svg",
           "thumb": "images/optimized/fields/11/7_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.4
+          "scale": 0.4,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/8.svg",
           "thumb": "images/optimized/fields/11/8_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.7
+          "scale": 0.7,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/9.svg",
           "thumb": "images/optimized/fields/11/9_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.6
+          "scale": 0.6,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/10.svg",
           "thumb": "images/optimized/fields/11/10_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.6
+          "scale": 0.6,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/11.svg",
           "thumb": "images/optimized/fields/11/11_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.6
+          "scale": 0.6,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/12.svg",
           "thumb": "images/optimized/fields/11/12_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.6
+          "scale": 0.6,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/13.svg",
           "thumb": "images/optimized/fields/11/13_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.75
+          "scale": 0.75,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/14.svg",
           "thumb": "images/optimized/fields/11/14_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.75
+          "scale": 0.75,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/15.svg",
           "thumb": "images/optimized/fields/11/15_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.5
+          "scale": 0.5,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/16.svg",
           "thumb": "images/optimized/fields/11/16_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.8
+          "scale": 0.8,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/17.svg",
           "thumb": "images/optimized/fields/11/17_mini.png",
           "w": 1302,
           "h": 975,
-          "scale": 0.4
+          "scale": 0.4,
+          "actions": [
+            "fields.topview"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/18.svg",
           "thumb": "images/optimized/fields/11/18_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.5
+          "scale": 0.5,
+          "actions": [
+            "fields.topview"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/19.svg",
           "thumb": "images/optimized/fields/11/19_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.3
+          "scale": 0.3,
+          "actions": [
+            "fields.topview"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/21.svg",
           "thumb": "images/optimized/fields/11/21_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.4
+          "scale": 0.4,
+          "actions": [
+            "fields.topview"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/22.svg",
           "thumb": "images/optimized/fields/11/22_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.4
+          "scale": 0.4,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/23.svg",
           "thumb": "images/optimized/fields/11/23_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.5
+          "scale": 0.5,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/24.svg",
           "thumb": "images/optimized/fields/11/24_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.6
+          "scale": 0.6,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/25.svg",
           "thumb": "images/optimized/fields/11/25_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.7
+          "scale": 0.7,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/26.svg",
           "thumb": "images/optimized/fields/11/26_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.7
+          "scale": 0.7,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/27.svg",
           "thumb": "images/optimized/fields/11/27_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.45
+          "scale": 0.45,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/28.svg",
           "thumb": "images/optimized/fields/11/28_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.45
+          "scale": 0.45,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/29.svg",
           "thumb": "images/optimized/fields/11/29_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.6
+          "scale": 0.6,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/30.svg",
           "thumb": "images/optimized/fields/11/30_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.8
+          "scale": 0.8,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/31.svg",
           "thumb": "images/optimized/fields/11/31_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.8
+          "scale": 0.8,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/32.svg",
           "thumb": "images/optimized/fields/11/32_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.8
+          "scale": 0.8,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/33.svg",
           "thumb": "images/optimized/fields/11/33_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.5
+          "scale": 0.5,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/34.svg",
           "thumb": "images/optimized/fields/11/34_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.5
+          "scale": 0.5,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/35.svg",
           "thumb": "images/optimized/fields/11/35_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.4
+          "scale": 0.4,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/36.svg",
           "thumb": "images/optimized/fields/11/36_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.4
+          "scale": 0.4,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/37.svg",
           "thumb": "images/optimized/fields/11/37_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.4
+          "scale": 0.4,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/38.svg",
           "thumb": "images/optimized/fields/11/38_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.4
+          "scale": 0.4,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/39.svg",
           "thumb": "images/optimized/fields/11/39_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.3
+          "scale": 0.3,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/40.svg",
           "thumb": "images/optimized/fields/11/40_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.35
+          "scale": 0.35,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/41.svg",
           "thumb": "images/optimized/fields/11/41_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 1
+          "scale": 1,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/42.svg",
           "thumb": "images/optimized/fields/11/42_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 2
+          "scale": 2,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/43.svg",
           "thumb": "images/optimized/fields/11/43_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 1
+          "scale": 1,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/44.svg",
           "thumb": "images/optimized/fields/11/44_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 1
+          "scale": 1,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/45.svg",
           "thumb": "images/optimized/fields/11/45_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 1
+          "scale": 1,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/46.svg",
           "thumb": "images/optimized/fields/11/46_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 0.6
+          "scale": 0.6,
+          "actions": [
+            "fields.perspective"
+          ]
         },
         {
           "svg": "images/optimized/fields/11/47.svg",
           "thumb": "images/optimized/fields/11/47_mini.png",
           "w": 1300,
           "h": 975,
-          "scale": 1.9
+          "scale": 1.9,
+          "actions": [
+            "fields.perspective"
+          ]
         }
-      ]
+      ],
+      "facets": {
+        "action": [
+          {
+            "id": "fields.perspective",
+            "label": "Perspective"
+          },
+          {
+            "id": "fields.topview",
+            "label": "Top View"
+          }
+        ]
+      }
     },
     "fields_futsal": {
       "name": "Futsal",
@@ -17327,6 +17480,10 @@
             "label": "Field 11"
           },
           {
+            "id": "fields.topview",
+            "label": "Top View"
+          },
+          {
             "id": "futsal",
             "label": "Futsal"
           }
@@ -17510,7 +17667,7 @@
           "h": 975,
           "scale": 0.4,
           "actions": [
-            "field-11"
+            "fields.topview"
           ]
         },
         {
@@ -17520,7 +17677,7 @@
           "h": 975,
           "scale": 0.5,
           "actions": [
-            "field-11"
+            "fields.topview"
           ]
         },
         {
@@ -17530,7 +17687,7 @@
           "h": 975,
           "scale": 0.3,
           "actions": [
-            "field-11"
+            "fields.topview"
           ]
         },
         {
@@ -17540,7 +17697,7 @@
           "h": 975,
           "scale": 0.4,
           "actions": [
-            "field-11"
+            "fields.topview"
           ]
         },
         {

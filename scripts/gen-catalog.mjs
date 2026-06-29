@@ -148,16 +148,29 @@ function flatFigures(name) {
   return { figures }
 }
 
+// Top-view pitches (per field type) — drawn from above, suitable for Tokens.
+// Everything else in the type is a perspective (angled) view.
+const FIELD_TOPVIEW = { '11': new Set([17, 18, 19, 21]) }
+
 function fieldFigures(name) {
   const type = name.slice('fields_'.length) // '11' | 'futsal'
+  const topview = FIELD_TOPVIEW[type]
   const figures = (palette_fields[type] || []).map((fd) => {
     const rel = `fields/${type}/${fd.index}.svg`
     const size = sizeOf(rel) || { w: 100, h: 100 }
     const f = { svg: `${IMG_BASE}/${rel}`, thumb: `${IMG_BASE}/fields/${type}/${fd.index}_mini.png`, w: size.w, h: size.h, scale: fd.scale }
     if (fd.color) f.color = fd.color
+    if (topview) f.actions = [topview.has(fd.index) ? 'fields.topview' : 'fields.perspective']
     return f
   })
-  return { figures }
+  const result = { figures }
+  if (topview) {
+    result.facets = { action: [
+      { id: 'fields.perspective', label: 'Perspective' },
+      { id: 'fields.topview', label: 'Top View' },
+    ] }
+  }
+  return result
 }
 
 // ── Build ──
@@ -190,11 +203,21 @@ for (const macro of palette_categories) {
 const f11 = categories['fields_11']
 const ffut = categories['fields_futsal']
 if (f11 && ffut) {
+  // Top-view field-11 pitches get their own section here too; the rest of
+  // field 11 stays under "Field 11", and Futsal is its own section.
+  const isTopview = (f) => (f.actions ?? []).includes('fields.topview')
   categories['fields_all'] = {
     name: 'All Fields',
     kind: 'field',
-    facets: { action: [{ id: 'field-11', label: 'Field 11' }, { id: 'futsal', label: 'Futsal' }] },
-    figures: [...f11.figures.map((f) => ({ ...f, actions: ['field-11'] })), ...ffut.figures.map((f) => ({ ...f, actions: ['futsal'] }))],
+    facets: { action: [
+      { id: 'field-11', label: 'Field 11' },
+      { id: 'fields.topview', label: 'Top View' },
+      { id: 'futsal', label: 'Futsal' },
+    ] },
+    figures: [
+      ...f11.figures.map((f) => ({ ...f, actions: isTopview(f) ? ['fields.topview'] : ['field-11'] })),
+      ...ffut.figures.map((f) => ({ ...f, actions: ['futsal'] })),
+    ],
   }
   const fg = groups.find((g) => g.id === 'fields')
   if (fg) fg.categories.unshift('fields_all')
