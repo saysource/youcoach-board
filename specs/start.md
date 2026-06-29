@@ -488,3 +488,49 @@ When a field category is selected, in the properties panel we show:
 The logo position refer to the position of the youcoach logo @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client/src/core/assets/youcoachapp_logo_dark.svg shown on top of the background image with 0.2 opacity.
 The positions are: center / top-left / top-right / bottom-left / bottom-right
 
+------------
+
+## Shapes menu
+
+The Rectangle tool menu item in the main toolbar should become a more generic Shapes menu.
+The default icon should be @assets/shapes.svg, which is what is used when no previous shape tool was selected.
+The icon opens a drop down with the following shapes:
+- Rectangle
+- Ellipse
+- Diamond
+- Penthagon
+- Triangle
+- Trapezoid
+
+As the user select a shape type, this becomes the selected tool, and in the main toolbar we replace the generic Shapes icon with the one of the selected tool.
+If the user, upon opening the dropdown, does not make any choice, we activate automatically the last shape tool used, and the menu closes automatically by clicking outside it.
+I provided the icon for @assets/shapes.svg, the only one missing.
+
+
+## Arrows menu
+
+The Arrow tool menu item in the main toolbar should become a more generic Lines menu.
+The default icon should be @assets/lines.svg, which is what is used when no previous line/arrow tool was selected.
+The icon opens a drop down with the following shapes:
+
+- Arrow
+- Line
+- Elbow arrow (really a cubic bezier)
+- Elbow line
+
+As the user select a line/arrow type, this becomes the selected tool, and in the main toolbar we replace the generic Lines icon with the one of the selected tool.
+If the user, upon opening the dropdown, does not make any choice, we activate automatically the last line tool used, and the menu closes automatically by clicking outside it.
+
+### More about lines and arrow
+
+Line/Arrow style can be of 2 types: streight or curved.
+The tool Miro does a great job in siplyfing how the user can adjust the curve and adding/removing points to a ployline.
+It shows between points special mid-points (let's call them anchors).
+If the line is "streight", dragging an anchor will actually split the segment in two sub-segments.
+If the line is "curved", bezier is automatically calculated between points, and dragging an anchor will add new curve point.
+Double clicking a point (except for last and first) will remove that pont/joint.
+
+
+The options for the line style are actually 3: simple, quadratic bezier and cubic bezier, but simple simply means that we use a quadratic with no curve.
+
+If a line/arrow is composed of multiple segments, the bezier handles 

@@ -85,6 +85,28 @@ export function ShapesIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+// Trapezoid — lucide has Square/Circle/Diamond/Pentagon/Triangle but no
+// trapezoid; this matches their stroke style (24×24, fill none, round joins).
+export function TrapezoidIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width="1em"
+      height="1em"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...props}
+    >
+      <path d="M7 6 L17 6 L21 18 L3 18 Z" />
+    </svg>
+  )
+}
+
 // Logo-position icons (a rounded frame + a pill in the chosen corner/center),
 // converted from assets/logo_*.svg. The outer frame is shared.
 const LOGO_FRAME =

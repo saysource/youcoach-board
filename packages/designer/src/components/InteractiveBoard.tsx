@@ -20,6 +20,7 @@ import {
   makeLine,
   makePolyline,
   makeDraw,
+  squareCorner,
   applyFigureStyle,
   isDragSignificant,
   boxesIntersect,
@@ -568,7 +569,9 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
           setPolyDraft({ points: [start], cursor: current, endTip, snap })
         }
       } else if (isDragSignificant(type, start, current)) {
-        createFigure(applyFigureStyle(makeFigure(type, crypto.randomUUID(), start, current), toolDefaults))
+        // Shift keeps the shape's proportion (square bounding box → regular shape).
+        const end = snap ? squareCorner(start, current) : current
+        createFigure(applyFigureStyle(makeFigure(type, crypto.randomUUID(), start, end), toolDefaults))
       }
     } else if (groupGesture) {
       const g = groupGesture
@@ -808,7 +811,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
               (draft.type === 'line' ? (
                 <ElementView element={applyFigureStyle(makeLine('draft', draft.start, draft.snap ? snapLineEnd(draft.start, draft.current) : draft.current, draft.endTip), toolDefaults)} />
               ) : (
-                <ElementView element={applyFigureStyle(makeFigure(draft.type, 'draft', draft.start, draft.current), toolDefaults)} />
+                <ElementView element={applyFigureStyle(makeFigure(draft.type, 'draft', draft.start, draft.snap ? squareCorner(draft.start, draft.current) : draft.current), toolDefaults)} />
               ))}
             {polyDraft && (
               <>

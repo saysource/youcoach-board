@@ -55,10 +55,17 @@ export function applyFigureStyle(el: BoardElement, st: FigureStyle): BoardElemen
   } as BoardElement
 }
 
+/** The box-shape tools (the Shapes menu) — all create a closed, fillable figure. */
+export const SHAPE_TOOLS = ['rectangle', 'ellipse', 'diamond', 'pentagon', 'triangle', 'trapezoid'] as const
+export type ShapeTool = (typeof SHAPE_TOOLS)[number]
+export function isShapeTool(tool: ToolId): tool is ShapeTool {
+  return (SHAPE_TOOLS as readonly string[]).includes(tool)
+}
+
 /** Whether the figure a tool creates is a closed (fillable) shape — drives
  *  whether the panel offers a Background color for the tool's future element. */
 export function toolCreatesClosed(tool: ToolId): boolean {
-  return tool === 'rectangle' || tool === 'ellipse'
+  return isShapeTool(tool)
 }
 
 /** Below this drag distance (board units) a press is treated as a click, not a
@@ -67,8 +74,10 @@ export const MIN_DRAG = 4
 
 // What a drag with a creation tool drafts. 'line' isn't an element type — it's
 // the 2-point-polyline draft shared by the line and arrow tools (which on a mere
-// click instead start a multi-point polyline; see InteractiveBoard).
-export type DraftType = 'rect' | 'ellipse' | 'line'
+// click instead start a multi-point polyline; see InteractiveBoard). The box
+// shapes map 1:1 to element types except 'rectangle' → 'rect'.
+export type BoxShapeType = 'rect' | 'ellipse' | 'diamond' | 'pentagon' | 'triangle' | 'trapezoid'
+export type DraftType = BoxShapeType | 'line'
 
 /** Map a toolbar tool id to what it drafts on drag, or null if not a creation
  *  tool. Both line and arrow draft a 'line' (the arrow tip is added separately,
@@ -79,6 +88,11 @@ export function toolElementType(tool: ToolId): DraftType | null {
       return 'rect'
     case 'ellipse':
       return 'ellipse'
+    case 'diamond':
+    case 'pentagon':
+    case 'triangle':
+    case 'trapezoid':
+      return tool
     case 'line':
     case 'arrow':
       return 'line'
@@ -110,11 +124,36 @@ const figureBase = (id: string) => ({
   fill: FIGURE_FILL,
 })
 
-/** Build a box figure (rect / ellipse) from a drag (two corners). Used for both
- *  the live draft preview and the committed element. */
-export function makeFigure(type: 'rect' | 'ellipse', id: string, start: Point, current: Point): BoardElement {
+// Normalized (0..1 within the bounding box) vertices for the polygon shapes,
+// which are created as CLOSED POLYLINES (not their own element type). Pentagon is
+// a regular pentagon pointing up, fitted to the box.
+const SHAPE_POLY: Record<Exclude<BoxShapeType, 'rect' | 'ellipse'>, Point[]> = {
+  triangle: [{ x: 0.5, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
+  diamond: [{ x: 0.5, y: 0 }, { x: 1, y: 0.5 }, { x: 0.5, y: 1 }, { x: 0, y: 0.5 }],
+  pentagon: [{ x: 0.5, y: 0 }, { x: 1, y: 0.382 }, { x: 0.809, y: 1 }, { x: 0.191, y: 1 }, { x: 0, y: 0.382 }],
+  trapezoid: [{ x: 0.25, y: 0 }, { x: 0.75, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
+}
+
+/** Build a box figure from a drag (two corners). rect/ellipse become their own
+ *  element; the polygon shapes (diamond/pentagon/triangle/trapezoid) become a
+ *  CLOSED POLYLINE whose vertices are the shape template scaled into the box.
+ *  Used for both the live draft preview and the committed element. */
+export function makeFigure(type: BoxShapeType, id: string, start: Point, current: Point): BoardElement {
   const box = normalizeBox(start.x, start.y, current.x, current.y)
-  return { ...figureBase(id), type, ...box }
+  if (type === 'rect' || type === 'ellipse') {
+    return { ...figureBase(id), type, ...box }
+  }
+  const pts = SHAPE_POLY[type].map((n) => ({ x: box.x + n.x * box.width, y: box.y + n.y * box.height }))
+  return makePolyline(id, pts, true)
+}
+
+/** Shift = keep proportion: project `current` so the box from `start` is square,
+ *  preserving the drag direction on each axis. */
+export function squareCorner(start: Point, current: Point): Point {
+  const dx = current.x - start.x
+  const dy = current.y - start.y
+  const s = Math.max(Math.abs(dx), Math.abs(dy))
+  return { x: start.x + (dx < 0 ? -s : s), y: start.y + (dy < 0 ? -s : s) }
 }
 
 /** Build a straight line as a 2-point (open) polyline, optionally end-tipped. */

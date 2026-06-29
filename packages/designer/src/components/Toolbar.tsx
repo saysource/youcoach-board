@@ -1,7 +1,8 @@
-import { type ElementType } from 'react'
-import { Lock, Hand, MousePointer2, Square, MoveRight, Minus, Pencil, Eraser, Shapes, Type } from 'lucide-react'
+import { type ElementType, useState } from 'react'
+import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
-import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon } from './icons'
+import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon } from './icons'
+import { isShapeTool, type ShapeTool } from '../lib/draw'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Separator } from './ui/separator'
@@ -22,14 +23,29 @@ const GROUP_ICON: Record<string, ElementType> = { players: PlayersIcon, material
 export type ToolId =
   | 'select'
   | 'hand'
+  // The box-shape tools live behind the Shapes menu (see ShapesMenu / draw.ts
+  // SHAPE_TOOLS), not as individual toolbar buttons.
   | 'rectangle'
-  // 'ellipse' is a supported creation tool (see toolElementType) but not
-  // currently exposed as its own toolbar button.
   | 'ellipse'
+  | 'diamond'
+  | 'pentagon'
+  | 'triangle'
+  | 'trapezoid'
   | 'arrow'
   | 'line'
   | 'draw'
   | 'eraser'
+
+// Shapes-menu entries (order shown in the dropdown). The first is the default.
+const SHAPE_ITEMS: { id: ShapeTool; label: string; icon: ElementType }[] = [
+  { id: 'rectangle', label: 'Rectangle', icon: Square },
+  { id: 'ellipse', label: 'Ellipse', icon: Circle },
+  { id: 'diamond', label: 'Diamond', icon: Diamond },
+  { id: 'pentagon', label: 'Pentagon', icon: Pentagon },
+  { id: 'triangle', label: 'Triangle', icon: Triangle },
+  { id: 'trapezoid', label: 'Trapezoid', icon: TrapezoidIcon },
+]
+const SHAPE_ICON: Record<ShapeTool, ElementType> = Object.fromEntries(SHAPE_ITEMS.map((s) => [s.id, s.icon])) as Record<ShapeTool, ElementType>
 
 interface Tool {
   id: ToolId
@@ -38,19 +54,18 @@ interface Tool {
   icon: ElementType
   /** Number badge shown bottom-right, mirroring Excalidraw's keyboard hints. */
   shortcut?: number
-  /** Render a separator before this tool (group boundary). */
-  groupStart?: boolean
 }
 
-// The figure tools, in toolbar order (the lock toggle, the More-tools menu and
-// the eraser are rendered separately, around these). Only rectangle / arrow /
-// line create figures so far; the rest are inert placeholders. The arrow and
-// line tools draw a straight line on drag, or a multi-point polyline on click
-// (arrow = end-tipped). A separator brackets the figure tools (after Selection).
-const TOOLS: Tool[] = [
+// Navigation tools, rendered before the Shapes menu.
+const NAV_TOOLS: Tool[] = [
   { id: 'hand', label: 'Pan', icon: Hand },
   { id: 'select', label: 'Selection', icon: MousePointer2, shortcut: 1 },
-  { id: 'rectangle', label: 'Rectangle', icon: Square, shortcut: 2, groupStart: true },
+]
+
+// Figure-creation tools rendered after the Shapes menu (same group). The arrow
+// and line tools draw a straight line on drag, or a multi-point polyline on
+// click (arrow = end-tipped). Box shapes are behind the Shapes menu.
+const DRAW_TOOLS: Tool[] = [
   { id: 'arrow', label: 'Arrow', icon: MoveRight, shortcut: 3 },
   { id: 'line', label: 'Line', icon: Minus, shortcut: 4 },
   { id: 'draw', label: 'Draw', icon: Pencil, shortcut: 5 },
@@ -66,24 +81,30 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory }: ToolbarProps) {
+  // The shape last picked/used, so the Shapes button shows it and re-opening the
+  // menu re-activates it. Null until the first use (button shows the generic icon).
+  const [lastShape, setLastShape] = useState<ShapeTool | null>(null)
+  function pickShape(tool: ShapeTool) {
+    setLastShape(tool)
+    onToolChange(tool)
+  }
   return (
     <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
       <ToolButton label={locked ? 'Unlock' : 'Keep selected tool active'} active={locked} onClick={onToggleLock}>
         <Lock />
       </ToolButton>
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      {TOOLS.map((tool) => (
-        <div key={tool.id} className="flex items-center gap-1">
-          {tool.groupStart && <Separator orientation="vertical" className="mx-0.5 h-6" />}
-          <ToolButton
-            label={tool.label}
-            active={activeTool === tool.id}
-            shortcut={tool.shortcut}
-            onClick={() => onToolChange(tool.id)}
-          >
-            <tool.icon />
-          </ToolButton>
-        </div>
+      {NAV_TOOLS.map((tool) => (
+        <ToolButton key={tool.id} label={tool.label} active={activeTool === tool.id} shortcut={tool.shortcut} onClick={() => onToolChange(tool.id)}>
+          <tool.icon />
+        </ToolButton>
+      ))}
+      <Separator orientation="vertical" className="mx-0.5 h-6" />
+      <ShapesMenu activeTool={activeTool} lastShape={lastShape} onPick={pickShape} />
+      {DRAW_TOOLS.map((tool) => (
+        <ToolButton key={tool.id} label={tool.label} active={activeTool === tool.id} shortcut={tool.shortcut} onClick={() => onToolChange(tool.id)}>
+          <tool.icon />
+        </ToolButton>
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <MoreToolsMenu onOpenCategory={onOpenCategory} />
@@ -92,6 +113,50 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
         <Eraser />
       </ToolButton>
     </div>
+  )
+}
+
+// The Shapes menu: a toolbar button whose icon is the active/last-used shape (or
+// the generic Shapes glyph before any is used). Opening it auto-activates the
+// last-used shape (default Rectangle) so the user can draw immediately; picking
+// an item switches to that shape. Clicking outside closes it (Radix default).
+function ShapesMenu({
+  activeTool,
+  lastShape,
+  onPick,
+}: {
+  activeTool: ToolId
+  lastShape: ShapeTool | null
+  onPick: (tool: ShapeTool) => void
+}) {
+  const active = isShapeTool(activeTool)
+  const current = active ? activeTool : lastShape
+  const Icon = current ? SHAPE_ICON[current] : ShapesIcon
+  return (
+    <DropdownMenu onOpenChange={(open) => open && onPick(lastShape ?? 'rectangle')}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon-sm"
+              aria-label="Shapes"
+              aria-pressed={active}
+              className={cn('relative hover:bg-primary/25', active && 'bg-primary/40 hover:bg-primary/40')}
+            >
+              <Icon />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Shapes</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="min-w-40">
+        {SHAPE_ITEMS.map((it) => (
+          <DropdownMenuItem key={it.id} onSelect={() => onPick(it.id)}>
+            <it.icon /> {it.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
