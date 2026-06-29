@@ -148,28 +148,46 @@ function flatFigures(name) {
   return { figures }
 }
 
-// Top-view pitches (per field type) — drawn from above, suitable for Tokens.
-// Everything else in the type is a perspective (angled) view.
-const FIELD_TOPVIEW = { '11': new Set([17, 18, 19, 21]) }
+// Field-11 view classification (drives the action sections). Empty = bare
+// pitches with no markings; Top view = drawn from above (suit Tokens); the rest
+// are perspective (angled) views.
+const FIELD_EMPTY = { '11': new Set([0, 32, 44]) }
+const FIELD_TOPVIEW = { '11': new Set([17, 18, 19, 21, 49]) }
+
+// Fields added after the legacy palette (svg + _mini.png already in public/).
+const FIELD_EXTRA = { '11': [{ index: 49, scale: 0.3 }] }
+
+// Action id for a field index (only the classified types get sections).
+function fieldAction(type, index) {
+  if (FIELD_EMPTY[type]?.has(index)) return 'fields.empty'
+  if (FIELD_TOPVIEW[type]?.has(index)) return 'fields.topview'
+  return 'fields.perspective'
+}
+
+// Section order + labels for a classified field type. `prefix` qualifies the
+// labels inside the combined "All Fields" category.
+function fieldSections(prefix = '') {
+  return [
+    { id: 'fields.empty', label: `${prefix}Empty` },
+    { id: 'fields.topview', label: `${prefix}Top view` },
+    { id: 'fields.perspective', label: `${prefix}Perspective` },
+  ]
+}
 
 function fieldFigures(name) {
   const type = name.slice('fields_'.length) // '11' | 'futsal'
-  const topview = FIELD_TOPVIEW[type]
-  const figures = (palette_fields[type] || []).map((fd) => {
+  const classified = !!FIELD_TOPVIEW[type]
+  const entries = [...(palette_fields[type] || []), ...(FIELD_EXTRA[type] || [])]
+  const figures = entries.map((fd) => {
     const rel = `fields/${type}/${fd.index}.svg`
     const size = sizeOf(rel) || { w: 100, h: 100 }
     const f = { svg: `${IMG_BASE}/${rel}`, thumb: `${IMG_BASE}/fields/${type}/${fd.index}_mini.png`, w: size.w, h: size.h, scale: fd.scale }
     if (fd.color) f.color = fd.color
-    if (topview) f.actions = [topview.has(fd.index) ? 'fields.topview' : 'fields.perspective']
+    if (classified) f.actions = [fieldAction(type, fd.index)]
     return f
   })
   const result = { figures }
-  if (topview) {
-    result.facets = { action: [
-      { id: 'fields.perspective', label: 'Perspective' },
-      { id: 'fields.topview', label: 'Top View' },
-    ] }
-  }
+  if (classified) result.facets = { action: fieldSections() }
   return result
 }
 
@@ -203,19 +221,17 @@ for (const macro of palette_categories) {
 const f11 = categories['fields_11']
 const ffut = categories['fields_futsal']
 if (f11 && ffut) {
-  // Top-view field-11 pitches get their own section here too; the rest of
-  // field 11 stays under "Field 11", and Futsal is its own section.
-  const isTopview = (f) => (f.actions ?? []).includes('fields.topview')
+  // Field 11 keeps its Empty / Top view / Perspective sections (prefixed here),
+  // then a separator, then Futsal as a single section.
   categories['fields_all'] = {
     name: 'All Fields',
     kind: 'field',
     facets: { action: [
-      { id: 'field-11', label: 'Field 11' },
-      { id: 'fields.topview', label: 'Top View' },
-      { id: 'futsal', label: 'Futsal' },
+      ...fieldSections('Fields 11 - '),
+      { id: 'futsal', label: 'Futsal', separatorBefore: true },
     ] },
     figures: [
-      ...f11.figures.map((f) => ({ ...f, actions: isTopview(f) ? ['fields.topview'] : ['field-11'] })),
+      ...f11.figures.map((f) => ({ ...f })),
       ...ffut.figures.map((f) => ({ ...f, actions: ['futsal'] })),
     ],
   }

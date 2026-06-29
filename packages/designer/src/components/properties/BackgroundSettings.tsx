@@ -18,7 +18,7 @@ const LOGO_OPTIONS: { value: LogoPosition; label: string; render: React.ReactNod
 
 // Background settings shown in the properties panel while a field category is the
 // active library category: solid background + color, field scale, logo position.
-// (Panning the field via the move-background overlay is a follow-up.)
+// The field is panned directly on the canvas via the move handle (InteractiveBoard).
 export function BackgroundSettings() {
   const bg = useEditorStore((s) => s.doc.background)
   const setBackground = useEditorStore((s) => s.setBackground)

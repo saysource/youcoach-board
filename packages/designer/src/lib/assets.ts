@@ -38,6 +38,8 @@ export interface CatalogFigure {
 export interface FacetValue {
   id: string
   label: string
+  /** Render a divider before this entry (jump menu + section list). */
+  separatorBefore?: boolean
 }
 export interface CatalogCategory {
   name: string

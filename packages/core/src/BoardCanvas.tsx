@@ -70,7 +70,11 @@ export function BoardCanvas({ doc, className, svgRef, children, overlay, backgro
           <rect x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} />
         </clipPath>
       </defs>
-      <g data-layer="background">{background ?? <FieldBackground image={doc.background.image} />}</g>
+      {/* Clipped to the 4:3 canvas so a scaled/panned field SVG (or logo) never
+          draws past the board edges. */}
+      <g data-layer="background" clipPath={`url(#${clipId})`}>
+        {background ?? <FieldBackground image={doc.background.image} />}
+      </g>
       {/* Elements are clipped to the canvas so figures never draw past its edge
           (overflow when moved/resized is hidden). The overlay is NOT clipped, so
           selection frames/handles can still extend beyond the board. */}

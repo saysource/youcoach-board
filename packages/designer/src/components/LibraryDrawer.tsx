@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { X, Sparkles, Maximize, Minimize, Pin, PinOff, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, type LucideIcon } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
 import { useAssets, buildFigureElement, FIGURE_DND_MIME, FIELD_DND_MIME, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { useEditorStore } from '../store/context'
@@ -61,8 +61,10 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const facings = cat?.facets?.facing ? [...cat.facets.facing].sort((a, b) => FACING_ORDER.indexOf(a.id) - FACING_ORDER.indexOf(b.id)) : null
   const inFacing = (f: CatalogFigure) => !facings || !facing || (f.facing ?? null) === facing
   const sections = actions
-    ? actions.map((a) => ({ id: a.id, label: a.label, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && (f.actions ?? []).includes(a.id)) })).filter((sec) => sec.figures.length)
-    : [{ id: 'all', label: '', figures: (cat?.figures ?? []).filter(inFacing) }]
+    ? actions
+        .map((a) => ({ id: a.id, label: a.label, separatorBefore: a.separatorBefore, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && (f.actions ?? []).includes(a.id)) }))
+        .filter((sec) => sec.figures.length)
+    : [{ id: 'all', label: '', separatorBefore: false, figures: (cat?.figures ?? []).filter(inFacing) }]
 
   function jumpTo(id: string) {
     gridRef.current?.querySelector(`[data-section="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -135,7 +137,7 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
     <aside
       aria-hidden={!open}
       className={cn(
-        'pointer-events-auto absolute inset-y-0 right-0 z-20 flex w-72 flex-col border-l border-border bg-card/90 transition-transform duration-200',
+        'pointer-events-auto absolute inset-y-0 right-0 z-20 flex w-64 flex-col border-l border-border bg-card/90 transition-transform duration-200',
         pinned ? 'shadow-none' : 'shadow-xl',
         open ? 'translate-x-0' : 'translate-x-full',
       )}
@@ -181,9 +183,10 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                 </Tooltip>
                 <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
                   {actions.map((a) => (
-                    <DropdownMenuItem key={a.id} onSelect={() => jumpTo(a.id)}>
-                      {a.label}
-                    </DropdownMenuItem>
+                    <Fragment key={a.id}>
+                      {a.separatorBefore && <DropdownMenuSeparator />}
+                      <DropdownMenuItem onSelect={() => jumpTo(a.id)}>{a.label}</DropdownMenuItem>
+                    </Fragment>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -238,8 +241,9 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
               )}
 
               <div ref={gridRef} className="flex-1 overflow-y-auto p-2 pt-0">
-                {sections.map((sec) => (
+                {sections.map((sec, si) => (
                   <div key={sec.id} data-section={sec.id}>
+                    {sec.separatorBefore && si > 0 && <div className="-mx-2 my-2 border-t border-border" />}
                     {sec.label && (
                       <div
                         key={`t-${sec.id}-${sec.id === flash.id ? flash.n : 0}`}
@@ -251,7 +255,7 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                         {sec.label}
                       </div>
                     )}
-                    <div className="grid grid-cols-3 gap-2 mb-3 last:mb-0">
+                    <div className="grid grid-cols-3 gap-0 mb-3 last:mb-0">
                       {sec.figures.map((f, i) => (
                         <button
                           key={`${f.thumb}-${i}`}

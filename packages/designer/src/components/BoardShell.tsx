@@ -25,8 +25,9 @@ const BOARD_TOP_PAD = 40
 const BOARD_SIDE_PAD = 16
 // Left space reserved for the full panel: left-2 (8) + w-52 (208) + gap.
 const PANEL_RESERVE = 200
-// Right-side library drawer width (Tailwind w-72 = 18rem).
-const DRAWER_WIDTH = 288
+// Right-side library drawer width (Tailwind w-64 = 16rem). Keep in sync with
+// LibraryDrawer's `w-64` and the `right-64` board inset below.
+const DRAWER_WIDTH = 256
 
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
@@ -111,7 +112,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // just enough to meet the drawer; widths too tight to fully clear it sit
   // flush-left, minimizing BOTH the overlap and the unused space on the left.
   // (We grow the right padding to shift the centered field left.) A docked
-  // (pinned) drawer instead refits the board into the remaining width (right-72).
+  // (pinned) drawer instead refits the board into the remaining width (right-64).
   const overlayOpen = drawerOpen && !drawerPinned
   const naturalRight = leftPad + (availWidth + fieldW) / 2 // centered field's right edge
   const targetRight = Math.max(leftPad + fieldW, Math.min(naturalRight, width - DRAWER_WIDTH))
@@ -164,7 +165,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           <div
             className={cn(
               'absolute inset-y-0 left-0 transition-all duration-200',
-              reserveRight ? 'right-72' : 'right-0',
+              reserveRight ? 'right-64' : 'right-0',
             )}
             style={{
               paddingTop: BOARD_TOP_PAD,
@@ -173,7 +174,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard />
+            <InteractiveBoard backgroundMode={backgroundMode} />
           </div>
 
           {/* Top-left menu */}

@@ -16811,7 +16811,7 @@
           "h": 1000,
           "scale": 1,
           "actions": [
-            "fields.perspective"
+            "fields.empty"
           ]
         },
         {
@@ -17121,7 +17121,7 @@
           "h": 975,
           "scale": 0.8,
           "actions": [
-            "fields.perspective"
+            "fields.empty"
           ]
         },
         {
@@ -17241,7 +17241,7 @@
           "h": 975,
           "scale": 1,
           "actions": [
-            "fields.perspective"
+            "fields.empty"
           ]
         },
         {
@@ -17273,17 +17273,31 @@
           "actions": [
             "fields.perspective"
           ]
+        },
+        {
+          "svg": "images/optimized/fields/11/49.svg",
+          "thumb": "images/optimized/fields/11/49_mini.png",
+          "w": 1200,
+          "h": 897,
+          "scale": 0.3,
+          "actions": [
+            "fields.topview"
+          ]
         }
       ],
       "facets": {
         "action": [
           {
-            "id": "fields.perspective",
-            "label": "Perspective"
+            "id": "fields.empty",
+            "label": "Empty"
           },
           {
             "id": "fields.topview",
-            "label": "Top View"
+            "label": "Top view"
+          },
+          {
+            "id": "fields.perspective",
+            "label": "Perspective"
           }
         ]
       }
@@ -17476,16 +17490,21 @@
       "facets": {
         "action": [
           {
-            "id": "field-11",
-            "label": "Field 11"
+            "id": "fields.empty",
+            "label": "Fields 11 - Empty"
           },
           {
             "id": "fields.topview",
-            "label": "Top View"
+            "label": "Fields 11 - Top view"
+          },
+          {
+            "id": "fields.perspective",
+            "label": "Fields 11 - Perspective"
           },
           {
             "id": "futsal",
-            "label": "Futsal"
+            "label": "Futsal",
+            "separatorBefore": true
           }
         ]
       },
@@ -17497,7 +17516,7 @@
           "h": 1000,
           "scale": 1,
           "actions": [
-            "field-11"
+            "fields.empty"
           ]
         },
         {
@@ -17507,7 +17526,7 @@
           "h": 975,
           "scale": 0.5,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17517,7 +17536,7 @@
           "h": 975,
           "scale": 1.1,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17527,7 +17546,7 @@
           "h": 975,
           "scale": 0.8,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17537,7 +17556,7 @@
           "h": 975,
           "scale": 0.8,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17547,7 +17566,7 @@
           "h": 975,
           "scale": 0.8,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17557,7 +17576,7 @@
           "h": 975,
           "scale": 1,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17567,7 +17586,7 @@
           "h": 975,
           "scale": 0.4,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17577,7 +17596,7 @@
           "h": 975,
           "scale": 0.7,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17587,7 +17606,7 @@
           "h": 975,
           "scale": 0.6,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17597,7 +17616,7 @@
           "h": 975,
           "scale": 0.6,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17607,7 +17626,7 @@
           "h": 975,
           "scale": 0.6,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17617,7 +17636,7 @@
           "h": 975,
           "scale": 0.6,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17627,7 +17646,7 @@
           "h": 975,
           "scale": 0.75,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17637,7 +17656,7 @@
           "h": 975,
           "scale": 0.75,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17647,7 +17666,7 @@
           "h": 975,
           "scale": 0.5,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17657,7 +17676,7 @@
           "h": 975,
           "scale": 0.8,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17707,7 +17726,7 @@
           "h": 975,
           "scale": 0.4,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17717,7 +17736,7 @@
           "h": 975,
           "scale": 0.5,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17727,7 +17746,7 @@
           "h": 975,
           "scale": 0.6,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17737,7 +17756,7 @@
           "h": 975,
           "scale": 0.7,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17747,7 +17766,7 @@
           "h": 975,
           "scale": 0.7,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17757,7 +17776,7 @@
           "h": 975,
           "scale": 0.45,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17767,7 +17786,7 @@
           "h": 975,
           "scale": 0.45,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17777,7 +17796,7 @@
           "h": 975,
           "scale": 0.6,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17787,7 +17806,7 @@
           "h": 975,
           "scale": 0.8,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17797,7 +17816,7 @@
           "h": 975,
           "scale": 0.8,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17807,7 +17826,7 @@
           "h": 975,
           "scale": 0.8,
           "actions": [
-            "field-11"
+            "fields.empty"
           ]
         },
         {
@@ -17817,7 +17836,7 @@
           "h": 975,
           "scale": 0.5,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17827,7 +17846,7 @@
           "h": 975,
           "scale": 0.5,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17837,7 +17856,7 @@
           "h": 975,
           "scale": 0.4,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17847,7 +17866,7 @@
           "h": 975,
           "scale": 0.4,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17857,7 +17876,7 @@
           "h": 975,
           "scale": 0.4,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17867,7 +17886,7 @@
           "h": 975,
           "scale": 0.4,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17877,7 +17896,7 @@
           "h": 975,
           "scale": 0.3,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17887,7 +17906,7 @@
           "h": 975,
           "scale": 0.35,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17897,7 +17916,7 @@
           "h": 975,
           "scale": 1,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17907,7 +17926,7 @@
           "h": 975,
           "scale": 2,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17917,7 +17936,7 @@
           "h": 975,
           "scale": 1,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17927,7 +17946,7 @@
           "h": 975,
           "scale": 1,
           "actions": [
-            "field-11"
+            "fields.empty"
           ]
         },
         {
@@ -17937,7 +17956,7 @@
           "h": 975,
           "scale": 1,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17947,7 +17966,7 @@
           "h": 975,
           "scale": 0.6,
           "actions": [
-            "field-11"
+            "fields.perspective"
           ]
         },
         {
@@ -17957,7 +17976,17 @@
           "h": 975,
           "scale": 1.9,
           "actions": [
-            "field-11"
+            "fields.perspective"
+          ]
+        },
+        {
+          "svg": "images/optimized/fields/11/49.svg",
+          "thumb": "images/optimized/fields/11/49_mini.png",
+          "w": 1200,
+          "h": 897,
+          "scale": 0.3,
+          "actions": [
+            "fields.topview"
           ]
         },
         {
