@@ -1,13 +1,12 @@
 import type { StrokeStyle } from '@youcoach-board/core'
 
-// Small, Excalidraw-flavored palettes. Will be refined later.
-export const STROKE_COLORS = ['#1e1e1e', '#e03131', '#2f9e44', '#1971c2', '#f08c00']
-export const BG_COLORS = ['transparent', '#ffc9c9', '#b2f2bb', '#a5d8ff', '#ffec99']
-
+// Stroke width / style options for the Settings popover. (Color palettes live in
+// ColorPickerWidget; the picker also collects colors in use from the document.)
 export const STROKE_WIDTHS: { label: string; value: number }[] = [
-  { label: 'Thin', value: 1.5 },
-  { label: 'Bold', value: 3 },
-  { label: 'Extra bold', value: 6 },
+  { label: 'Extra Thin', value: 1.5 },
+  { label: 'Thin', value: 3 },
+  { label: 'Bold', value: 6 },
+  { label: 'Extra Bold', value: 10 },
 ]
 
 export const STROKE_STYLES: { label: string; value: StrokeStyle }[] = [

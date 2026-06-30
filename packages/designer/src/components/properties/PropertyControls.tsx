@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { type StrokeStyle, strokeDash } from '@youcoach-board/core'
 import { Slider } from '../ui/slider'
 import { cn } from '../../lib/cn'
+import { CHECKER_IMAGE } from '../../lib/checker'
+import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { usePropertyEditing } from './usePropertyEditing'
-import { STROKE_COLORS, BG_COLORS, STROKE_WIDTHS, STROKE_STYLES } from './palettes'
+import { STROKE_WIDTHS, STROKE_STYLES } from './palettes'
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -38,15 +40,15 @@ export function Swatches({
             aria-pressed={active}
             onClick={() => onChange(c)}
             className={cn(
-              'size-6 rounded-md border border-border',
+              'size-6 rounded-md border border-border p-0 overflow-hidden',
               active && 'ring-2 ring-primary ring-offset-1 ring-offset-popover',
             )}
-            style={
-              isTransparent(c)
-                ? { backgroundImage: 'linear-gradient(45deg,#0002 25%,transparent 25%,transparent 75%,#0002 75%),linear-gradient(45deg,#0002 25%,transparent 25%,transparent 75%,#0002 75%)', backgroundSize: '8px 8px', backgroundPosition: '0 0,4px 4px' }
-                : { background: c }
-            }
-          />
+            style={isTransparent(c) ? { backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' } : { background: c }}
+          >
+            <div className="size-6 relative" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' }}>
+                            <div className="size-6 eee relative" style={isTransparent(c) ? { } : { background: c }}></div>
+                          </div>
+          </button>
         )
       })}
       <span className="mx-0.5 h-5 w-px bg-border" />
@@ -125,41 +127,31 @@ function StyleIcon({ style }: { style: StrokeStyle }) {
 }
 
 function OpacityControl({ value, onChange }: { value: number | undefined; onChange: (v: number) => void }) {
-  // Thumb tracks live; the committed value (single undo op) lands on release.
-  const [live, setLive] = useState<number | null>(null)
-  const v = (live ?? value ?? 1) * 100
+  // Same model as the Color widget: apply live for feedback, with the whole drag
+  // coalesced into one undo step (armed on first change, committed on window
+  // pointerup — see useDragTransaction).
+  const arm = useDragTransaction()
   return (
     <Slider
       min={0}
       max={100}
       step={1}
-      value={[Math.round(v)]}
-      onValueChange={([p]) => setLive(p / 100)}
-      onValueCommit={([p]) => {
+      value={[Math.round((value ?? 1) * 100)]}
+      onValueChange={([p]) => {
+        arm()
         onChange(p / 100)
-        setLive(null)
       }}
     />
   )
 }
 
-// The full set of property sections — reused by the full panel and the compact
-// "settings" popover. `omitColors` skips the color rows (the compact toolbar
-// surfaces those as its own dedicated buttons).
-export function PropertyControls({ omitColors = false }: { omitColors?: boolean }) {
-  const { hasClosed, values, setStroke, setFill, setStrokeWidth, setStrokeStyle, setOpacity } = usePropertyEditing()
+// The non-color property sections (stroke width/style + opacity), shown in the
+// Settings popover. Colors are edited through the dedicated Background/Border
+// color buttons, not here.
+export function PropertyControls() {
+  const { values, setStrokeWidth, setStrokeStyle, setOpacity } = usePropertyEditing()
   return (
     <div className="grid gap-3">
-      {!omitColors && (
-        <Field label="Stroke">
-          <Swatches colors={STROKE_COLORS} value={values.stroke} onChange={setStroke} />
-        </Field>
-      )}
-      {!omitColors && hasClosed && (
-        <Field label="Background">
-          <Swatches colors={BG_COLORS} value={values.fill} onChange={setFill} />
-        </Field>
-      )}
       <Field label="Stroke width">
         <Segmented
           items={STROKE_WIDTHS.map((w) => ({ value: w.value, label: w.label, render: <WidthIcon w={w.value} /> }))}

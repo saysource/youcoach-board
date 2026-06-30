@@ -2423,6 +2423,10 @@ radix-ui@^1.4.3:
     "@radix-ui/react-use-size" "1.1.2"
     "@radix-ui/react-visually-hidden" "1.2.6"
 
+react-colorful@^5.7.0:
+  version "5.7.0"
+  resolved "https://registry.yarnpkg.com/react-colorful/-/react-colorful-5.7.0.tgz#82c0f31311606161ed13423979067c865e4a7877"
+
 react-dom@^19.2.0:
   version "19.2.7"
   resolved "https://registry.yarnpkg.com/react-dom/-/react-dom-19.2.7.tgz#0450dc9ae9ddbff76ef196401cd8b8c7fb466ccc"

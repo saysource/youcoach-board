@@ -12,7 +12,7 @@
 // Everything is a pure function over the document, framework-free and trivially
 // testable; the Zustand editor store drives the stack + pointer.
 
-import type { BoardDoc } from './model'
+import type { BoardDoc, BoardBackground } from './model'
 import type { ArrowTip, BoardElement, ElementTransform } from './elements'
 
 /** A partial set of attributes to overwrite on an element. `transform` is
@@ -32,6 +32,7 @@ export interface ElementPatch {
   points?: Array<[number, number]>
   // Polyline shape options.
   closed?: boolean
+  curve?: boolean
   startTip?: ArrowTip
   endTip?: ArrowTip
   // Figure options.
@@ -51,6 +52,11 @@ export type Operation =
   | { kind: 'add'; element: BoardElement; index: number }
   | { kind: 'remove'; element: BoardElement; index: number }
   | { kind: 'update'; changes: ElementChange[] }
+  // Reorder (z-order): the full element order by id, before and after. Stores
+  // only ids (no element copies), so it stays cheap and trivially reversible.
+  | { kind: 'reorder'; order: string[]; prevOrder: string[] }
+  // The document background (field, colors, scale, pan, logo) before/after.
+  | { kind: 'background'; before: BoardBackground; after: BoardBackground }
   | { kind: 'transaction'; label: string; ops: Operation[] }
 
 function patched(el: BoardElement, p: ElementPatch): BoardElement {
@@ -80,6 +86,15 @@ export function applyOperation(doc: BoardDoc, op: Operation): BoardDoc {
         }),
       }
     }
+    case 'reorder': {
+      const byId = new Map(doc.elements.map((e) => [e.id, e]))
+      const elements = op.order.map((id) => byId.get(id)).filter((e): e is BoardElement => !!e)
+      // Safety: keep any element missing from `order` (shouldn't happen) at the end.
+      for (const e of doc.elements) if (!op.order.includes(e.id)) elements.push(e)
+      return { ...doc, elements }
+    }
+    case 'background':
+      return { ...doc, background: op.after }
     case 'transaction':
       return op.ops.reduce(applyOperation, doc)
   }
@@ -97,6 +112,10 @@ export function invertOperation(op: Operation): Operation {
         kind: 'update',
         changes: op.changes.map((c) => ({ id: c.id, before: c.after, after: c.before })),
       }
+    case 'reorder':
+      return { kind: 'reorder', order: op.prevOrder, prevOrder: op.order }
+    case 'background':
+      return { kind: 'background', before: op.after, after: op.before }
     case 'transaction':
       // Reverse order AND invert each sub-operation.
       return { kind: 'transaction', label: op.label, ops: [...op.ops].reverse().map(invertOperation) }

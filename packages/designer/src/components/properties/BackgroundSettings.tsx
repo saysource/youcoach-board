@@ -1,5 +1,6 @@
 import { type LogoPosition } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
+import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { Slider } from '../ui/slider'
 import { Swatches, Segmented } from './PropertyControls'
 import { LogoTopLeftIcon, LogoTopRightIcon, LogoCenterIcon, LogoBottomLeftIcon, LogoBottomRightIcon } from '../icons'
@@ -22,6 +23,7 @@ const LOGO_OPTIONS: { value: LogoPosition; label: string; render: React.ReactNod
 export function BackgroundSettings() {
   const bg = useEditorStore((s) => s.doc.background)
   const setBackground = useEditorStore((s) => s.setBackground)
+  const arm = useDragTransaction()
   return (
     <div className="grid gap-3">
       <div className="grid gap-1.5">
@@ -36,7 +38,17 @@ export function BackgroundSettings() {
 
       <div className="grid gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">Field scale</span>
-        <Slider min={20} max={300} step={5} value={[Math.round(bg.scale * 100)]} onValueChange={([v]) => setBackground({ scale: v / 100 })} />
+        <Slider
+          min={20}
+          max={300}
+          step={5}
+          value={[Math.round(bg.scale * 100)]}
+          onValueChange={([v]) => {
+            // First change arms the (one) undo transaction, committed on window pointerup.
+            arm()
+            setBackground({ scale: v / 100 })
+          }}
+        />
       </div>
 
       <div className="grid gap-1.5">

@@ -22,9 +22,10 @@ import { PropertiesPanel, MobileBar } from './properties/PropertiesPanel'
 // Board area padding (px) and the space reserved on the left for the full
 // properties panel (panel width + margins).
 const BOARD_TOP_PAD = 40
-const BOARD_SIDE_PAD = 16
+const BOARD_LEFT_PAD = 50
+const BOARD_RIGHT_PAD = 16
 // Left space reserved for the full panel: left-2 (8) + w-52 (208) + gap.
-const PANEL_RESERVE = 200
+const PANEL_RESERVE = 50
 // Right-side library drawer width (Tailwind w-64 = 16rem). Keep in sync with
 // LibraryDrawer's `w-64` and the `right-64` board inset below.
 const DRAWER_WIDTH = 256
@@ -90,7 +91,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const innerH = Math.max(0, height - 2 * BOARD_TOP_PAD)
   // Rendered field width: the 4:3 fit is height-driven when there's horizontal
   // room, so derive it from height (minus the board's vertical padding).
-  const canvasWidth = Math.min(Math.max(0, width - 2 * BOARD_SIDE_PAD), innerH * BOARD_ASPECT)
+  const canvasWidth = Math.min(Math.max(0, width - (BOARD_LEFT_PAD + BOARD_RIGHT_PAD)), innerH * BOARD_ASPECT)
   const mobile = width < 768
   // Full panel only when ~a panel's worth of free width sits beside the field;
   // otherwise the compact toolbar (which overlays minimally).
@@ -101,8 +102,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const reserveLeft = fullPanel
 
   // Field's rendered (height-driven) width within the current left reserve.
-  const leftPad = reserveLeft ? PANEL_RESERVE : BOARD_SIDE_PAD
-  const availWidth = Math.max(0, width - leftPad - BOARD_SIDE_PAD)
+  const leftPad = reserveLeft ? PANEL_RESERVE : BOARD_LEFT_PAD
+  const availWidth = Math.max(0, width - leftPad - BOARD_RIGHT_PAD)
   const fieldW = Math.min(availWidth, innerH * BOARD_ASPECT)
 
   // When the drawer is OPEN as an overlay, keep the field centered but pull its
@@ -116,7 +117,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const overlayOpen = drawerOpen && !drawerPinned
   const naturalRight = leftPad + (availWidth + fieldW) / 2 // centered field's right edge
   const targetRight = Math.max(leftPad + fieldW, Math.min(naturalRight, width - DRAWER_WIDTH))
-  const boardPaddingRight = overlayOpen ? Math.max(BOARD_SIDE_PAD, width + leftPad - 2 * targetRight + fieldW) : BOARD_SIDE_PAD
+  const boardPaddingRight = overlayOpen ? Math.max(BOARD_RIGHT_PAD, width + leftPad - 2 * targetRight + fieldW) : BOARD_RIGHT_PAD
   const reserveRight = drawerOpen && drawerPinned
 
   // Keyboard: undo/redo, delete selection, escape to deselect / drop the tool.

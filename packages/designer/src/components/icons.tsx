@@ -107,6 +107,26 @@ export function TrapezoidIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+// Close-path toggle icon (assets/close_path.svg): a dashed ring of nodes.
+export function ClosePathIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <g transform="translate(-1,-1)">
+        <path d="M14.241,5.199L5.414,10.586" />
+        <path d="M18.586,13.414L13.414,18.586" />
+        <path d="M5.414,13.595L10.586,18.586" />
+        <path d="M17.209,5.84L19.076,10.226" />
+        <circle cx="12" cy="20" r="2" />
+        <circle cx="20" cy="12" r="2" />
+        <circle cx="4" cy="12" r="2" />
+      </g>
+      <g transform="translate(3,-0.753026)">
+        <circle cx="12" cy="4" r="2" />
+      </g>
+    </svg>
+  )
+}
+
 // Lines-menu generic icon (assets/lines.svg): an arrow over a line.
 export function LinesIcon(props: SVGProps<SVGSVGElement>) {
   return (

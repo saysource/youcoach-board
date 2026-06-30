@@ -175,6 +175,8 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   const setSelection = useEditorStore((s) => s.setSelection)
   const createFigure = useEditorStore((s) => s.createFigure)
   const setBackground = useEditorStore((s) => s.setBackground)
+  const beginTransaction = useEditorStore((s) => s.beginTransaction)
+  const commitTransaction = useEditorStore((s) => s.commitTransaction)
   const updateElements = useEditorStore((s) => s.updateElements)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
 
@@ -421,6 +423,8 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   }
 
   function onContainerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    // Only the LEFT button drives interactions (touch/pen primary press is 0 too).
+    if (e.button !== 0) return
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
@@ -469,6 +473,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   }
 
   function onElementPointerDown(e: React.PointerEvent, el: BoardElement) {
+    if (e.button !== 0) return
     if (creating) return
     e.stopPropagation()
     const svg = svgRef.current
@@ -496,6 +501,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   }
 
   function onHandleDown(handle: HandleId, e: React.PointerEvent, el: BoardElement) {
+    if (e.button !== 0) return
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
@@ -519,6 +525,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   }
 
   function onGroupHandleDown(handle: CornerId | 'rotate', e: React.PointerEvent) {
+    if (e.button !== 0) return
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
@@ -533,6 +540,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
 
   // Pressing inside the group frame (between elements) drags the whole group.
   function onGroupBodyPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return
     if (creating) return
     e.stopPropagation()
     const svg = svgRef.current
@@ -542,9 +550,12 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
 
   // Grab the background move handle: pan the field SVG by dragging it.
   function onBgPanPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
+    // Coalesce the whole pan drag into one undo step.
+    beginTransaction()
     setBgPan({ start: clientToBoard(svg, e.clientX, e.clientY), origin: doc.background.position })
     containerRef.current?.setPointerCapture(e.pointerId)
   }
@@ -584,6 +595,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     }
     if (bgPan) {
       setBgPan(null)
+      commitTransaction()
     } else if (freeDraft) {
       const pts = freeDraft
       setFreeDraft(null)

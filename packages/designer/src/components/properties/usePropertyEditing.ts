@@ -1,4 +1,4 @@
-import type { BoardElement, ElementPatch, StrokeStyle } from '@youcoach-board/core'
+import type { ArrowTip, BoardElement, ElementPatch, StrokeStyle } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
 import { isCreationTool } from '../../store/editorStore'
 import { toolCreatesClosed } from '../../lib/draw'
@@ -42,22 +42,40 @@ export function usePropertyEditing() {
       activeTool,
       els,
       hasClosed: toolCreatesClosed(activeTool),
+      // Polyline/figure-specific affordances are only meaningful on a selection.
+      polyCount: 0,
+      openPolyCount: 0,
+      closableCount: 0,
+      figureCount: 0,
       values: {
         stroke: toolDefaults.stroke as string | undefined,
         strokeWidth: toolDefaults.strokeWidth as number | undefined,
         strokeStyle: toolDefaults.strokeStyle as StrokeStyle | undefined,
         fill: toolDefaults.fill as string | undefined,
         opacity: toolDefaults.opacity as number | undefined,
+        curve: undefined as boolean | undefined,
+        closed: undefined as boolean | undefined,
+        startTip: undefined as ArrowTip | undefined,
+        endTip: undefined as ArrowTip | undefined,
       },
       setStroke: (stroke: string) => setToolDefaults({ stroke }),
       setStrokeWidth: (strokeWidth: number) => setToolDefaults({ strokeWidth }),
       setStrokeStyle: (strokeStyle: StrokeStyle) => setToolDefaults({ strokeStyle }),
       setFill: (fill: string) => setToolDefaults({ fill }),
       setOpacity: (opacity: number) => setToolDefaults({ opacity }),
+      setCurve: () => {},
+      setClosed: () => {},
+      setStartTip: () => {},
+      setEndTip: () => {},
+      flip: () => {},
     }
   }
 
   const closedEls = els.filter(isClosed)
+  const polys = els.filter((e): e is Extract<BoardElement, { type: 'polyline' }> => e.type === 'polyline')
+  const openPolys = polys.filter((p) => !p.closed)
+  const closablePolys = polys.filter((p) => p.points.length >= 3)
+  const figures = els.filter((e) => e.type === 'figure')
 
   function patch(targets: BoardElement[], make: (el: BoardElement) => { before: ElementPatch; after: ElementPatch }) {
     if (targets.length === 0) return
@@ -73,12 +91,20 @@ export function usePropertyEditing() {
     activeTool,
     els,
     hasClosed: closedEls.length > 0,
+    polyCount: polys.length,
+    openPolyCount: openPolys.length,
+    closableCount: closablePolys.length,
+    figureCount: figures.length,
     values: {
       stroke: common(els, (e) => e.stroke),
       strokeWidth: common(els, (e) => e.strokeWidth),
       strokeStyle: common(els, (e) => e.strokeStyle),
       fill: common(closedEls, (e) => e.fill),
       opacity: common(els, (e) => e.transform.opacity),
+      curve: common(polys, (e) => (e as Extract<BoardElement, { type: 'polyline' }>).curve),
+      closed: common(polys, (e) => (e as Extract<BoardElement, { type: 'polyline' }>).closed),
+      startTip: common(openPolys, (e) => (e as Extract<BoardElement, { type: 'polyline' }>).startTip),
+      endTip: common(openPolys, (e) => (e as Extract<BoardElement, { type: 'polyline' }>).endTip),
     },
     setStroke: (stroke: string) => {
       patch(els, (e) => ({ before: { stroke: e.stroke }, after: { stroke } }))
@@ -100,5 +126,10 @@ export function usePropertyEditing() {
       patch(els, (e) => ({ before: { transform: e.transform }, after: { transform: { ...e.transform, opacity } } }))
       remember({ opacity })
     },
+    setCurve: (curve: boolean) => patch(polys, (e) => ({ before: { curve: (e as Extract<BoardElement, { type: 'polyline' }>).curve }, after: { curve } })),
+    setClosed: (closed: boolean) => patch(polys, (e) => ({ before: { closed: (e as Extract<BoardElement, { type: 'polyline' }>).closed }, after: { closed } })),
+    setStartTip: (startTip: ArrowTip) => patch(openPolys, (e) => ({ before: { startTip: (e as Extract<BoardElement, { type: 'polyline' }>).startTip }, after: { startTip } })),
+    setEndTip: (endTip: ArrowTip) => patch(openPolys, (e) => ({ before: { endTip: (e as Extract<BoardElement, { type: 'polyline' }>).endTip }, after: { endTip } })),
+    flip: () => patch(figures, (e) => ({ before: { mirror: (e as Extract<BoardElement, { type: 'figure' }>).mirror }, after: { mirror: !(e as Extract<BoardElement, { type: 'figure' }>).mirror } })),
   }
 }

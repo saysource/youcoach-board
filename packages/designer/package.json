@@ -22,7 +22,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@youcoach-board/core": "0.0.0"
+    "@youcoach-board/core": "0.0.0",
+    "react-colorful": "^5.7.0"
   },
   "peerDependencies": {
     "react": ">=18",

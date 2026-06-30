@@ -534,3 +534,107 @@ Double clicking a point (except for last and first) will remove that pont/joint.
 The options for the line style are actually 3: simple, quadratic bezier and cubic bezier, but simple simply means that we use a quadratic with no curve.
 
 If a line/arrow is composed of multiple segments, the bezier handles 
+
+
+## Properties panel / properties bar
+
+We want to drop the full panel view for the properties and stick with the minimal properties toolbar.
+The properties toolbar will contain a set of icons/buttons.
+By clicking the button, we will open a dropdown panel/widget with which settings can be easily modified.
+
+The main widgets:
+- background (applies to rectangle, ellipse, closed polylines and text pillow), it is represented in the toolbar by a circle coloured with the selected color, checkerboard background for opacity clarity and filled with the selected fill style; the opened widget shows:
+  - fill style: solid / diagonal rows
+  - color picker (more about the color picker later)
+- border color show simply the color picker
+- other props (settings icon): show properties specific to each element type:
+  - stroke thick
+  - stroke style
+  - line style: streight or curved (icons strip to change the value)
+  - arrow heades: two dropdowns, one for end, one for start, showing the options none, circe, arrow tip
+  - close path: single toggle button ( @assets/close_path.svg)
+  - font size (text elements)
+  - padding (text elements)
+  - opacity (global figure opacity)
+
+- Kit and skin options (for later)
+  - kit config
+  - skin config
+- Actions: a three dots icon to open a dropdown menu with several options:
+  - Copy
+  - Duplicate
+  - Flip (only for SVG figures)
+  - Arrange
+    - Bring forward
+    - Bring to Front
+    - Send backword
+    - Send to back
+  - Copy style (included kit and skin config in case of players)
+  - Paste style
+
+
+### Properties element by element
+
+- Rectangle and ellipse
+  - fill color
+  - stroke color (with opacity)
+  - stroke thickness (thin / medium / think)
+  - stroke style (thin / medium / think)
+  - opacity (global figure opacity)
+
+- Line 
+  - fill color (if closed)
+  - stroke color (with opacity)
+  - stroke style (thin / medium / think)
+  - opacity (overall opacity)
+  - start tip (none / arrow / circle)
+  - end tip (none / arrow / circle)
+  - style (solid / dashed / dotted)
+  - type (streight / quadratic bezier / cubic bezier)
+
+- Player
+  - kit config
+  - skin config
+  - opacity
+
+- Material
+  - color (apply only to selected materials)
+  - scale (the default value of the scale may be tied to the type of field we are working with)
+  
+- Text
+  - text color (with opacity)
+  - fill color (with opacity)
+  - text padding
+  - opacity (overall opacity)
+
+- Disc
+  - color1 (with opacity), uses the border color type of button/widget
+  - color2 (with opacity), uses the border color type of button/widget
+  - disc style (disc / tshirt)
+  - opacity (overall opacity)
+
+- Materials
+  - color1 (with opacity)
+  - color2 (with opacity)
+  - disc style (disc / tshirt)
+  - opacity (overall opacity)
+
+
+### Color picker widget
+
+The color picker widget is composed by two parts:
+a set of 5 colors the user can choose from, shown as rounded rectangles.
+The first color should be always the fully transparent one, and then a list of preset colors, which are replaced with the last selected colors based on the property being edited (border/text, color 1 and 2, background), with a FIFO strategy.
+A color picker widget which allows to specify a color in format of hex code, and the picker pen, as implemented here: @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client/src/core/components/ui/color-picker.tsx
+This color picker uses a drowpdown react-colorful dropdown, in our case the dropdown will show just the simple react-colorful colorpicker component, included opacity slider.
+
+### More about Disc and disc style
+
+For now we have a single type of disc, which is driven by the catalog. We will add other disc styles and maybe create an ad hoc editor for it like we will do for the player kit and skin/hairs.
+Ignore it for now by providing a single option.
+
+
+
+
+- multiselection resolution
+- implement frequency/amplitude and double lines.
