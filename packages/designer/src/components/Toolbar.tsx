@@ -40,6 +40,7 @@ export type ToolId =
   | 'zigzag-arrow'
   | 'double-arrow'
   | 'token'
+  | 'text'
   | 'draw'
   | 'eraser'
 
@@ -318,8 +319,8 @@ function MoreToolsMenu({
         <DropdownMenuItem disabled={!ball} onSelect={addBall}>
           <MatchIcon /> Add Ball
         </DropdownMenuItem>
-        {/* Text element not implemented yet — placeholder. */}
-        <DropdownMenuItem disabled>
+        {/* Text stamp tool — click the board to place, then edit inline. */}
+        <DropdownMenuItem onSelect={() => onToolChange('text')}>
           <Type /> Add Text
         </DropdownMenuItem>
         <DropdownMenuSeparator />

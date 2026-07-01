@@ -128,6 +128,35 @@ export function SelectionHandles({ element, scale, onHandleDown, hideFrame = fal
     )
   }
 
+  // Text: frame + corner resize handles (no rotation). Dragging a corner scales
+  // the FONT (the box re-fits the text; see InteractiveBoard.textFontResize).
+  if (element.type === 'text') {
+    const hs = HANDLE_PX / scale
+    const cursor: Record<CornerId, string> = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' }
+    return (
+      <g>
+        <polygon points={poly} fill="none" stroke={FRAME} strokeWidth={STROKE_PX} vectorEffect="non-scaling-stroke" shapeRendering={outlineRendering} pointerEvents="none" />
+        {(Object.keys(corners) as CornerId[]).map((cid) => (
+          <rect
+            key={cid}
+            x={corners[cid].x - hs / 2}
+            y={corners[cid].y - hs / 2}
+            width={hs}
+            height={hs}
+            rx={hs / 5}
+            fill="#ffffff"
+            stroke={HANDLE}
+            strokeWidth={STROKE_PX}
+            vectorEffect="non-scaling-stroke"
+            style={{ cursor: cursor[cid] }}
+            data-handle={cid}
+            onPointerDown={(e) => onHandleDown!(cid, e)}
+          />
+        ))}
+      </g>
+    )
+  }
+
   // Rotation handle: above the (rotated) top edge, along its outward normal.
   const topMid = { x: (corners.nw.x + corners.ne.x) / 2, y: (corners.nw.y + corners.ne.y) / 2 }
   const ex = corners.ne.x - corners.nw.x

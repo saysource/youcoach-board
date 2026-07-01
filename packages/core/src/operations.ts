@@ -13,7 +13,7 @@
 // testable; the Zustand editor store drives the stack + pointer.
 
 import type { BoardDoc, BoardBackground } from './model'
-import type { ArrowTip, BoardElement, ElementTransform } from './elements'
+import type { ArrowTip, BoardElement, ElementTransform, TextAlign } from './elements'
 
 /** A partial set of attributes to overwrite on an element. `transform` is
  *  replaced wholesale (the patch carries the full transform), so applying is a
@@ -54,6 +54,11 @@ export interface ElementPatch {
   text?: string
   label?: string
   showLabel?: boolean
+  // Text element options (text?/textColor?/x?/y?/width?/height? reuse fields above).
+  bgColor?: string
+  fontSize?: number
+  align?: TextAlign
+  bold?: boolean
 }
 
 /** A single element's change within an `update` operation. */

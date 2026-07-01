@@ -33,7 +33,7 @@ export interface ElementTransform {
 
 export const IDENTITY_TRANSFORM: ElementTransform = { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1 }
 
-export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw' | 'figure' | 'token'
+export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw' | 'figure' | 'token' | 'text'
 
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
 
@@ -173,7 +173,34 @@ export interface TokenElement extends BaseElement {
   showLabel: boolean
 }
 
-export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement
+/** A multiline text label wrapped by a rounded rectangle (which may be
+ *  transparent). Box geometry like rect: `width`/`height` are DERIVED from the
+ *  text + `fontSize` (fitted with a small padding; see TEXT_PADDING) by the
+ *  designer and stored so the viewer/export render identically without measuring.
+ *  `align` only matters across multiple lines. */
+export type TextAlign = 'left' | 'center' | 'right'
+
+export interface TextElement extends BaseElement {
+  type: 'text'
+  x: number
+  y: number
+  width: number
+  height: number
+  /** The text; may contain newlines (multiline). */
+  text: string
+  /** Text color (CSS). */
+  textColor: string
+  /** Rounded-rectangle background color (CSS, or 'transparent'); carries opacity. */
+  bgColor: string
+  /** Font size in board units (TEXT_MIN_FONT..TEXT_MAX_FONT). */
+  fontSize: number
+  /** Horizontal alignment of the lines within the box. */
+  align: TextAlign
+  /** Render bold (font weight 800) instead of the regular weight. */
+  bold: boolean
+}
+
+export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement
 
 // ── Smooth curves (auto, no user handles) ───────────────────────────────────
 // A polyline with `curve` renders as a Catmull-Rom spline through its points,
@@ -591,6 +618,31 @@ export const TOKEN_LABEL_GAP_PX = 3
 /** Shown when a token's `label` is empty. */
 export const TOKEN_LABEL_PLACEHOLDER = 'Player'
 
+// ── Text element ─────────────────────────────────────────────────────────────
+// The font/line-height/padding are shared by the SVG renderer (ElementView), the
+// designer's box measurement, and the inline editor's overlay <textarea>, so all
+// three agree exactly. A system font (no webfont dependency) keeps canvas
+// measureText and SVG rendering in lockstep.
+export const TEXT_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+export const TEXT_FONT_WEIGHT = 400
+/** Weight used when a text element is bold. */
+export const TEXT_FONT_WEIGHT_BOLD = 800
+/** Line box height as a multiple of the font size. */
+export const TEXT_LINE_HEIGHT = 1.25
+/** Padding (board units) between the text bbox and the background rectangle. */
+export const TEXT_PADDING = 5
+export const TEXT_MIN_FONT = 2
+export const TEXT_MAX_FONT = 200
+export const DEFAULT_TEXT_FONT_SIZE = 24
+export const DEFAULT_TEXT_COLOR = '#000000'
+/** Default text background: white at 50% opacity (#rrggbbaa). */
+export const DEFAULT_TEXT_BG = '#ffffff80'
+
+/** Corner radius (board units) of a text element's background rectangle. */
+export function textBoxRadius(el: TextElement): number {
+  return Math.min(el.height / 2, Math.max(6, el.fontSize * 0.3))
+}
+
 export interface Box {
   x: number
   y: number
@@ -777,6 +829,27 @@ export function parseElement(raw: unknown): BoardElement | null {
       text: typeof o.text === 'string' ? o.text : '',
       label: typeof o.label === 'string' ? o.label : '',
       showLabel: o.showLabel === true,
+    }
+  }
+  if (o.type === 'text') {
+    const width = num(o.width)
+    const height = num(o.height)
+    if (width === null || height === null) return null
+    const aligns: TextAlign[] = ['left', 'center', 'right']
+    const fs = num(o.fontSize)
+    return {
+      ...base,
+      type: 'text',
+      x: num(o.x) ?? 0,
+      y: num(o.y) ?? 0,
+      width,
+      height,
+      text: typeof o.text === 'string' ? o.text : '',
+      textColor: str(o.textColor, DEFAULT_TEXT_COLOR),
+      bgColor: str(o.bgColor, DEFAULT_TEXT_BG),
+      fontSize: fs === null ? DEFAULT_TEXT_FONT_SIZE : clamp(fs, TEXT_MIN_FONT, TEXT_MAX_FONT),
+      align: aligns.includes(o.align as TextAlign) ? (o.align as TextAlign) : 'center',
+      bold: o.bold === true,
     }
   }
   return null

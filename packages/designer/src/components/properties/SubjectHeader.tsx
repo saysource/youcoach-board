@@ -1,5 +1,5 @@
 import { type ComponentType } from 'react'
-import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Hand, Pencil, Eraser } from 'lucide-react'
+import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Hand, Pencil, Eraser, Type } from 'lucide-react'
 import { TrapezoidIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from '../icons'
 import type { BoardElement } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
@@ -26,6 +26,7 @@ function elementSubject(el: BoardElement): Subject {
   if (el.type === 'draw') return { icon: Pencil, label: 'Drawing' }
   if (el.type === 'figure') return { icon: Shapes, label: 'Figure' }
   if (el.type === 'token') return { icon: TokenIcon, label: el.shape === 'jersey' ? 'Jersey' : 'Token' }
+  if (el.type === 'text') return { icon: Type, label: 'Text' }
   // Diamond/pentagon/triangle/trapezoid are created as closed polylines, so they
   // surface here through polylineSubject (a closed polyline → "Shape").
   return polylineSubject(el)
@@ -49,6 +50,7 @@ const TOOL_SUBJECT: Record<ToolId, Subject> = {
   'zigzag-arrow': { icon: LineZigzagArrowIcon, label: 'Zigzag arrow' },
   'double-arrow': { icon: LineStyleDoubleIcon, label: 'Double arrow' },
   token: { icon: TokenIcon, label: 'Token' },
+  text: { icon: Type, label: 'Text' },
   draw: { icon: Pencil, label: 'Draw' },
   eraser: { icon: Eraser, label: 'Eraser' },
 }

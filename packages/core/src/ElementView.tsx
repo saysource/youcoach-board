@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import type { BoardElement } from './elements'
-import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, strokeDash, TOKEN_GEOMETRY, TOKEN_VIEW, TOKEN_STRIPE_PERIOD, TOKEN_SINGLE_STRIPE, TOKEN_CHECKER_SIZE, TOKEN_FONT, TOKEN_FONT_WEIGHT, TOKEN_LABEL_PX, TOKEN_LABEL_GAP_PX, TOKEN_LABEL_PLACEHOLDER } from './elements'
+import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, strokeDash, TOKEN_GEOMETRY, TOKEN_VIEW, TOKEN_STRIPE_PERIOD, TOKEN_SINGLE_STRIPE, TOKEN_CHECKER_SIZE, TOKEN_FONT, TOKEN_FONT_WEIGHT, TOKEN_LABEL_PX, TOKEN_LABEL_GAP_PX, TOKEN_LABEL_PLACEHOLDER, TEXT_FONT, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius } from './elements'
 
 // Renders a single board element to SVG. Presentational and shared: the viewer
 // renders elements through this directly, and the designer wraps it with
@@ -170,6 +170,38 @@ function Shape({ element, viewScale }: { element: BoardElement; viewScale?: numb
           </text>
         )}
       </>
+    )
+  }
+
+  if (element.type === 'text') {
+    const { x, y, width, height, fontSize, align } = element
+    const lines = element.text.length ? element.text.split('\n') : ['']
+    const lineH = fontSize * TEXT_LINE_HEIGHT
+    const rx = textBoxRadius(element)
+    const hasBg = element.bgColor !== 'transparent' && element.bgColor !== ''
+    const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle'
+    const tx = align === 'left' ? x + TEXT_PADDING : align === 'right' ? x + width - TEXT_PADDING : x + width / 2
+    // Text block is vertically centered in the box (which is height = lines·lineH
+    // + 2·pad, so the top sits exactly at y + pad).
+    const top = y + (height - lines.length * lineH) / 2
+    return (
+      <g>
+        {/* Transparent hit area so the whole box (not just the glyphs) selects/moves. */}
+        <rect x={x} y={y} width={width} height={height} rx={rx} fill={hasBg ? element.bgColor : 'transparent'} />
+        <text
+          textAnchor={anchor}
+          fontSize={fontSize}
+          fontWeight={element.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT}
+          fill={element.textColor}
+          style={{ fontFamily: TEXT_FONT, whiteSpace: 'pre' }}
+        >
+          {lines.map((ln, i) => (
+            <tspan key={i} x={tx} y={top + i * lineH + lineH / 2} dominantBaseline="central">
+              {ln === '' ? ' ' : ln}
+            </tspan>
+          ))}
+        </text>
+      </g>
     )
   }
 

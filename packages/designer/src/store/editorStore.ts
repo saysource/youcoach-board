@@ -11,14 +11,14 @@ import {
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
-import { type FigureStyle, type TokenDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline } from '../lib/draw'
+import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline } from '../lib/draw'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
  *  elements non-interactive, selection cleared). The line/arrow tools draft a
  *  straight line on drag, or a multi-point polyline on click (see
  *  InteractiveBoard); see toolElementType for the drag-create mapping. */
 export function isCreationTool(tool: ToolId): boolean {
-  return isShapeTool(tool) || isLineTool(tool) || tool === 'draw' || tool === 'token'
+  return isShapeTool(tool) || isLineTool(tool) || tool === 'draw' || tool === 'token' || tool === 'text'
 }
 
 export interface EditorState {
@@ -32,6 +32,9 @@ export interface EditorState {
   /** Style + starting text/label for the NEXT token: inherited from the last
    *  selected/created token, and edited via the panel while the Token tool is up. */
   tokenDefaults: TokenDefaults
+  /** Style for the NEXT text element: inherited from the last selected/created
+   *  text, and edited via the panel while the Text tool is active. */
+  textDefaults: TextDefaults
   /** Id of the most recently selected/created token. A new token copies this
    *  token's CURRENT size (so resizes are reflected); null falls back to any
    *  token on the board, else the field's figure scale. */
@@ -64,6 +67,8 @@ export interface EditorState {
   setToolDefaults: (patch: Partial<FigureStyle>) => void
   /** Merge changes into the next-token defaults (style/text/label). */
   setTokenDefaults: (patch: Partial<TokenDefaults>) => void
+  /** Merge changes into the next-text defaults (color/bg/size/align). */
+  setTextDefaults: (patch: Partial<TextDefaults>) => void
   /** Replace the current selection (pass [] to clear). */
   setSelection: (ids: string[]) => void
   /** Create a figure (records it on the undo stack), select it, and — unless
@@ -140,6 +145,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       activeTool: 'select',
       selectedIds: [],
       tokenDefaults: { ...DEFAULT_TOKEN_DEFAULTS },
+      textDefaults: { ...DEFAULT_TEXT_DEFAULTS },
       lastTokenId: null,
       keepToolActive: false,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
@@ -161,6 +167,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       setTokenDefaults: (patch) => set((s) => ({ tokenDefaults: { ...s.tokenDefaults, ...patch } })),
 
+      setTextDefaults: (patch) => set((s) => ({ textDefaults: { ...s.textDefaults, ...patch } })),
+
       setSelection: (ids) =>
         set((s) => {
           // Selecting a token makes its style (+ starting text) the next-token
@@ -169,6 +177,12 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
           if (tok && tok.type === 'token') {
             const { shape, tokenFill, color1, color2, textColor, showLabel, text } = tok
             return { selectedIds: ids, lastTokenId: tok.id, tokenDefaults: { ...s.tokenDefaults, shape, tokenFill, color1, color2, textColor, showLabel, text } }
+          }
+          // Selecting a text element makes its style the next-text defaults.
+          const txt = ids.map((id) => s.doc.elements.find((e) => e.id === id)).find((e) => e?.type === 'text')
+          if (txt && txt.type === 'text') {
+            const { textColor, bgColor, fontSize, align, bold } = txt
+            return { selectedIds: ids, textDefaults: { ...s.textDefaults, textColor, bgColor, fontSize, align, bold } }
           }
           return { selectedIds: ids }
         }),
@@ -183,6 +197,10 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
             element.type === 'token'
               ? { ...s.tokenDefaults, shape: element.shape, tokenFill: element.tokenFill, color1: element.color1, color2: element.color2, textColor: element.textColor, showLabel: element.showLabel, text: element.text }
               : s.tokenDefaults,
+          textDefaults:
+            element.type === 'text'
+              ? { ...s.textDefaults, textColor: element.textColor, bgColor: element.bgColor, fontSize: element.fontSize, align: element.align, bold: element.bold }
+              : s.textDefaults,
           activeTool: keepToolActive ? activeTool : 'select',
           // Remember the created element's style as the next-figure default.
           toolDefaults: figureStyleOf(element),

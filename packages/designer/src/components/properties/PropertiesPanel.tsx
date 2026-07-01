@@ -17,8 +17,11 @@ import {
   Minus,
   MoveRight,
   RotateCcw,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from 'lucide-react'
-import { type ArrowTip, type BoardElement, type TokenShape, type TokenFill, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX } from '@youcoach-board/core'
+import { type ArrowTip, type BoardElement, type TokenShape, type TokenFill, type TextAlign, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX, TEXT_MIN_FONT, TEXT_MAX_FONT } from '@youcoach-board/core'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
@@ -113,6 +116,14 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
       {p.allToken ? (
         // Tokens carry a self-contained editor (type, colors, fill, text, opacity).
         <TokenSettingsButton side="right" />
+      ) : p.allText ? (
+        // Text: color (stroke-style widget), background color (with opacity), and a
+        // settings popover (font size + alignment).
+        <>
+          <ColorButton kind="fill" label="Text color" value={p.values.textColor} onChange={p.setTextColor} side="right" />
+          <ColorButton kind="fill" label="Background" value={p.values.bgColor} onChange={p.setBgColor} side="right" />
+          <TextSettingsButton side="right" />
+        </>
       ) : (
         <>
           {p.hasClosed && (
@@ -228,6 +239,49 @@ function SettingsButton({ side, small, translucent }: { side: 'right' | 'top'; s
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-52">
         <SettingsWidget />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+const ALIGN_ITEMS: { value: TextAlign; label: string; render: ReactNode }[] = [
+  { value: 'left', label: 'Left', render: <AlignLeft className="size-4" /> },
+  { value: 'center', label: 'Center', render: <AlignCenter className="size-4" /> },
+  { value: 'right', label: 'Right', render: <AlignRight className="size-4" /> },
+]
+
+// Text element settings popover: font size (2–200) + line alignment. Color and
+// background are their own toolbar buttons (like a shape's border/fill).
+function TextSettingsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
+  const p = usePropertyEditing()
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button size={small ? 'icon-sm' : 'icon'} aria-label="Text settings" className={cn(translucent && TRANSLUCENT)}>
+              <SlidersHorizontal />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Text</TooltipContent>
+      </Tooltip>
+      <PopoverContent side={side} align="start" className="w-56">
+        <div className="grid gap-3">
+          <Field label={`Font size (${p.values.fontSize ?? 0})`}>
+            <WaveSlider min={TEXT_MIN_FONT} max={TEXT_MAX_FONT} value={p.values.fontSize ?? 0} onChange={p.setFontSize} />
+          </Field>
+          <Field label="Alignment">
+            <Segmented items={ALIGN_ITEMS} value={p.values.align} onChange={p.setAlign} />
+          </Field>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">Bold</span>
+            <Switch checked={!!p.values.bold} onCheckedChange={p.setBold} />
+          </div>
+          <Field label="Opacity">
+            <WaveSlider min={0} max={100} value={Math.round((p.values.opacity ?? 1) * 100)} onChange={(v) => p.setOpacity(v / 100)} />
+          </Field>
+        </div>
       </PopoverContent>
     </Popover>
   )

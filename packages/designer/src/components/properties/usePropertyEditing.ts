@@ -1,4 +1,4 @@
-import type { ArrowTip, BoardElement, ElementPatch, StrokeStyle, FillStyle, TokenShape, TokenFill } from '@youcoach-board/core'
+import type { ArrowTip, BoardElement, ElementPatch, StrokeStyle, FillStyle, TokenShape, TokenFill, TextAlign } from '@youcoach-board/core'
 
 /** The line renderings, surfaced as one multi-state in the Settings popover. */
 export type LineStyle = 'straight' | 'curved' | 'zigzag' | 'double'
@@ -8,7 +8,7 @@ export type LineStyle = 'straight' | 'curved' | 'zigzag' | 'double'
 export type TokenVisualStyle = { shape: TokenShape; tokenFill: TokenFill; color1: string; color2: string; textColor: string }
 import { useEditorStore } from '../../store/context'
 import { isCreationTool } from '../../store/editorStore'
-import { toolCreatesClosed, nextTokenText } from '../../lib/draw'
+import { toolCreatesClosed, nextTokenText, measureTextBox } from '../../lib/draw'
 
 /** Closed shapes can be filled (background color); open ones can't. */
 export function isClosed(el: BoardElement): boolean {
@@ -29,6 +29,8 @@ export function usePropertyEditing() {
   const setToolDefaults = useEditorStore((s) => s.setToolDefaults)
   const tokenDefaults = useEditorStore((s) => s.tokenDefaults)
   const setTokenDefaults = useEditorStore((s) => s.setTokenDefaults)
+  const textDefaults = useEditorStore((s) => s.textDefaults)
+  const setTextDefaults = useEditorStore((s) => s.setTextDefaults)
   const els = doc.elements.filter((e) => selectedIds.includes(e.id))
   const editingSelection = els.length > 0
   // Whether the panel currently has an editable subject: a selection, or any
@@ -36,6 +38,8 @@ export function usePropertyEditing() {
   const editable = editingSelection || isCreationTool(activeTool)
   // The Token stamp shows its token editor (bound to the next-token defaults).
   const tokenTool = activeTool === 'token'
+  // The Text tool shows its text editor (bound to the next-text defaults).
+  const textTool = activeTool === 'text'
   // In creation mode (incl. a LOCKED tool that auto-selected its last creation) the
   // bar targets the NEXT element's defaults, never the incidental selection — so
   // e.g. picking a token preset re-styles the next token, not the last stamped one.
@@ -57,6 +61,7 @@ export function usePropertyEditing() {
       allFigure: false,
       allRect: false,
       allToken: tokenTool,
+      allText: textTool,
       values: {
         stroke: toolDefaults.stroke as string | undefined,
         strokeWidth: toolDefaults.strokeWidth as number | undefined,
@@ -78,10 +83,15 @@ export function usePropertyEditing() {
         tokenFill: tokenTool ? tokenDefaults.tokenFill : undefined,
         color1: tokenTool ? tokenDefaults.color1 : undefined,
         color2: tokenTool ? tokenDefaults.color2 : undefined,
-        textColor: tokenTool ? tokenDefaults.textColor : undefined,
+        textColor: tokenTool ? tokenDefaults.textColor : textTool ? textDefaults.textColor : undefined,
         text: tokenTool ? tokenDefaults.text : undefined,
         label: tokenTool ? tokenDefaults.label : undefined,
         showLabel: tokenTool ? tokenDefaults.showLabel : undefined,
+        // Text-tool defaults (the next text to be placed); undefined otherwise.
+        bgColor: textTool ? textDefaults.bgColor : undefined,
+        fontSize: textTool ? textDefaults.fontSize : undefined,
+        align: textTool ? textDefaults.align : undefined,
+        bold: textTool ? textDefaults.bold : undefined,
       },
       setStroke: (stroke: string) => setToolDefaults({ stroke }),
       setStrokeWidth: (strokeWidth: number) => setToolDefaults({ strokeWidth }),
@@ -107,10 +117,16 @@ export function usePropertyEditing() {
       setTokenFill: (tokenFill: TokenFill) => setTokenDefaults({ tokenFill }),
       setColor1: (color1: string) => setTokenDefaults({ color1 }),
       setColor2: (color2: string) => setTokenDefaults({ color2 }),
-      setTextColor: (textColor: string) => setTokenDefaults({ textColor }),
+      // Text color: routed to whichever tool is active (token badge vs text).
+      setTextColor: (textColor: string) => (textTool ? setTextDefaults({ textColor }) : setTokenDefaults({ textColor })),
       setText: (text: string) => setTokenDefaults({ text }),
       setLabel: (label: string) => setTokenDefaults({ label }),
       setShowLabel: (showLabel: boolean) => setTokenDefaults({ showLabel }),
+      // Text-tool defaults.
+      setBgColor: (bgColor: string) => setTextDefaults({ bgColor }),
+      setFontSize: (fontSize: number) => setTextDefaults({ fontSize }),
+      setAlign: (align: TextAlign) => setTextDefaults({ align }),
+      setBold: (bold: boolean) => setTextDefaults({ bold }),
     }
   }
 
@@ -127,10 +143,13 @@ export function usePropertyEditing() {
   const allRect = els.every((e) => e.type === 'rect')
   const tokens = els.filter((e): e is Extract<BoardElement, { type: 'token' }> => e.type === 'token')
   const allToken = tokens.length === els.length
+  const texts = els.filter((e): e is Extract<BoardElement, { type: 'text' }> => e.type === 'text')
+  const allText = texts.length === els.length
   // Each displayed value is the FIRST selected element's (not blanked when mixed).
   const first = els[0]
   const firstPoly = first.type === 'polyline' ? first : undefined
   const firstToken = first.type === 'token' ? first : undefined
+  const firstText = first.type === 'text' ? first : undefined
 
   function patch(targets: BoardElement[], make: (el: BoardElement) => { before: ElementPatch; after: ElementPatch }) {
     if (targets.length === 0) return
@@ -152,6 +171,7 @@ export function usePropertyEditing() {
     allFigure,
     allRect,
     allToken,
+    allText,
     values: {
       stroke: first.stroke,
       strokeWidth: first.strokeWidth,
@@ -172,10 +192,15 @@ export function usePropertyEditing() {
       tokenFill: firstToken?.tokenFill,
       color1: firstToken?.color1,
       color2: firstToken?.color2,
-      textColor: firstToken?.textColor,
+      // Text color is shared by tokens (badge) and text elements.
+      textColor: firstToken?.textColor ?? firstText?.textColor,
       text: firstToken?.text,
       label: firstToken?.label,
       showLabel: firstToken?.showLabel,
+      bgColor: firstText?.bgColor,
+      fontSize: firstText?.fontSize,
+      align: firstText?.align,
+      bold: firstText?.bold,
     },
     setStroke: (stroke: string) => {
       patch(els, (e) => ({ before: { stroke: e.stroke }, after: { stroke } }))
@@ -239,9 +264,45 @@ export function usePropertyEditing() {
       patch(tokens, (e) => ({ before: { color2: (e as Extract<BoardElement, { type: 'token' }>).color2 }, after: { color2 } }))
       setTokenDefaults({ color2 })
     },
+    // Text color: applies to tokens (badge) and/or text elements in the selection.
     setTextColor: (textColor: string) => {
       patch(tokens, (e) => ({ before: { textColor: (e as Extract<BoardElement, { type: 'token' }>).textColor }, after: { textColor } }))
-      setTokenDefaults({ textColor })
+      patch(texts, (e) => ({ before: { textColor: (e as Extract<BoardElement, { type: 'text' }>).textColor }, after: { textColor } }))
+      if (tokens.length) setTokenDefaults({ textColor })
+      if (texts.length) setTextDefaults({ textColor })
+    },
+    // Text element: background color / font size / alignment. Font size re-measures
+    // the box (keeping the center fixed) so it stays fitted to the text.
+    setBgColor: (bgColor: string) => {
+      patch(texts, (e) => ({ before: { bgColor: (e as Extract<BoardElement, { type: 'text' }>).bgColor }, after: { bgColor } }))
+      setTextDefaults({ bgColor })
+    },
+    setFontSize: (fontSize: number) => {
+      patch(texts, (e) => {
+        const t = e as Extract<BoardElement, { type: 'text' }>
+        const { width, height } = measureTextBox(t.text, fontSize, t.bold)
+        return {
+          before: { fontSize: t.fontSize, x: t.x, y: t.y, width: t.width, height: t.height },
+          after: { fontSize, x: t.x + (t.width - width) / 2, y: t.y + (t.height - height) / 2, width, height },
+        }
+      })
+      setTextDefaults({ fontSize })
+    },
+    setAlign: (align: TextAlign) => {
+      patch(texts, (e) => ({ before: { align: (e as Extract<BoardElement, { type: 'text' }>).align }, after: { align } }))
+      setTextDefaults({ align })
+    },
+    // Bold toggles weight 800; the box is re-measured (bold is wider) about its center.
+    setBold: (bold: boolean) => {
+      patch(texts, (e) => {
+        const t = e as Extract<BoardElement, { type: 'text' }>
+        const { width, height } = measureTextBox(t.text, t.fontSize, bold)
+        return {
+          before: { bold: t.bold, x: t.x, y: t.y, width: t.width, height: t.height },
+          after: { bold, x: t.x + (t.width - width) / 2, y: t.y + (t.height - height) / 2, width, height },
+        }
+      })
+      setTextDefaults({ bold })
     },
     setText: (text: string) => {
       patch(tokens, (e) => ({ before: { text: (e as Extract<BoardElement, { type: 'token' }>).text }, after: { text } }))

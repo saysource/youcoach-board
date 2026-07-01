@@ -1,5 +1,19 @@
-import type { ArrowTip, BoardElement, Box, StrokeStyle, FillStyle, TokenShape, TokenFill } from '@youcoach-board/core'
-import { normalizeBox, IDENTITY_TRANSFORM, DEFAULT_WAVE_LENGTH, DEFAULT_WAVE_AMPLITUDE, DEFAULT_LINES_OFFSET } from '@youcoach-board/core'
+import type { ArrowTip, BoardElement, Box, StrokeStyle, FillStyle, TokenShape, TokenFill, TextAlign } from '@youcoach-board/core'
+import {
+  normalizeBox,
+  IDENTITY_TRANSFORM,
+  DEFAULT_WAVE_LENGTH,
+  DEFAULT_WAVE_AMPLITUDE,
+  DEFAULT_LINES_OFFSET,
+  TEXT_FONT,
+  TEXT_FONT_WEIGHT,
+  TEXT_FONT_WEIGHT_BOLD,
+  TEXT_LINE_HEIGHT,
+  TEXT_PADDING,
+  DEFAULT_TEXT_FONT_SIZE,
+  DEFAULT_TEXT_COLOR,
+  DEFAULT_TEXT_BG,
+} from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 
 export interface Point {
@@ -294,6 +308,85 @@ export function nextTokenText(elements: BoardElement[], ref: { color1: string; c
     if (e.text.trim() !== '' && Number.isInteger(n)) nums.push(n)
   }
   return nums.length ? String(Math.max(...nums) + 1) : '1'
+}
+
+// ── Text element ─────────────────────────────────────────────────────────────
+
+/** The style a text element carries (everything except its content/geometry) —
+ *  what the panel edits and new text elements inherit. */
+export interface TextStyle {
+  textColor: string
+  bgColor: string
+  fontSize: number
+  align: TextAlign
+  bold: boolean
+}
+export const DEFAULT_TEXT_STYLE: TextStyle = {
+  textColor: DEFAULT_TEXT_COLOR,
+  bgColor: DEFAULT_TEXT_BG,
+  fontSize: DEFAULT_TEXT_FONT_SIZE,
+  align: 'center',
+  bold: false,
+}
+/** The "next text" defaults (= its style); no starting content (text starts empty). */
+export type TextDefaults = TextStyle
+export const DEFAULT_TEXT_DEFAULTS: TextDefaults = { ...DEFAULT_TEXT_STYLE }
+
+// Reused offscreen 2D context for text measurement (canvas measureText at
+// `fontSize` px yields widths in board units 1:1, matching the SVG renderer).
+let _measureCtx: CanvasRenderingContext2D | null = null
+function measureCtx(): CanvasRenderingContext2D | null {
+  if (!_measureCtx && typeof document !== 'undefined') _measureCtx = document.createElement('canvas').getContext('2d')
+  return _measureCtx
+}
+
+/** The background box (width/height in board units) that fits `text` at `fontSize`:
+ *  the widest line plus TEXT_PADDING on each side, floored to fit an "M"; height
+ *  is line-count · line-height + padding. Kept in lockstep with ElementView's
+ *  text layout so the SVG and the inline editor overlay agree. */
+export function measureTextBox(text: string, fontSize: number, bold = false): { width: number; height: number } {
+  const lines = text.length ? text.split('\n') : ['']
+  const ctx = measureCtx()
+  let maxW = 0
+  if (ctx) {
+    ctx.font = `${bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT} ${fontSize}px ${TEXT_FONT}`
+    for (const ln of lines) maxW = Math.max(maxW, ctx.measureText(ln).width)
+    maxW = Math.max(maxW, ctx.measureText('M').width) // min width fits an "M"
+  } else {
+    // SSR/export fallback: rough monospace-ish estimate.
+    maxW = Math.max(1, ...lines.map((l) => l.length)) * fontSize * 0.6
+  }
+  const lineH = fontSize * TEXT_LINE_HEIGHT
+  return {
+    width: Math.ceil(maxW + 2 * TEXT_PADDING),
+    height: Math.ceil(lines.length * lineH + 2 * TEXT_PADDING),
+  }
+}
+
+/** Build a text element centered at (cx, cy) with the given style + content.
+ *  Its box is measured from the content so it fits exactly (min = one "M"). */
+export function makeText(id: string, cx: number, cy: number, style: TextStyle = DEFAULT_TEXT_STYLE, text = ''): BoardElement {
+  const { width, height } = measureTextBox(text, style.fontSize, style.bold)
+  return {
+    id,
+    type: 'text',
+    x: Math.round(cx - width / 2),
+    y: Math.round(cy - height / 2),
+    width,
+    height,
+    text,
+    textColor: style.textColor,
+    bgColor: style.bgColor,
+    fontSize: style.fontSize,
+    align: style.align,
+    bold: style.bold,
+    transform: { ...IDENTITY_TRANSFORM },
+    stroke: '#111111',
+    strokeWidth: 3,
+    strokeStyle: 'solid',
+    fill: 'transparent',
+    fillStyle: 'solid',
+  }
 }
 
 /** Convert a rectangle into an equivalent CLOSED polyline (its four corners),

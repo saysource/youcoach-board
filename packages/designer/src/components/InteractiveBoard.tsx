@@ -13,6 +13,13 @@ import {
   TOKEN_FONT_WEIGHT,
   TOKEN_LABEL_PX,
   TOKEN_LABEL_GAP_PX,
+  TEXT_FONT,
+  TEXT_FONT_WEIGHT,
+  TEXT_FONT_WEIGHT_BOLD,
+  TEXT_LINE_HEIGHT,
+  TEXT_PADDING,
+  TEXT_MIN_FONT,
+  TEXT_MAX_FONT,
   type ArrowTip,
   type BoardElement,
   type ElementTransform,
@@ -27,6 +34,8 @@ import {
   makePolyline,
   makeDraw,
   makeToken,
+  makeText,
+  measureTextBox,
   nextTokenText,
   TOKEN_SIZE,
   squareCorner,
@@ -52,6 +61,8 @@ import { buildFigureElement, FIGURE_DND_MIME, FIELD_DND_MIME, type FigureDragDat
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
+// The corner diagonally opposite a resize handle (stays pinned during a text resize).
+const OPPOSITE_CORNER: Record<CornerId, CornerId> = { nw: 'se', ne: 'sw', se: 'nw', sw: 'ne' }
 const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-canvas
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
 const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
@@ -190,9 +201,11 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const tokenDefaults = useEditorStore((s) => s.tokenDefaults)
+  const textDefaults = useEditorStore((s) => s.textDefaults)
   const lastTokenId = useEditorStore((s) => s.lastTokenId)
   const setSelection = useEditorStore((s) => s.setSelection)
   const createFigure = useEditorStore((s) => s.createFigure)
+  const deleteSelected = useEditorStore((s) => s.deleteSelected)
   const setBackground = useEditorStore((s) => s.setBackground)
   const beginTransaction = useEditorStore((s) => s.beginTransaction)
   const commitTransaction = useEditorStore((s) => s.commitTransaction)
@@ -216,9 +229,16 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   // under-badge label) + the in-progress text. Double-click / touch long-press;
   // committed on Enter/blur.
   type EditField = 'text' | 'label'
-  const [editing, setEditing] = useState<{ id: string; field: EditField; text: string } | null>(null)
+  // `created` marks a text element that was made by this edit session (so an empty
+  // blur/escape discards it entirely). `text` is the CURRENT typed value.
+  const [editing, setEditing] = useState<{ id: string; field: EditField; text: string; created?: boolean } | null>(null)
+  // Original text of a text element at edit start, to restore on Escape.
+  const origTextRef = useRef<string>('')
   // Screen placement of the inline editor (computed in an effect — needs the CTM).
   const [editPos, setEditPos] = useState<{ left: number; top: number; width: number; font: number; color: string } | null>(null)
+  // Screen placement of the text-element editor overlay (recomputed live as the
+  // box grows). Kept separate because a text edit sizes to the whole box.
+  const [textBox, setTextBox] = useState<{ left: number; top: number; width: number; height: number; font: number; pad: number; align: 'left' | 'center' | 'right'; color: string; bold: boolean } | null>(null)
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Last token pointer-down (id + field + timestamp) to detect a double-tap
   // manually — the native dblclick can't fire once the selection frame covers the
@@ -245,6 +265,28 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     ro.observe(svg)
     return () => ro.disconnect()
   }, [])
+
+  // The element currently being inline-edited (if it's a text element) — recompute
+  // its editor overlay box whenever its geometry (grows as you type) or the zoom
+  // changes. Kept in an effect so the CTM/refs aren't read during render.
+  const editingEl = editing ? doc.elements.find((e) => e.id === editing.id) : undefined
+  const editingTextEl = editingEl && editingEl.type === 'text' ? editingEl : null
+  useEffect(() => {
+    const place = () => {
+      const el = editingTextEl
+      if (!el) return setTextBox(null)
+      const svg = svgRef.current
+      const cont = containerRef.current
+      if (!svg || !cont) return
+      const ctm = svg.getScreenCTM()
+      if (!ctm) return
+      const sp = new DOMPoint(el.x + el.transform.x, el.y + el.transform.y).matrixTransform(ctm)
+      const r = cont.getBoundingClientRect()
+      const sc = el.transform.scale * ctm.a
+      setTextBox({ left: sp.x - r.left, top: sp.y - r.top, width: el.width * sc, height: el.height * sc, font: el.fontSize * sc, pad: TEXT_PADDING * sc, align: el.align, color: el.textColor, bold: el.bold })
+    }
+    place()
+  }, [editingTextEl, scale])
 
   // Abandon any in-progress polyline if the user leaves the line/arrow tools
   // (React's "adjust state when a value changes during render" pattern).
@@ -397,6 +439,20 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     return g.current
   }
 
+  // Resizing a TEXT element only changes its font size (proportional to the drag);
+  // the box is re-measured to fit and the handle's opposite corner stays put.
+  function textFontResize(el: Extract<BoardElement, { type: 'text' }>, g: Gesture): BoardElement {
+    const { box } = computeResize(g.box0, g.t0, g.handle as CornerId, clampToCanvas(g.current), MIN_SIZE, { proportional: true })
+    const s = box.width / (g.box0.width || 1)
+    const fontSize = Math.max(TEXT_MIN_FONT, Math.min(TEXT_MAX_FONT, Math.round(el.fontSize * s)))
+    const m = measureTextBox(el.text, fontSize, el.bold)
+    const opp = OPPOSITE_CORNER[g.handle as CornerId]
+    const c0 = localCorners(g.box0)[opp as CornerId]
+    const x = opp === 'nw' || opp === 'sw' ? c0.x : c0.x - m.width
+    const y = opp === 'nw' || opp === 'ne' ? c0.y : c0.y - m.height
+    return { ...el, fontSize, x, y, width: m.width, height: m.height, transform: g.t0 }
+  }
+
   // The element as it should render RIGHT NOW — committed state plus any
   // in-progress move / resize / rotate / endpoint gesture.
   function liveElement(el: BoardElement): BoardElement {
@@ -422,6 +478,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
         if (el.type === 'polyline' || el.type === 'draw') {
           return { ...el, points: scalePoints(el.points, gesture.box0, box), transform }
         }
+        if (el.type === 'text') return textFontResize(el, gesture)
         return { ...el, x: box.x, y: box.y, width: box.width, height: box.height, transform } as BoardElement
       }
       if (gesture.kind === 'point' && el.type === 'polyline') {
@@ -505,6 +562,20 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
       return
     }
 
+    // Text: a stamp tool — click drops an (empty) text element and immediately
+    // opens the inline editor (Excalidraw-style). Blurring it empty discards it.
+    if (activeTool === 'text') {
+      const c = clampToCanvas(p)
+      const txt = makeText(crypto.randomUUID(), c.x, c.y, textDefaults, '')
+      createFigure(txt)
+      // Defer opening the editor until AFTER this click's pointerup, so the
+      // trailing pointerup doesn't blur the freshly-focused textarea (which would
+      // commit-and-discard the empty element). Token editing starts on pointerup,
+      // so it doesn't hit this.
+      setTimeout(() => startTextEdit(txt, true), 0)
+      return
+    }
+
     // Already mid-polyline (entered by a click with the line/arrow tool):
     // each further click drops a vertex; finishing is via the end dots / ESC.
     if (polyDraft) {
@@ -576,6 +647,8 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     if (el.type === 'token') {
       const field = pressTokenFieldRef.current
       longPressRef.current = setTimeout(() => startTokenEdit(el, field), 500)
+    } else if (el.type === 'text') {
+      longPressRef.current = setTimeout(() => startTextEdit(el), 500)
     }
   }
 
@@ -641,6 +714,53 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
       }
     }
     setEditing(null)
+  }
+
+  // ── Text element inline editing ────────────────────────────────────────────
+  // The editor is a fully-transparent <textarea> laid exactly over the rendered
+  // SVG text; typing live-updates the element (text + measured box) inside one
+  // undo transaction, so it feels like editing the SVG directly. Enter inserts a
+  // newline; blur commits; Escape restores the original.
+  function startTextEdit(el: BoardElement, created = false) {
+    if (el.type !== 'text') return
+    cancelLongPress()
+    setSelection([el.id])
+    setEditPos(null) // text uses its own overlay (computed from the live element)
+    origTextRef.current = el.text
+    beginTransaction()
+    setEditing({ id: el.id, field: 'text', text: el.text, created })
+  }
+
+  // Apply a new text value to the edited element live: re-measure the box and keep
+  // its center fixed so it grows symmetrically.
+  function applyLiveText(el: Extract<BoardElement, { type: 'text' }>, value: string) {
+    const { width, height } = measureTextBox(value, el.fontSize, el.bold)
+    updateElements([
+      {
+        id: el.id,
+        before: { text: el.text, x: el.x, y: el.y, width: el.width, height: el.height },
+        after: { text: value, x: el.x + (el.width - width) / 2, y: el.y + (el.height - height) / 2, width, height },
+      },
+    ])
+  }
+
+  function commitTextEdit() {
+    if (!editing) return
+    const el = doc.elements.find((e) => e.id === editing.id)
+    const empty = el?.type === 'text' && el.text.trim() === ''
+    commitTransaction()
+    setEditing(null)
+    // A freshly-created text left empty is discarded (it's still selected).
+    if (editing.created && empty) deleteSelected()
+  }
+
+  function cancelTextEdit() {
+    if (!editing) return
+    const el = doc.elements.find((e) => e.id === editing.id)
+    if (el?.type === 'text' && !editing.created) applyLiveText(el, origTextRef.current)
+    commitTransaction()
+    setEditing(null)
+    if (editing.created) deleteSelected()
   }
 
   function onHandleDown(handle: HandleId, e: React.PointerEvent, el: BoardElement) {
@@ -809,6 +929,16 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
           } else {
             tokenTapRef.current = { id: el.id, field, t: e.timeStamp }
           }
+        } else if (el?.type === 'text') {
+          // Same double-tap path as tokens (a native dblclick can't fire once the
+          // selection frame covers the element).
+          const prev = tokenTapRef.current
+          if (prev && prev.id === el.id && e.timeStamp - prev.t < 400) {
+            tokenTapRef.current = null
+            startTextEdit(el)
+          } else {
+            tokenTapRef.current = { id: el.id, field: 'text', t: e.timeStamp }
+          }
         } else {
           tokenTapRef.current = null
         }
@@ -835,6 +965,16 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
       if (el.type === 'polyline' || el.type === 'draw') {
         updateElements([
           { id: g.id, before: { points: el.points, transform: g.t0 }, after: { points: scalePoints(el.points, g.box0, box), transform } },
+        ])
+      } else if (el.type === 'text') {
+        // Text resize = font-size change (box re-measured); transform is unchanged.
+        const r = textFontResize(el, g) as Extract<BoardElement, { type: 'text' }>
+        updateElements([
+          {
+            id: g.id,
+            before: { fontSize: el.fontSize, x: el.x, y: el.y, width: el.width, height: el.height },
+            after: { fontSize: r.fontSize, x: r.x, y: r.y, width: r.width, height: r.height },
+          },
         ])
       } else {
         updateElements([
@@ -1156,6 +1296,60 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
             padding: 0,
             margin: 0,
             lineHeight: 1,
+          }}
+          className="z-40 select-text outline-none"
+        />
+      )}
+      {/* Text element editor: a transparent multiline <textarea> laid exactly over
+          the live SVG text (which shows the value as you type). Enter = newline;
+          blur commits; Escape restores. */}
+      {editing && editingTextEl && textBox && (
+        <textarea
+          autoFocus
+          value={editing.text}
+          wrap="off"
+          onFocus={(e) => {
+            const v = e.currentTarget.value
+            e.currentTarget.setSelectionRange(v.length, v.length)
+          }}
+          onChange={(e) => {
+            const val = e.target.value
+            setEditing((cur) => (cur ? { ...cur, text: val } : cur))
+            const cur = doc.elements.find((x) => x.id === editing.id)
+            if (cur?.type === 'text') applyLiveText(cur, val)
+          }}
+          onBlur={commitTextEdit}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              cancelTextEdit()
+            }
+            // Enter falls through → inserts a newline (multiline text).
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            left: textBox.left,
+            top: textBox.top,
+            width: textBox.width,
+            height: textBox.height,
+            fontFamily: TEXT_FONT,
+            fontSize: textBox.font,
+            fontWeight: textBox.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT,
+            lineHeight: TEXT_LINE_HEIGHT,
+            padding: textBox.pad,
+            textAlign: textBox.align,
+            color: 'transparent',
+            caretColor: textBox.color,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            margin: 0,
+            resize: 'none',
+            overflow: 'hidden',
+            boxSizing: 'border-box',
+            whiteSpace: 'pre',
           }}
           className="z-40 select-text outline-none"
         />
