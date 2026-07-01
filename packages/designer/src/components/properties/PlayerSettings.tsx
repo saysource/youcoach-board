@@ -7,7 +7,6 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '../ui/po
 import { Slider } from '../ui/slider'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { cn } from '../../lib/cn'
-import { CHECKER_IMAGE } from '../../lib/checker'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { usePortalContainer } from '../../lib/board-root'
 import { useEditorStore } from '../../store/context'
@@ -204,11 +203,7 @@ function KitColorButton({ color, label, onChange, open, onOpenChange }: { color:
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <button type="button" aria-label={label} className="size-6 shrink-0 overflow-hidden rounded-md border border-border/70">
-          <span className="block size-full" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#fff' }}>
-            <span className="block size-full" style={{ background: color }} />
-          </span>
-        </button>
+        <button type="button" aria-label={label} className="size-6 shrink-0 rounded-md border border-border/70" style={{ background: color }} />
       </PopoverTrigger>
       <PopoverContent side="right" align="start" className="w-56" onInteractOutside={keepOpenOnNested}>
         <ColorPickerWidget value={color} onChange={onChange} showOpacity={false} />
