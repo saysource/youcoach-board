@@ -233,7 +233,7 @@ function KitEditor() {
   })
   return (
     <div className="flex items-stretch gap-3">
-      <KitSvg kit={kit} className="shrink-0 self-center" style={{ height: 160, width: 'auto' }} />
+      <KitSvg kit={kit} className="shrink-0 self-center" style={{ height: 240, width: 'auto' }} />
       <div className="grid gap-2">
         <div className="flex gap-1">
           {KIT_STYLES.map((s) => (
@@ -245,7 +245,7 @@ function KitEditor() {
               onClick={() => set({ style: s })}
               className={cn('flex items-center justify-center rounded-md border p-0.5', kit.style === s ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-accent')}
             >
-              <KitStyleIcon style={s} />
+              <KitStyleIcon style={s} size={42} />
             </button>
           ))}
         </div>
@@ -273,7 +273,7 @@ function KitEditor() {
           const k = history[i]
           return (
             <button key={i} type="button" aria-label="Recent kit" disabled={!k} onClick={() => k && p.setKit(k)} className="flex items-center justify-center rounded-md disabled:cursor-default">
-              <KitSvg kit={k ?? EMPTY_KIT} style={{ height: 76, width: 'auto' }} />
+              <KitSvg kit={k ?? EMPTY_KIT} style={{ height: 114, width: 'auto' }} />
             </button>
           )
         })}
