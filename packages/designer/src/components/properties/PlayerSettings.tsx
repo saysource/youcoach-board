@@ -268,7 +268,7 @@ function KitEditor() {
           const k = history[i]
           return (
             <button key={i} type="button" aria-label="Recent kit" disabled={!k} onClick={() => k && p.setKit(k)} className="flex items-center justify-center rounded-md disabled:cursor-default">
-              <KitSvg kit={k ?? EMPTY_KIT} style={{ height: 114, width: 'auto' }} />
+              <KitSvg kit={k ?? EMPTY_KIT} style={{ height: 114, width: 'auto', opacity: k ? 1 : 0.2 }} />
             </button>
           )
         })}
