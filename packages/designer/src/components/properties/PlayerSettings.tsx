@@ -147,7 +147,8 @@ function OpacityRow() {
 
 // ── Kit editor ───────────────────────────────────────────────────────────────
 
-// A recolored kit.svg (body silhouette + colored kit).
+// A recolored kit.svg (body silhouette + colored kit), inside a circular chip —
+// used for the trigger button in the settings row.
 function KitFigure({ kit, size = 40 }: { kit: PlayerKit; size?: number }) {
   const pv = kitPreview(kit)
   return (
@@ -155,6 +156,14 @@ function KitFigure({ kit, size = 40 }: { kit: PlayerKit; size?: number }) {
       {pv && <svg style={{ width: size * 0.9, height: size * 0.9 }} viewBox={pv.viewBox} preserveAspectRatio="xMidYMid meet" dangerouslySetInnerHTML={{ __html: pv.inner }} aria-hidden />}
     </span>
   )
+}
+
+// A bare recolored kit.svg (no chip/border) — used for the editor preview and the
+// recent-kit presets, which just fit their box.
+function KitSvg({ kit, className, style }: { kit: PlayerKit; className?: string; style?: React.CSSProperties }) {
+  const pv = kitPreview(kit)
+  if (!pv) return null
+  return <svg className={className} style={style} viewBox={pv.viewBox} preserveAspectRatio="xMidYMid meet" dangerouslySetInnerHTML={{ __html: pv.inner }} aria-hidden />
 }
 
 // A jersey-style icon: the token jersey shirt (white base, mid-gray stripes) with
@@ -223,8 +232,8 @@ function KitEditor() {
     onOpenChange: (o: boolean) => setOpenColor(o ? which : null),
   })
   return (
-    <div className="flex items-start gap-3">
-      <KitFigure kit={kit} size={130} />
+    <div className="flex items-stretch gap-3">
+      <KitSvg kit={kit} className="shrink-0 self-center" style={{ height: 160, width: 'auto' }} />
       <div className="grid gap-2">
         <div className="flex gap-1">
           {KIT_STYLES.map((s) => (
@@ -259,12 +268,12 @@ function KitEditor() {
           <span className="text-xs text-muted-foreground">Socks</span>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-1 self-start">
+      <div className="grid grid-cols-2 grid-rows-2 gap-1 self-stretch">
         {Array.from({ length: KIT_HISTORY_SIZE }).map((_, i) => {
           const k = history[i]
           return (
-            <button key={i} type="button" aria-label="Recent kit" disabled={!k} onClick={() => k && p.setKit(k)} className="rounded-md disabled:cursor-default">
-              <KitFigure kit={k ?? EMPTY_KIT} size={44} />
+            <button key={i} type="button" aria-label="Recent kit" disabled={!k} onClick={() => k && p.setKit(k)} className="flex items-center justify-center rounded-md disabled:cursor-default">
+              <KitSvg kit={k ?? EMPTY_KIT} style={{ height: 76, width: 'auto' }} />
             </button>
           )
         })}
