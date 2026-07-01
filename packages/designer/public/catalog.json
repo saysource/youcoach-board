@@ -3,14 +3,14 @@
   "imageBase": "images/optimized",
   "defaults": {
     "players": {
-      "yc-color-1": "#1971c2",
-      "yc-color-2": "#ffffff",
+      "yc-color-1": "#FF0000",
+      "yc-color-2": "#000000",
       "yc-skin": "#e8b690",
       "yc-hair": "#3b2a20",
-      "socks": "#1971c2",
-      "shoes": "#1f1f1f",
-      "v_stripe": "#ffffff",
-      "h_stripe": "#ffffff"
+      "socks": "#FF0000",
+      "shoes": "#333333",
+      "v_stripe": "#000000",
+      "h_stripe": "#FF0000"
     },
     "materials": {
       "yc-color-1": "#e03131",
@@ -39,8 +39,7 @@
       "id": "materials",
       "name": "Materials",
       "categories": [
-        "materials",
-        "discs"
+        "materials"
       ]
     },
     {
@@ -15815,20 +15814,20 @@
       "colors": "materials",
       "figures": [
         {
-          "svg": "images/optimized/materials/14.svg",
-          "thumb": "images/optimized/materials/14_mini.png",
-          "w": 67,
-          "h": 67,
+          "svg": "images/optimized/materials/15.svg",
+          "thumb": "images/optimized/materials/15_mini.png",
+          "w": 72,
+          "h": 70,
           "actions": [
             "material.balls"
           ],
           "sizeFactor": 0.25
         },
         {
-          "svg": "images/optimized/materials/15.svg",
-          "thumb": "images/optimized/materials/15_mini.png",
-          "w": 72,
-          "h": 70,
+          "svg": "images/optimized/materials/14.svg",
+          "thumb": "images/optimized/materials/14_mini.png",
+          "w": 67,
+          "h": 67,
           "actions": [
             "material.balls"
           ],
@@ -16636,169 +16635,6 @@
           }
         ]
       }
-    },
-    "discs": {
-      "name": "Text and Tokens",
-      "kind": "figure",
-      "colors": "materials",
-      "figures": [
-        {
-          "thumb": "images/optimized/text/0_mini.png",
-          "w": 120,
-          "h": 48,
-          "tool": "text"
-        },
-        {
-          "svg": "images/optimized/discs/1.svg",
-          "thumb": "images/optimized/discs/1_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/2.svg",
-          "thumb": "images/optimized/discs/2_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/3.svg",
-          "thumb": "images/optimized/discs/3_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/4.svg",
-          "thumb": "images/optimized/discs/4_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/5.svg",
-          "thumb": "images/optimized/discs/5_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/6.svg",
-          "thumb": "images/optimized/discs/6_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/7.svg",
-          "thumb": "images/optimized/discs/7_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/8.svg",
-          "thumb": "images/optimized/discs/8_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/9.svg",
-          "thumb": "images/optimized/discs/9_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/10.svg",
-          "thumb": "images/optimized/discs/10_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/11.svg",
-          "thumb": "images/optimized/discs/11_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/12.svg",
-          "thumb": "images/optimized/discs/12_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/13.svg",
-          "thumb": "images/optimized/discs/13_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/14.svg",
-          "thumb": "images/optimized/discs/14_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/15.svg",
-          "thumb": "images/optimized/discs/15_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/16.svg",
-          "thumb": "images/optimized/discs/16_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/17.svg",
-          "thumb": "images/optimized/discs/17_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/18.svg",
-          "thumb": "images/optimized/discs/18_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/19.svg",
-          "thumb": "images/optimized/discs/19_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/20.svg",
-          "thumb": "images/optimized/discs/20_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/21.svg",
-          "thumb": "images/optimized/discs/21_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/22.svg",
-          "thumb": "images/optimized/discs/22_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/23.svg",
-          "thumb": "images/optimized/discs/23_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/24.svg",
-          "thumb": "images/optimized/discs/24_mini.png",
-          "w": 367,
-          "h": 375
-        },
-        {
-          "svg": "images/optimized/discs/25.svg",
-          "thumb": "images/optimized/discs/25_mini.png",
-          "w": 367,
-          "h": 375
-        }
-      ]
     },
     "fields_11": {
       "name": "Fields 11",

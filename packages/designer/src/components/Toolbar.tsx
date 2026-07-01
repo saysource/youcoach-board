@@ -1,7 +1,7 @@
 import { type ElementType, useState } from 'react'
 import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
-import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon } from './icons'
+import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -37,6 +37,9 @@ export type ToolId =
   | 'line'
   | 'elbow-arrow'
   | 'elbow-line'
+  | 'zigzag-arrow'
+  | 'double-arrow'
+  | 'token'
   | 'draw'
   | 'eraser'
 
@@ -57,6 +60,8 @@ const LINE_ITEMS: { id: LineTool; label: string; icon: ElementType }[] = [
   { id: 'line', label: 'Line', icon: Minus },
   { id: 'elbow-arrow', label: 'Elbow arrow', icon: ElbowArrowIcon },
   { id: 'elbow-line', label: 'Elbow line', icon: ElbowLineIcon },
+  { id: 'zigzag-arrow', label: 'Zigzag arrow', icon: LineZigzagArrowIcon },
+  { id: 'double-arrow', label: 'Double arrow', icon: LineStyleDoubleIcon },
 ]
 const LINE_ICON: Record<LineTool, ElementType> = Object.fromEntries(LINE_ITEMS.map((s) => [s.id, s.icon])) as Record<LineTool, ElementType>
 
@@ -86,9 +91,14 @@ interface ToolbarProps {
   onToggleLock: () => void
   /** Open the library drawer at a category (from the More-tools menu). */
   onOpenCategory: (catId: string) => void
+  /** Enter background-edit mode (from the More-tools menu). */
+  onEditBackground: () => void
 }
 
-export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory }: ToolbarProps) {
+// Which toolbar dropdown is currently open (only one at a time).
+type ToolbarMenu = 'shapes' | 'lines' | 'more'
+
+export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground }: ToolbarProps) {
   // The shape last picked/used, so the Shapes button shows it and re-opening the
   // menu re-activates it. Null until the first use (button shows the generic icon).
   const [lastShape, setLastShape] = useState<ShapeTool | null>(null)
@@ -101,6 +111,14 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
     setLastLine(tool)
     onToolChange(tool)
   }
+  // Single source of truth for the open dropdown so opening one closes the others.
+  // Close events only clear when they belong to the still-open menu, so an
+  // open-then-close race (clicking a second trigger) can't cancel the new menu.
+  const [openMenu, setOpenMenu] = useState<ToolbarMenu | null>(null)
+  const menuProps = (name: ToolbarMenu) => ({
+    open: openMenu === name,
+    onOpenChange: (o: boolean) => setOpenMenu((prev) => (o ? name : prev === name ? null : prev)),
+  })
   return (
     <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
       <ToolButton label={locked ? 'Unlock' : 'Keep selected tool active'} active={locked} onClick={onToggleLock}>
@@ -113,15 +131,15 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
         </ToolButton>
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <ShapesMenu activeTool={activeTool} lastShape={lastShape} onPick={pickShape} />
-      <LinesMenu activeTool={activeTool} lastLine={lastLine} onPick={pickLine} />
+      <ShapesMenu activeTool={activeTool} lastShape={lastShape} onPick={pickShape} {...menuProps('shapes')} />
+      <LinesMenu activeTool={activeTool} lastLine={lastLine} onPick={pickLine} {...menuProps('lines')} />
       {DRAW_TOOLS.map((tool) => (
         <ToolButton key={tool.id} label={tool.label} active={activeTool === tool.id} shortcut={tool.shortcut} onClick={() => onToolChange(tool.id)}>
           <tool.icon />
         </ToolButton>
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <MoreToolsMenu onOpenCategory={onOpenCategory} />
+      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onEditBackground={onEditBackground} {...menuProps('more')} />
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ToolButton label="Eraser" active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
         <Eraser />
@@ -138,16 +156,26 @@ function ShapesMenu({
   activeTool,
   lastShape,
   onPick,
+  open,
+  onOpenChange,
 }: {
   activeTool: ToolId
   lastShape: ShapeTool | null
   onPick: (tool: ShapeTool) => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
   const active = isShapeTool(activeTool)
   const current = active ? activeTool : lastShape
   const Icon = current ? SHAPE_ICON[current] : ShapesIcon
   return (
-    <DropdownMenu onOpenChange={(open) => open && onPick(lastShape ?? 'rectangle')}>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o)
+        if (o) onPick(lastShape ?? 'rectangle')
+      }}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -181,16 +209,26 @@ function LinesMenu({
   activeTool,
   lastLine,
   onPick,
+  open,
+  onOpenChange,
 }: {
   activeTool: ToolId
   lastLine: LineTool | null
   onPick: (tool: LineTool) => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
   const active = isLineTool(activeTool)
   const current = active ? activeTool : lastLine
   const Icon = current ? LINE_ICON[current] : LinesIcon
   return (
-    <DropdownMenu onOpenChange={(open) => open && onPick(lastLine ?? 'arrow')}>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o)
+        if (o) onPick(lastLine ?? 'arrow')
+      }}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -220,7 +258,19 @@ function LinesMenu({
 // The figure-library shortcut: the catalog's macro-groups jump the drawer to a
 // category; below, quick "add" actions. ("Fields and Background" shows as
 // "Background" — it'll later open a background-settings mode.)
-function MoreToolsMenu({ onOpenCategory }: { onOpenCategory: (catId: string) => void }) {
+function MoreToolsMenu({
+  onToolChange,
+  onOpenCategory,
+  onEditBackground,
+  open,
+  onOpenChange,
+}: {
+  onToolChange: (tool: ToolId) => void
+  onOpenCategory: (catId: string) => void
+  onEditBackground: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const { catalog } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
   // The ball = the first material with the "balls" action; flagged so animation
@@ -234,7 +284,7 @@ function MoreToolsMenu({ onOpenCategory }: { onOpenCategory: (catId: string) => 
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -260,6 +310,11 @@ function MoreToolsMenu({ onOpenCategory }: { onOpenCategory: (catId: string) => 
             )
           })}
         <DropdownMenuSeparator />
+        {/* Token stamp tool — placed by clicking the board, then edited inline. */}
+        <DropdownMenuItem onSelect={() => onToolChange('token')}>
+          <TokenIcon /> Token
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!ball} onSelect={addBall}>
           <MatchIcon /> Add Ball
         </DropdownMenuItem>
@@ -268,8 +323,8 @@ function MoreToolsMenu({ onOpenCategory }: { onOpenCategory: (catId: string) => 
           <Type /> Add Text
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {/* Opens the All Fields category (and, later, a background-settings mode). */}
-        <DropdownMenuItem disabled={!catalog?.categories.fields_all} onSelect={() => onOpenCategory('fields_all')}>
+        {/* Enters background-edit mode (its own toolbar + fields-only drawer). */}
+        <DropdownMenuItem onSelect={onEditBackground}>
           <SoccerFieldIcon /> Edit Background
         </DropdownMenuItem>
       </DropdownMenuContent>

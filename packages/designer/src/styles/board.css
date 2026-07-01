@@ -16,6 +16,9 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import 'tw-animate-css';
+/* Token label font — matches the rendered SVG label and the inline editor.
+ * Loaded from Google Fonts for now; can be self-hosted later. */
+@import url('https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@600&display=swap');
 
 /* Tell Tailwind where to scan for class names (no auto content detection in a
  * library build). */

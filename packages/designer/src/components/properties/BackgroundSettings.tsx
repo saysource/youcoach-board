@@ -2,12 +2,13 @@ import { type LogoPosition } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { Slider } from '../ui/slider'
-import { Swatches, Segmented } from './PropertyControls'
+import { Segmented } from './PropertyControls'
+import { ColorPickerWidget } from './ColorPickerWidget'
 import { LogoTopLeftIcon, LogoTopRightIcon, LogoCenterIcon, LogoBottomLeftIcon, LogoBottomRightIcon } from '../icons'
 import defaultFieldImage from '../../assets/field0.jpg'
 
-// Solid background: a transparent swatch (restore the default image) + colors.
-const BG_COLORS = ['transparent', '#2f8a3e', '#3b7a57', '#5b8c3a', '#d1d1d1', '#e7e7e7', '#ffffff']
+// Background swatch presets (first = restore the default field image).
+const BG_COLORS = ['transparent', '#2f8a3e', '#3b7a57', '#5b8c3a', '#d1d1d1', '#9f9f9f', '#a6c58b', '#3389e0', '#ffffff']
 
 const LOGO_OPTIONS: { value: LogoPosition; label: string; render: React.ReactNode }[] = [
   { value: 'top-left', label: 'Top left', render: <LogoTopLeftIcon className="size-5" /> },
@@ -17,25 +18,30 @@ const LOGO_OPTIONS: { value: LogoPosition; label: string; render: React.ReactNod
   { value: 'bottom-right', label: 'Bottom right', render: <LogoBottomRightIcon className="size-5" /> },
 ]
 
-// Background settings shown in the properties panel while a field category is the
-// active library category: solid background + color, field scale, logo position.
-// The field is panned directly on the canvas via the move handle (InteractiveBoard).
+// The background color picker (its own toolbar button): the same widget as the
+// stroke color, but without opacity and with the background presets. The
+// "transparent" swatch restores the default field image; any color is a solid fill.
+export function BackgroundColorPicker() {
+  const bg = useEditorStore((s) => s.doc.background)
+  const setBackground = useEditorStore((s) => s.setBackground)
+  return (
+    <ColorPickerWidget
+      value={bg.image ? 'transparent' : bg.color}
+      onChange={(c) => (c === 'transparent' || c === '' ? setBackground({ image: defaultFieldImage }) : setBackground({ color: c, image: null }))}
+      presets={BG_COLORS}
+      showOpacity={false}
+    />
+  )
+}
+
+// Background settings (field scale + logo position) — the field is panned directly
+// on the canvas via the move handle (InteractiveBoard).
 export function BackgroundSettings() {
   const bg = useEditorStore((s) => s.doc.background)
   const setBackground = useEditorStore((s) => s.setBackground)
   const arm = useDragTransaction()
   return (
     <div className="grid gap-3">
-      <div className="grid gap-1.5">
-        <span className="text-[11px] font-medium text-muted-foreground">Solid background</span>
-        {/* Transparent = restore the default field image; a color = solid fill. */}
-        <Swatches
-          colors={BG_COLORS}
-          value={bg.image ? 'transparent' : bg.color}
-          onChange={(c) => (c === 'transparent' || c === '' ? setBackground({ image: defaultFieldImage }) : setBackground({ color: c, image: null }))}
-        />
-      </div>
-
       <div className="grid gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">Field scale</span>
         <Slider

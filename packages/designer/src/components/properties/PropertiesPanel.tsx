@@ -15,25 +15,27 @@ import {
   Undo2,
   Redo2,
   Minus,
-  Spline,
   MoveRight,
-  SquareDashedBottom,
+  RotateCcw,
 } from 'lucide-react'
-import { type ArrowTip } from '@youcoach-board/core'
+import { type ArrowTip, type BoardElement, type TokenShape, type TokenFill, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX } from '@youcoach-board/core'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { Slider } from '../ui/slider'
+import { Switch } from '../ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu'
 import { cn } from '../../lib/cn'
 import { CHECKER_IMAGE } from '../../lib/checker'
+import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { useEditorStore } from '../../store/context'
 import type { Breakpoint } from '../../lib/use-breakpoint'
-import { ClosePathIcon } from '../icons'
+import { ClosePathIcon, LineStylePlainIcon, LineStyleCurvedIcon, LineStyleZigzagIcon, LineStyleDoubleIcon, OpenPathIcon, PolylineIcon, TokenDiscIcon, JerseyIcon } from '../icons'
 import { PropertyControls, Segmented } from './PropertyControls'
 import { ColorPickerWidget } from './ColorPickerWidget'
-import { usePropertyEditing } from './usePropertyEditing'
+import { usePropertyEditing, type TokenVisualStyle } from './usePropertyEditing'
 import { SubjectHeader } from './SubjectHeader'
-import { BackgroundSettings } from './BackgroundSettings'
+import { BackgroundSettings, BackgroundColorPicker } from './BackgroundSettings'
 
 const isTransparent = (c?: string) => !c || c === 'transparent'
 // Translucent, blurred buttons for the mobile bar — float over the canvas.
@@ -47,22 +49,60 @@ export function PropertiesPanel({ mode, backgroundMode = false }: { mode: Breakp
   return <PropertiesBar backgroundMode={backgroundMode} />
 }
 
-function FieldBackgroundPanel() {
+// The background-edit toolbar: a left-side vertical cluster with the background
+// color, settings (scale + logo), and reset — shown only in background-edit mode.
+function BackgroundEditBar() {
+  const bg = useEditorStore((s) => s.doc.background)
+  const resetBackground = useEditorStore((s) => s.resetBackground)
   return (
-    <div className="pointer-events-auto absolute left-2 top-16 z-30 max-h-[calc(100%-7rem)] w-52 overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-lg">
-      <div className="flex items-center gap-2 px-1 text-sm font-medium text-foreground [&_svg]:size-6 [&_svg]:text-muted-foreground">
-        <SquareDashedBottom /> <span>Background</span>
-      </div>
-      <div className="mt-3 border-t border-border pt-3">
-        <BackgroundSettings />
-      </div>
+    <div className="pointer-events-auto absolute left-3 top-16 z-30 flex flex-col items-center gap-1 rounded-xl border border-border bg-card p-1.5 shadow-lg">
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button size="icon" aria-label="Background color">
+                <span className="size-6 flex items-center justify-center rounded-lg" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' }}>
+                  <span className="size-6 rounded-lg border border-border/70" style={bg.image ? undefined : { background: bg.color }} />
+                </span>
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Background color</TooltipContent>
+        </Tooltip>
+        <PopoverContent side="right" align="start" className="w-56">
+          <BackgroundColorPicker />
+        </PopoverContent>
+      </Popover>
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button size="icon" aria-label="Background settings">
+                <SlidersHorizontal />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Scale & logo</TooltipContent>
+        </Tooltip>
+        <PopoverContent side="right" align="start" className="w-52">
+          <BackgroundSettings />
+        </PopoverContent>
+      </Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button size="icon" aria-label="Reset background" onClick={resetBackground}>
+            <RotateCcw />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Reset background</TooltipContent>
+      </Tooltip>
     </div>
   )
 }
 
 function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
   const p = usePropertyEditing()
-  if (backgroundMode && p.count === 0) return <FieldBackgroundPanel />
+  if (backgroundMode) return <BackgroundEditBar />
   // Nothing to edit (the select/hand tool is active with no selection) → no panel.
   // It appears for a selection (to edit it) or a creation tool (future-element style).
   if (!p.editable) return null
@@ -70,16 +110,51 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
     <div className="pointer-events-auto absolute left-3 top-16 z-30 flex flex-col items-center gap-1 rounded-xl border border-border bg-card p-1.5 shadow-lg">
       <SubjectHeader compact />
       <span className="my-0.5 h-px w-6 bg-border" />
-      {p.hasClosed && <ColorButton kind="fill" label="Background" channel="fill" value={p.values.fill} onChange={p.setFill} side="right" />}
-      <ColorButton kind="stroke" label="Border" channel="stroke" value={p.values.stroke} onChange={p.setStroke} side="right" />
-      <SettingsButton side="right" />
+      {p.allToken ? (
+        // Tokens carry a self-contained editor (type, colors, fill, text, opacity).
+        <TokenSettingsButton side="right" />
+      ) : (
+        <>
+          {p.hasClosed && (
+            <ColorButton kind="fill" label="Background" value={p.values.fill} onChange={p.setFill} side="right" fillStyle={p.values.fillStyle} onFillStyleChange={p.setFillStyle} />
+          )}
+          <ColorButton kind="stroke" label="Border" value={p.values.stroke} onChange={p.setStroke} side="right" />
+          <SettingsButton side="right" />
+        </>
+      )}
       {p.count > 0 && (
         <>
           <span className="my-0.5 h-px w-6 bg-border" />
           <ActionsMenu side="right" />
         </>
       )}
+      {p.allToken && <TokenStyleButtons apply={p.applyTokenStyle} side="right" />}
     </div>
+  )
+}
+
+// The team-style cluster: one copy-style button per distinct token look on the
+// board (up to 4). Clicking re-styles the selected token(s) to match. Hidden when
+// the board has no tokens.
+function TokenStyleButtons({ apply, side }: { apply: (style: TokenVisualStyle) => void; side: 'right' | 'top' }) {
+  const elements = useEditorStore((s) => s.doc.elements)
+  const activeTool = useEditorStore((s) => s.activeTool)
+  const tokenDefaults = useEditorStore((s) => s.tokenDefaults)
+  const styles = boardTokenStyles(elements)
+  if (styles.length === 0) return null
+  // With the Token tool up, outline the preset the NEXT token will actually use
+  // (the current next-token defaults) — nothing is selected, so no per-element edit.
+  const activeKey =
+    activeTool === 'token'
+      ? tokenStyleKey({ shape: tokenDefaults.shape, tokenFill: tokenDefaults.tokenFill, color1: tokenDefaults.color1, color2: tokenDefaults.color2, textColor: tokenDefaults.textColor })
+      : null
+  return (
+    <>
+      <span className={side === 'top' ? 'mx-0.5 h-6 w-px bg-border' : 'my-0.5 h-px w-6 bg-border'} />
+      {styles.map((style) => (
+        <TokenStyleButton key={tokenStyleKey(style)} style={style} onApply={() => apply(style)} active={tokenStyleKey(style) === activeKey} side={side} />
+      ))}
+    </>
   )
 }
 
@@ -88,23 +163,29 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
 function ColorButton({
   kind,
   label,
-  channel,
   value,
   onChange,
   side,
   small,
   translucent,
+  fillStyle,
+  onFillStyleChange,
 }: {
   kind: 'fill' | 'stroke'
   label: string
-  channel: string
   value: string | undefined
   onChange: (c: string) => void
   side: 'right' | 'top'
   small?: boolean
   translucent?: boolean
+  fillStyle?: 'solid' | 'striped'
+  onFillStyleChange?: (s: 'solid' | 'striped') => void
 }) {
-  const swatchStyle = isTransparent(value) ? {} : { backgroundImage: CHECKER_IMAGE, background: value }
+  const swatchStyle = isTransparent(value)
+    ? {}
+    : fillStyle === 'striped'
+      ? { backgroundImage: `repeating-linear-gradient(135deg, ${value} 0 3px, transparent 3px 6px)` }
+      : { background: value }
   return (
     // The undo transaction is owned by ColorPickerWidget's lifecycle (begins on
     // mount, commits on unmount) — robust to every way the popover can close.
@@ -126,7 +207,7 @@ function ColorButton({
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
-        <ColorPickerWidget value={value} onChange={onChange} channel={channel} />
+        <ColorPickerWidget value={value} onChange={onChange} fillStyle={fillStyle} onFillStyleChange={onFillStyleChange} />
       </PopoverContent>
     </Popover>
   )
@@ -152,6 +233,186 @@ function SettingsButton({ side, small, translucent }: { side: 'right' | 'top'; s
   )
 }
 
+const FILL_ITEMS: { value: TokenFill; label: string }[] = [
+  { value: 'solid', label: 'Solid' },
+  { value: 'vstripes', label: 'Vertical stripes' },
+  { value: 'hstripes', label: 'Horizontal stripes' },
+  { value: 'vstripe', label: 'Single vertical stripe' },
+  { value: 'hstripe', label: 'Single horizontal stripe' },
+  { value: 'checker', label: 'Checkerboard' },
+]
+
+// A live preview of the token with the given fill (and the editor's current
+// shape/colors). Labelled "00" at 50px for the fill picker; the copy-style
+// buttons reuse it text-less at a smaller size.
+function TokenPreview({ shape, fill, color1, color2, textColor, text = '00', size = 50 }: { shape: TokenShape; fill: TokenFill; color1: string; color2: string; textColor: string; text?: string; size?: number }) {
+  const el = {
+    id: 'preview',
+    type: 'token' as const,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    shape,
+    tokenFill: fill,
+    color1,
+    color2,
+    textColor,
+    text,
+    label: '',
+    showLabel: false,
+    transform: IDENTITY_TRANSFORM,
+    stroke: '#111111',
+    strokeWidth: 3,
+    strokeStyle: 'solid' as const,
+    fill: 'transparent',
+    fillStyle: 'solid' as const,
+  }
+  return (
+    <svg width={size} height={size} viewBox="-4 -4 118 118" aria-hidden>
+      <ElementView element={el} />
+    </svg>
+  )
+}
+
+const tokenStyleKey = (s: TokenVisualStyle) => `${s.shape}|${s.tokenFill}|${s.color1}|${s.color2}|${s.textColor}`
+
+// The distinct token "looks" (shape + fill + colors, ignoring text/label) present
+// on the board, in z-order, capped at 4 — the teams the copy-style buttons offer.
+function boardTokenStyles(elements: readonly BoardElement[]): TokenVisualStyle[] {
+  const seen = new Set<string>()
+  const out: TokenVisualStyle[] = []
+  for (const e of elements) {
+    if (e.type !== 'token') continue
+    const style: TokenVisualStyle = { shape: e.shape, tokenFill: e.tokenFill, color1: e.color1, color2: e.color2, textColor: e.textColor }
+    const key = tokenStyleKey(style)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(style)
+    if (out.length === 4) break
+  }
+  return out
+}
+
+// One copy-style button: a text-less preview of a board token's look; clicking it
+// restyles the selected token(s) to match (a one-click "paste style"). When the
+// Token tool is active, `active` outlines the preset that the next token will use.
+function TokenStyleButton({ style, onApply, active, side }: { style: TokenVisualStyle; onApply: () => void; active?: boolean; side: 'right' | 'top' }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button size="icon" aria-label="Apply this token style" aria-pressed={active} onClick={onApply} className={cn(active && 'ring-2 ring-primary ring-offset-1 ring-offset-card')}>
+          <TokenPreview shape={style.shape} fill={style.tokenFill} color1={style.color1} color2={style.color2} textColor={style.textColor} text="" size={26} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side={side}>Copy this style</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function TokenSettingsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button size={small ? 'icon-sm' : 'icon'} aria-label="Token settings" className={cn(translucent && TRANSLUCENT)}>
+              <SlidersHorizontal />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Token</TooltipContent>
+      </Tooltip>
+      <PopoverContent
+        side={side}
+        align="start"
+        className="w-60"
+        // Keep this popover open while a nested color-picker popover is in use
+        // (interacting with it would otherwise read as an outside dismissal).
+        onInteractOutside={(e) => {
+          const t = (e.detail.originalEvent.target as HTMLElement | null) ?? null
+          if (t?.closest('[data-radix-popper-content-wrapper]')) e.preventDefault()
+        }}
+      >
+        <TokenSettingsWidget />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function TokenSettingsWidget() {
+  const p = usePropertyEditing()
+  const shape = p.values.tokenShape ?? 'token'
+  const c1 = p.values.color1 ?? '#ebebeb'
+  const c2 = p.values.color2 ?? '#1e1e1e'
+  const tc = p.values.textColor ?? '#111111'
+  return (
+    <div className="grid gap-3">
+      <Field label="Type">
+        <Segmented
+          items={[
+            { value: 'token' as TokenShape, label: 'Token', render: <TokenDiscIcon className="size-4" /> },
+            { value: 'jersey' as TokenShape, label: 'Jersey', render: <JerseyIcon className="size-4" /> },
+          ]}
+          value={p.values.tokenShape}
+          onChange={p.setTokenShape}
+        />
+      </Field>
+      <Field label="Colors">
+        <div className="flex items-center gap-2">
+          <ColorButton kind="fill" label="Color 1" value={p.values.color1} onChange={p.setColor1} side="right" small />
+          <ColorButton kind="fill" label="Color 2" value={p.values.color2} onChange={p.setColor2} side="right" small />
+          <ColorButton kind="fill" label="Text color" value={p.values.textColor} onChange={p.setTextColor} side="right" small />
+        </div>
+      </Field>
+      <Field label="Fill">
+        <div className="grid grid-cols-3 gap-1.5">
+          {FILL_ITEMS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              aria-label={f.label}
+              aria-pressed={p.values.tokenFill === f.value}
+              onClick={() => p.setTokenFill(f.value)}
+              className={cn(
+                'flex items-center justify-center rounded-md border p-0.5',
+                p.values.tokenFill === f.value ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-accent',
+              )}
+            >
+              <TokenPreview shape={shape} fill={f.value} color1={c1} color2={c2} textColor={tc} />
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Text">
+        <input
+          type="text"
+          value={p.values.text ?? ''}
+          onChange={(e) => p.setText(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          placeholder="Number"
+        />
+      </Field>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">Label</span>
+        <Switch checked={!!p.values.showLabel} onCheckedChange={p.setShowLabel} />
+      </div>
+      {p.values.showLabel && (
+        <input
+          type="text"
+          value={p.values.label ?? ''}
+          onChange={(e) => p.setLabel(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          placeholder="Player"
+        />
+      )}
+      <Field label="Opacity">
+        <WaveSlider min={0} max={100} value={Math.round((p.values.opacity ?? 1) * 100)} onChange={(v) => p.setOpacity(v / 100)} />
+      </Field>
+    </div>
+  )
+}
+
 const TIP_ITEMS: { value: ArrowTip; label: string; render: ReactNode }[] = [
   { value: 'none', label: 'None', render: <Minus className="size-4" /> },
   { value: 'arrow', label: 'Arrow', render: <MoveRight className="size-4" /> },
@@ -166,26 +427,90 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+// Wave "frequency" is presented to the user as a 0–100 slider where higher =
+// tighter waves, but stored as a period in board units. Map MAX px → 0%, MIN px
+// → 100% (so dragging right raises the frequency), matching the old editor.
+function freqToPct(waveLength: number | undefined): number {
+  const wl = waveLength ?? WAVE_LENGTH_MAX
+  return Math.round(((WAVE_LENGTH_MAX - wl) / (WAVE_LENGTH_MAX - WAVE_LENGTH_MIN)) * 100)
+}
+function pctToFreq(pct: number): number {
+  return Math.round(WAVE_LENGTH_MAX - (pct / 100) * (WAVE_LENGTH_MAX - WAVE_LENGTH_MIN))
+}
+
+// A slider that coalesces a whole drag into one undo step (see useDragTransaction,
+// same model as the opacity control).
+function WaveSlider({ min, max, value, onChange }: { min: number; max: number; value: number; onChange: (v: number) => void }) {
+  const arm = useDragTransaction()
+  return (
+    <Slider
+      min={min}
+      max={max}
+      step={1}
+      value={[value]}
+      onValueChange={([v]) => {
+        arm()
+        onChange(v)
+      }}
+    />
+  )
+}
+
 // Element-specific "other props": stroke width/style/opacity (via PropertyControls)
-// plus, for polylines, line type (straight/curved), arrow tips and close-path.
+// plus, for polylines, line type (straight/curved/zigzag), wave frequency/amplitude,
+// arrow tips and close-path.
 function SettingsWidget() {
   const p = usePropertyEditing()
-  const hasPoly = p.polyCount > 0
   return (
     <div className="grid gap-3">
-      {hasPoly && (
+      {p.allPoly && (
         <>
           <Field label="Line type">
             <Segmented
               items={[
-                { value: 'straight', label: 'Straight', render: <Minus className="size-4" /> },
-                { value: 'curved', label: 'Curved', render: <Spline className="size-4" /> },
+                { value: 'straight', label: 'Straight', render: <LineStylePlainIcon className="size-4" /> },
+                { value: 'curved', label: 'Curved', render: <LineStyleCurvedIcon className="size-4" /> },
+                { value: 'zigzag', label: 'Zigzag', render: <LineStyleZigzagIcon className="size-4" /> },
+                { value: 'double', label: 'Double', render: <LineStyleDoubleIcon className="size-4" /> },
               ]}
-              value={p.values.curve === undefined ? undefined : p.values.curve ? 'curved' : 'straight'}
-              onChange={(v) => p.setCurve(v === 'curved')}
+              value={p.values.lineStyle}
+              onChange={p.setLineStyle}
             />
           </Field>
-          {p.openPolyCount > 0 && (
+          {p.values.lineStyle === 'zigzag' && (
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Frequency">
+                {/* Stored as a wave length (px); the slider reads as frequency, so
+                    right = tighter waves. Range maps MAX→MIN px. */}
+                <WaveSlider
+                  min={0}
+                  max={100}
+                  value={freqToPct(p.values.waveLength)}
+                  onChange={(pct) => p.setWaveLength(pctToFreq(pct))}
+                />
+              </Field>
+              <Field label={`Amplitude${p.values.waveAmplitude === 0 ? ' (auto)' : ''}`}>
+                {/* 0 = Auto (wave as tall as it is wide). */}
+                <WaveSlider
+                  min={0}
+                  max={WAVE_AMPLITUDE_MAX}
+                  value={p.values.waveAmplitude ?? 0}
+                  onChange={p.setWaveAmplitude}
+                />
+              </Field>
+            </div>
+          )}
+          {p.values.lineStyle === 'double' && (
+            <Field label="Lines offset">
+              <WaveSlider
+                min={LINES_OFFSET_MIN}
+                max={LINES_OFFSET_MAX}
+                value={p.values.linesOffset ?? LINES_OFFSET_MIN}
+                onChange={p.setLinesOffset}
+              />
+            </Field>
+          )}
+          {p.allOpenPoly && (
             <div className="grid grid-cols-2 gap-2">
               <Field label="Start tip">
                 <Segmented items={TIP_ITEMS} value={p.values.startTip} onChange={p.setStartTip} />
@@ -195,18 +520,18 @@ function SettingsWidget() {
               </Field>
             </div>
           )}
-          {p.closableCount > 0 && (
-            <Field label="Close path">
-              <button
-                type="button"
-                aria-pressed={!!p.values.closed}
-                onClick={() => p.setClosed(!p.values.closed)}
-                className={cn('flex size-8 items-center justify-center rounded-md border border-transparent text-foreground hover:bg-accent [&_svg]:size-4', p.values.closed && 'border-border bg-accent')}
-              >
-                <ClosePathIcon />
-              </button>
+          {/* {p.allClosablePoly && (
+            <Field label="Closed figure">
+              <Segmented
+                items={[
+                  { value: true, label: 'Closed', render: <ClosePathIcon className="size-4" /> },
+                  { value: false, label: 'Open', render: <OpenPathIcon className="size-4" /> },
+                ]}
+                value={p.values.closed === undefined ? false : p.values.closed}
+                onChange={(v) => p.setClosed(v)}
+              />
             </Field>
-          )}
+          )} */}
         </>
       )}
       <PropertyControls />
@@ -217,10 +542,10 @@ function SettingsWidget() {
 // The "⋯" actions menu: duplicate, flip (figures), arrange (z-order), copy/paste
 // style, delete.
 function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
-  const { figureCount } = usePropertyEditing()
-  const flip = usePropertyEditing().flip
+  const { allFigure, flip, allClosablePoly, allRect, values, setClosed } = usePropertyEditing()
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected)
   const arrangeSelected = useEditorStore((s) => s.arrangeSelected)
+  const convertRectsToPolylines = useEditorStore((s) => s.convertRectsToPolylines)
   const copyStyle = useEditorStore((s) => s.copyStyle)
   const pasteStyle = useEditorStore((s) => s.pasteStyle)
   const deleteSelected = useEditorStore((s) => s.deleteSelected)
@@ -241,11 +566,27 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
         <DropdownMenuItem onSelect={duplicateSelected}>
           <CopyPlus /> Duplicate
         </DropdownMenuItem>
-        {figureCount > 0 && (
+        {allFigure && (
           <DropdownMenuItem onSelect={flip}>
             <FlipHorizontal2 /> Flip
           </DropdownMenuItem>
         )}
+        {allRect && (
+          <DropdownMenuItem onSelect={convertRectsToPolylines}>
+            <PolylineIcon /> Convert to polyline
+          </DropdownMenuItem>
+        )}
+        {/* Close / open a polyline with more than 2 points. */}
+        {allClosablePoly &&
+          (values.closed ? (
+            <DropdownMenuItem onSelect={() => setClosed(false)}>
+              <OpenPathIcon /> Open path
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onSelect={() => setClosed(true)}>
+              <ClosePathIcon /> Close path
+            </DropdownMenuItem>
+          ))}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Arrange</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => arrangeSelected('front')}>
@@ -290,8 +631,8 @@ export function MobileBar() {
   return (
     <div className="pointer-events-none absolute inset-x-2 bottom-16 z-30 flex items-center justify-between gap-2">
       <div className="pointer-events-auto flex items-center gap-1">
-        {p.editable && p.hasClosed && <ColorButton kind="fill" label="Background" channel="fill" value={p.values.fill} onChange={p.setFill} side="top" small translucent />}
-        {p.editable && <ColorButton kind="stroke" label="Border" channel="stroke" value={p.values.stroke} onChange={p.setStroke} side="top" small translucent />}
+        {p.editable && p.hasClosed && <ColorButton kind="fill" label="Background" value={p.values.fill} onChange={p.setFill} side="top" small translucent />}
+        {p.editable && <ColorButton kind="stroke" label="Border" value={p.values.stroke} onChange={p.setStroke} side="top" small translucent />}
         {p.editable && <SettingsButton side="top" small translucent />}
       </div>
       <div className="pointer-events-auto flex items-center gap-1">

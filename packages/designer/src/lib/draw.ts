@@ -1,5 +1,5 @@
-import type { ArrowTip, BoardElement, Box, StrokeStyle } from '@youcoach-board/core'
-import { normalizeBox, IDENTITY_TRANSFORM } from '@youcoach-board/core'
+import type { ArrowTip, BoardElement, Box, StrokeStyle, FillStyle, TokenShape, TokenFill } from '@youcoach-board/core'
+import { normalizeBox, IDENTITY_TRANSFORM, DEFAULT_WAVE_LENGTH, DEFAULT_WAVE_AMPLITUDE, DEFAULT_LINES_OFFSET } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 
 export interface Point {
@@ -20,6 +20,7 @@ export interface FigureStyle {
   strokeWidth: number
   strokeStyle: StrokeStyle
   fill: string
+  fillStyle: FillStyle
   opacity: number
 }
 
@@ -28,6 +29,7 @@ export const DEFAULT_FIGURE_STYLE: FigureStyle = {
   strokeWidth: FIGURE_STROKE_WIDTH,
   strokeStyle: 'solid',
   fill: FIGURE_FILL,
+  fillStyle: 'solid',
   opacity: 1,
 }
 
@@ -38,6 +40,7 @@ export function figureStyleOf(el: BoardElement): FigureStyle {
     strokeWidth: el.strokeWidth,
     strokeStyle: el.strokeStyle,
     fill: el.fill,
+    fillStyle: el.fillStyle,
     opacity: el.transform.opacity,
   }
 }
@@ -51,6 +54,7 @@ export function applyFigureStyle(el: BoardElement, st: FigureStyle): BoardElemen
     strokeWidth: st.strokeWidth,
     strokeStyle: st.strokeStyle,
     fill: st.fill,
+    fillStyle: st.fillStyle,
     transform: { ...el.transform, opacity: st.opacity },
   } as BoardElement
 }
@@ -69,15 +73,25 @@ export function toolCreatesClosed(tool: ToolId): boolean {
 }
 
 /** The line/arrow tools (the Lines menu). Straight: line/arrow; curved (smooth):
- *  elbow-line/elbow-arrow. arrow + elbow-arrow get an end arrow tip. */
-export const LINE_TOOLS = ['arrow', 'line', 'elbow-arrow', 'elbow-line'] as const
+ *  elbow-line/elbow-arrow. zigzag-arrow/double-arrow ride the same smooth curve
+ *  with the wave/parallel render style. All the *-arrow tools get an end tip. */
+export const LINE_TOOLS = ['arrow', 'line', 'elbow-arrow', 'elbow-line', 'zigzag-arrow', 'double-arrow'] as const
 export type LineTool = (typeof LINE_TOOLS)[number]
 export function isLineTool(tool: ToolId): tool is LineTool {
   return (LINE_TOOLS as readonly string[]).includes(tool)
 }
-/** Whether a line tool draws a smooth (curved) line rather than straight. */
+/** Whether a line tool draws a smooth (curved) line rather than straight.
+ *  Zigzag/double lines render along the same smooth curve, so they're curved too. */
 export function toolIsCurved(tool: ToolId): boolean {
-  return tool === 'elbow-arrow' || tool === 'elbow-line'
+  return tool === 'elbow-arrow' || tool === 'elbow-line' || tool === 'zigzag-arrow' || tool === 'double-arrow'
+}
+/** Whether a line tool draws a zigzag (wave) line. */
+export function toolIsZigzag(tool: ToolId): boolean {
+  return tool === 'zigzag-arrow'
+}
+/** Whether a line tool draws a double (parallel) line. */
+export function toolIsDouble(tool: ToolId): boolean {
+  return tool === 'double-arrow'
 }
 
 /** Below this drag distance (board units) a press is treated as a click, not a
@@ -109,6 +123,8 @@ export function toolElementType(tool: ToolId): DraftType | null {
     case 'arrow':
     case 'elbow-line':
     case 'elbow-arrow':
+    case 'zigzag-arrow':
+    case 'double-arrow':
       return 'line'
     default:
       return null
@@ -117,7 +133,7 @@ export function toolElementType(tool: ToolId): DraftType | null {
 
 /** The end arrow tip a creation tool gives its line/polyline. */
 export function toolEndTip(tool: ToolId): ArrowTip {
-  return tool === 'arrow' || tool === 'elbow-arrow' ? 'arrow' : 'none'
+  return tool === 'arrow' || tool === 'elbow-arrow' || tool === 'zigzag-arrow' || tool === 'double-arrow' ? 'arrow' : 'none'
 }
 
 /** Map a screen (client) coordinate into board user-space via the SVG's CTM.
@@ -136,6 +152,7 @@ const figureBase = (id: string) => ({
   strokeWidth: FIGURE_STROKE_WIDTH,
   strokeStyle: 'solid' as const,
   fill: FIGURE_FILL,
+  fillStyle: 'solid' as const,
 })
 
 // Normalized (0..1 within the bounding box) vertices for the polygon shapes,
@@ -172,8 +189,8 @@ export function squareCorner(start: Point, current: Point): Point {
 
 /** Build a straight line as a 2-point (open) polyline, optionally end-tipped and
  *  curved (a 2-point curve is straight; the curve shows once points are added). */
-export function makeLine(id: string, start: Point, current: Point, endTip: ArrowTip = 'none', curve = false): BoardElement {
-  return makePolyline(id, [start, current], false, 'none', endTip, curve)
+export function makeLine(id: string, start: Point, current: Point, endTip: ArrowTip = 'none', curve = false, zigzag = false, double = false): BoardElement {
+  return makePolyline(id, [start, current], false, 'none', endTip, curve, zigzag, double)
 }
 
 /** Build a polyline from vertices (board coords). */
@@ -184,6 +201,8 @@ export function makePolyline(
   startTip: ArrowTip = 'none',
   endTip: ArrowTip = 'none',
   curve = false,
+  zigzag = false,
+  double = false,
 ): BoardElement {
   return {
     ...figureBase(id),
@@ -191,8 +210,120 @@ export function makePolyline(
     points: points.map((p) => [p.x, p.y] as [number, number]),
     closed,
     curve,
+    zigzag,
+    waveLength: DEFAULT_WAVE_LENGTH,
+    waveAmplitude: DEFAULT_WAVE_AMPLITUDE,
+    double,
+    linesOffset: DEFAULT_LINES_OFFSET,
     startTip,
     endTip,
+  }
+}
+
+/** Default edge length (board units) of a freshly stamped token. */
+export const TOKEN_SIZE = 70
+
+/** The appearance a token carries (everything except text/geometry) — copied from
+ *  the last selected/created token so new tokens inherit the "team kit". */
+export interface TokenStyle {
+  shape: TokenShape
+  tokenFill: TokenFill
+  color1: string
+  color2: string
+  textColor: string
+  showLabel: boolean
+}
+
+/** Fallback style for the very first token (before any has been made/selected). */
+export const DEFAULT_TOKEN_STYLE: TokenStyle = {
+  shape: 'token',
+  tokenFill: 'solid',
+  color1: '#fa3523',
+  color2: '#648fec',
+  textColor: '#111111',
+  showLabel: false,
+}
+
+/** The "next token" defaults: its style + the starting badge text + label. New
+ *  tokens inherit this (updated from the last selected/created token); also what
+ *  the properties panel edits while the Token tool is active. */
+export interface TokenDefaults extends TokenStyle {
+  text: string
+  label: string
+}
+export const DEFAULT_TOKEN_DEFAULTS: TokenDefaults = { ...DEFAULT_TOKEN_STYLE, text: '1', label: '' }
+
+/** Build a token of edge `size` centered at (cx, cy) with the given style + label. */
+export function makeToken(id: string, cx: number, cy: number, style: TokenStyle = DEFAULT_TOKEN_STYLE, text = '1', size = TOKEN_SIZE): BoardElement {
+  return {
+    id,
+    type: 'token',
+    x: Math.round(cx - size / 2),
+    y: Math.round(cy - size / 2),
+    width: size,
+    height: size,
+    shape: style.shape,
+    tokenFill: style.tokenFill,
+    color1: style.color1,
+    color2: style.color2,
+    textColor: style.textColor,
+    text,
+    label: '',
+    showLabel: style.showLabel,
+    transform: { ...IDENTITY_TRANSFORM },
+    stroke: '#111111',
+    strokeWidth: 3,
+    strokeStyle: 'solid',
+    fill: 'transparent',
+    fillStyle: 'solid',
+  }
+}
+
+/** The label for a new token, continuing from `lastText` (the last selected/
+ *  created token's label): a numeric label advances to the next free number among
+ *  tokens of the SAME team — same colors AND fill style — or restarts at 1 for a
+ *  brand-new team (no matching tokens yet), rather than carrying over the previous
+ *  team's number. A non-numeric label is simply reused. */
+export function nextTokenText(elements: BoardElement[], ref: { color1: string; color2: string; textColor: string; tokenFill: TokenFill }, lastText: string): string {
+  if (!/^-?\d+$/.test(lastText.trim())) return lastText // non-numeric → reuse it
+  const nums: number[] = []
+  for (const e of elements) {
+    if (e.type !== 'token') continue
+    if (e.color1 !== ref.color1 || e.color2 !== ref.color2 || e.textColor !== ref.textColor || e.tokenFill !== ref.tokenFill) continue
+    const n = Number(e.text)
+    if (e.text.trim() !== '' && Number.isInteger(n)) nums.push(n)
+  }
+  return nums.length ? String(Math.max(...nums) + 1) : '1'
+}
+
+/** Convert a rectangle into an equivalent CLOSED polyline (its four corners),
+ *  preserving id, transform and style so it stays put and looks identical. */
+export function rectToPolyline(rect: Extract<BoardElement, { type: 'rect' }>): BoardElement {
+  const { x, y, width, height } = rect
+  return {
+    id: rect.id,
+    type: 'polyline',
+    points: [
+      [x, y],
+      [x + width, y],
+      [x + width, y + height],
+      [x, y + height],
+    ],
+    closed: true,
+    curve: false,
+    zigzag: false,
+    waveLength: DEFAULT_WAVE_LENGTH,
+    waveAmplitude: DEFAULT_WAVE_AMPLITUDE,
+    double: false,
+    linesOffset: DEFAULT_LINES_OFFSET,
+    startTip: 'none',
+    endTip: 'none',
+    transform: rect.transform,
+    stroke: rect.stroke,
+    strokeWidth: rect.strokeWidth,
+    strokeStyle: rect.strokeStyle,
+    fill: rect.fill,
+    fillStyle: rect.fillStyle,
   }
 }
 

@@ -6,7 +6,7 @@ import type { SVGProps } from 'react'
 // classes ([&_svg]:size-* / stroke-width). Two groups:
 //   - PlayersIcon / TrainingIcon / SoccerFieldIcon: filled/stroked YouCoach App 2
 //     glyphs, copied verbatim (paths carry their own flip-Y transforms).
-//   - ShapesIcon / DiscsIcon: hand-converted from assets/*.svg into lucide-style
+//   - ShapesIcon / TokenIcon: hand-converted from assets/*.svg into lucide-style
 //     stroke icons (fill none, stroke currentColor, round caps/joins).
 
 export function PlayersIcon(props: SVGProps<SVGSVGElement>) {
@@ -107,22 +107,87 @@ export function TrapezoidIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+// Line-type icons (assets/line_style_*.svg): a zig-zag (straight) and a wave
+// (curved), for the Line type toggle.
+export function LineStylePlainIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M2.024,10.337L6.512,3.313L15.488,17.361L19.976,10.337" />
+    </svg>
+  )
+}
+export function LineStyleCurvedIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M2.024,10.337C2.024,10.337 2.024,3.313 6.512,3.313C11,3.313 11,17.361 15.488,17.361C19.976,17.361 19.976,10.337 19.976,10.337" />
+    </svg>
+  )
+}
+
+export function LineStyleZigzagIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M2.024,10.337C4.302,3.313 4.301,3.313 6.512,10.337M6.512,10.337C8.79,17.361 8.789,17.361 11,10.337M11,10.337C13.278,3.313 13.277,3.313 15.488,10.337M15.488,10.337C17.766,17.361 17.759,17.38 19.976,10.337" />
+    </svg>
+  )
+}
+
+export function LineStyleDoubleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M19.724,14.128L18.74,14.331L17.816,14.496L16.965,14.619L16.204,14.697L15.552,14.727L15.037,14.713L14.693,14.669L14.395,14.567L14.233,14.436L14.039,14.145L13.82,13.599L13.624,12.817L13.462,11.859L13.315,10.782L13.144,9.629L12.897,8.428L12.49,7.191L11.794,5.949L10.662,4.844L9.843,4.328L8.995,3.893L8.117,3.54L7.215,3.266L6.29,3.064L5.341,2.926L4.362,2.839L3.345,2.795L2.276,2.784M19.591,18.739L18.536,18.927L17.52,19.074L16.543,19.173L15.606,19.216L14.701,19.19L13.809,19.07L12.193,18.479L10.914,17.459L10.06,16.223L9.539,14.951L9.223,13.705L9.02,12.507L8.866,11.383L8.717,10.373L8.546,9.532L8.351,8.929L8.184,8.617L8.108,8.536L7.618,8.226L7.131,7.977L6.63,7.775L6.091,7.612L5.496,7.483L4.828,7.385L4.076,7.319L3.232,7.283L2.29,7.273" />
+    </svg>
+  )
+}
+
+// Zigzag line with an arrowhead (assets/line_zigzag.svg) — the Lines-menu glyph
+// for the Zigzag arrow tool.
+export function LineZigzagArrowIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 10" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M17,1L21,5L17,9M1,5C1,5 2.099,1.737 3.608,1.737C5.046,1.737 4.634,7.961 6.421,7.961C7.067,7.961 9.146,1.784 11.074,1.784C12.658,1.784 12.763,5.05 13.909,5.05C15.132,5.05 17.691,5 17.691,5L21,5"/>
+    </svg>
+  )
+}
+
+// Token type glyphs for the token editor's Type switch.
+export function TokenDiscIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden {...props}>
+      <circle cx="12" cy="12" r="9" />
+    </svg>
+  )
+}
+export function JerseyIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={6} strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M50,9.485C44.518,9.485 42.116,8.247 37.951,5.058C20.026,12.144 18.784,15.497 18.784,15.497C18.784,15.497 15.531,29.859 11.379,40.664L26.292,43.875L27.717,38.416C29.224,57.179 27.996,74.392 25.831,91.072C36.314,91.301 47.444,91.974 50,91.974C52.556,91.974 63.686,91.301 74.169,91.072C72.004,74.392 70.776,57.179 72.283,38.416L74.062,44.206L88.621,40.664C84.469,29.859 81.216,15.497 81.216,15.497C81.216,15.497 79.974,12.144 62.049,5.058C57.884,8.247 55.482,9.485 50,9.485Z" />
+    </svg>
+  )
+}
+
+export function PolylineIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M4.1,3.209L15.611,7.402L13.984,16.554L4.807,13.286L4.623,8.92" />
+    </svg>
+  )
+}
+
 // Close-path toggle icon (assets/close_path.svg): a dashed ring of nodes.
 export function ClosePathIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
-      <g transform="translate(-1,-1)">
-        <path d="M14.241,5.199L5.414,10.586" />
-        <path d="M18.586,13.414L13.414,18.586" />
-        <path d="M5.414,13.595L10.586,18.586" />
-        <path d="M17.209,5.84L19.076,10.226" />
-        <circle cx="12" cy="20" r="2" />
-        <circle cx="20" cy="12" r="2" />
-        <circle cx="4" cy="12" r="2" />
-      </g>
-      <g transform="translate(3,-0.753026)">
-        <circle cx="12" cy="4" r="2" />
-      </g>
+      <path d="M11,18.566L2.024,13.849L11,2.546L19.976,10.337L11,18.566Z" />
+    </svg>
+  )
+}
+
+// Open-path toggle icon (assets/open_path.svg): a dashed ring of nodes.
+export function OpenPathIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M11,18.566L2.024,13.849L11,2.546L19.976,10.337" />
     </svg>
   )
 }
@@ -193,7 +258,7 @@ export function LogoBottomRightIcon(props: SVGProps<SVGSVGElement>) {
   return <LogoFrameIcon inner={LOGO_INNER['bottom-right']} {...props} />
 }
 
-export function DiscsIcon(props: SVGProps<SVGSVGElement>) {
+export function TokenIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

@@ -8,6 +8,11 @@ import type { ThemeSetting } from './lib/use-theme'
 // defined/loaded dynamically (the URL just feeds the doc's background.image).
 import defaultFieldImage from './assets/field0.jpg'
 
+// The field the board opens on (catalog fields_11 / 49, a top view). Path + figure
+// scale mirror what selecting it in the drawer applies (see LibraryDrawer.drop).
+const DEFAULT_FIELD_SVG = 'images/optimized/fields/11/49.svg'
+const DEFAULT_FIELD_FIGURE_SCALE = 0.3
+
 export interface BoardDesignerProps {
   /** Document to start from (a full or partial board). Defaults to empty. */
   initialDoc?: Partial<BoardDoc>
@@ -29,10 +34,16 @@ export interface BoardDesignerProps {
 // The editor's public entry point: a per-instance editor store wrapping the
 // floating-chrome shell + interactive board.
 export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, assets, onChange }: BoardDesignerProps) {
-  // Default the field background to the bundled image unless the caller set one.
+  // Default the background to the bundled base image + the opening field (11/49)
+  // unless the caller supplied their own.
   const docWithBackground = {
     ...initialDoc,
-    background: { ...initialDoc?.background, image: initialDoc?.background?.image ?? defaultFieldImage },
+    background: {
+      ...initialDoc?.background,
+      image: initialDoc?.background?.image ?? defaultFieldImage,
+      fieldSvg: initialDoc?.background?.fieldSvg ?? DEFAULT_FIELD_SVG,
+      figureScale: initialDoc?.background?.figureScale ?? DEFAULT_FIELD_FIGURE_SCALE,
+    },
   }
   return (
     <AssetsProvider config={assets}>

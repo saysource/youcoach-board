@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import '../styles/board.css'
+import { Check } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
+import { Button } from './ui/button'
 import { BoardRootProvider } from '../lib/board-root'
 import { BOARD_ASPECT } from '@youcoach-board/core'
 import { useTheme, type ThemeSetting } from '../lib/use-theme'
@@ -57,12 +59,32 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     setLibraryCatId(catId)
     setDrawerOpen(true)
   }
-  // The properties panel switches to background settings while a field category
-  // is the active library category.
-  const backgroundMode = !!(libraryCatId && catalog?.categories[libraryCatId]?.kind === 'field')
 
   // Editor store: subscribe to what the chrome needs; actions via the api handle.
   const store = useEditorStoreApi()
+
+  // Background-edit mode: an explicit editor state (not derived from the drawer)
+  // that disables element actions, swaps in a background toolbar, restricts the
+  // drawer to fields, and is committed by "Finish" or ESC.
+  const [bgEditing, setBgEditing] = useState(false)
+  const backgroundMode = bgEditing
+  function firstFieldCat() {
+    for (const g of catalog?.groups ?? []) for (const id of g.categories) if (catalog?.categories[id]?.kind === 'field') return id
+    return null
+  }
+  function editBackground() {
+    setBgEditing(true)
+    const s = store.getState()
+    s.setSelection([])
+    s.setActiveTool('select')
+    const f = firstFieldCat()
+    if (f) setLibraryCatId(f)
+    setDrawerOpen(true)
+  }
+  function finishBackground() {
+    setBgEditing(false)
+    setDrawerOpen(false)
+  }
   const activeTool = useEditorStore((s) => s.activeTool)
   const setActiveTool = useEditorStore((s) => s.setActiveTool)
   const keepToolActive = useEditorStore((s) => s.keepToolActive)
@@ -128,6 +150,12 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
       const mod = e.metaKey || e.ctrlKey
       const { undo, redo, deleteSelected, setSelection, setActiveTool, activeTool } = store.getState()
 
+      // ESC leaves background-edit mode before any other Escape behavior.
+      if (e.key === 'Escape' && bgEditing) {
+        e.preventDefault()
+        finishBackground()
+        return
+      }
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
@@ -144,7 +172,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [store])
+  }, [store, bgEditing])
 
   return (
     <div
@@ -183,15 +211,25 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} />
           </div>
 
-          {/* Main toolbar — top-center, or bottom-center in mobile mode. */}
+          {/* Main toolbar — top-center, or bottom-center in mobile mode. In
+              background-edit mode it's replaced by a single "Finish" button. */}
           <div className={cn('pointer-events-none absolute left-1/2 z-30 -translate-x-1/2', mobile ? 'bottom-3' : 'top-3')}>
-            <Toolbar
-              activeTool={activeTool}
-              onToolChange={setActiveTool}
-              locked={keepToolActive}
-              onToggleLock={toggleKeepTool}
-              onOpenCategory={openCategory}
-            />
+            {bgEditing ? (
+              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+                <Button size="sm" onClick={finishBackground} className="font-medium">
+                  <Check /> Finish editing background
+                </Button>
+              </div>
+            ) : (
+              <Toolbar
+                activeTool={activeTool}
+                onToolChange={setActiveTool}
+                locked={keepToolActive}
+                onToggleLock={toggleKeepTool}
+                onOpenCategory={openCategory}
+                onEditBackground={editBackground}
+              />
+            )}
           </div>
 
           {/* Properties panel: always present (both the full and the compact
@@ -235,6 +273,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             onToggleFullscreen={() => setFullscreen((v) => !v)}
             categoryId={libraryCatId}
             onCategoryChange={setLibraryCatId}
+            fieldsOnly={bgEditing}
           />
         </BoardRootProvider>
       </TooltipPrimitive.Provider>

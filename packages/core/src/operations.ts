@@ -24,6 +24,7 @@ export interface ElementPatch {
   strokeWidth?: number
   strokeStyle?: 'solid' | 'dashed' | 'dotted'
   fill?: string
+  fillStyle?: 'solid' | 'striped'
   // Geometry (for future resize); type-checked loosely since it varies by type.
   x?: number
   y?: number
@@ -33,12 +34,26 @@ export interface ElementPatch {
   // Polyline shape options.
   closed?: boolean
   curve?: boolean
+  zigzag?: boolean
+  waveLength?: number
+  waveAmplitude?: number
+  double?: boolean
+  linesOffset?: number
   startTip?: ArrowTip
   endTip?: ArrowTip
   // Figure options.
   figureId?: string
   colors?: Record<string, string>
   mirror?: boolean
+  // Token options.
+  shape?: 'token' | 'jersey'
+  tokenFill?: 'solid' | 'vstripes' | 'hstripes' | 'vstripe' | 'hstripe' | 'checker'
+  color1?: string
+  color2?: string
+  textColor?: string
+  text?: string
+  label?: string
+  showLabel?: boolean
 }
 
 /** A single element's change within an `update` operation. */

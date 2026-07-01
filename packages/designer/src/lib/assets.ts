@@ -17,7 +17,7 @@ export interface AssetsConfig {
   catalog?: string
 }
 
-// ── Catalog types (mirror catalog.json / gen-catalog.mjs) ──
+// ── Catalog types (mirror catalog.json, the hand-maintained source of truth) ──
 export interface CatalogFigure {
   /** Asset path to the SVG. Absent for app-managed `tool` entries (e.g. text). */
   svg?: string
@@ -126,5 +126,6 @@ export function buildFigureElement(d: FigureDragData, cx: number, cy: number): B
     strokeWidth: 3,
     strokeStyle: 'solid',
     fill: 'transparent',
+    fillStyle: 'solid',
   }
 }

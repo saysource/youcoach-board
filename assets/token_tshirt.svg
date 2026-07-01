@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <path d="M50,9.485C44.518,9.485 42.116,8.247 37.951,5.058C20.026,12.144 18.784,15.497 18.784,15.497C18.784,15.497 15.531,29.859 11.379,40.664L26.292,43.875L27.717,38.416C29.224,57.179 27.996,74.392 25.831,91.072C36.314,91.301 47.444,91.974 50,91.974C52.556,91.974 63.686,91.301 74.169,91.072C72.004,74.392 70.776,57.179 72.283,38.416L74.062,44.206L88.621,40.664C84.469,29.859 81.216,15.497 81.216,15.497C81.216,15.497 79.974,12.144 62.049,5.058C57.884,8.247 55.482,9.485 50,9.485Z" style="fill:rgb(217,217,217);stroke:black;stroke-width:3.96px;"/>
+    <text className="token-text" x="50px" y="40px" text-anchor="middle" dominant-baseline="middle" style="font-family: sans-serif;font-weight:700;font-size:25px;">YC</text>
+</svg>

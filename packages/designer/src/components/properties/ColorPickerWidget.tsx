@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { HexColorPicker, HexColorInput } from 'react-colorful'
 import { Pipette } from 'lucide-react'
-import type { BoardElement } from '@youcoach-board/core'
 import { cn } from '../../lib/cn'
 import { CHECKER_IMAGE } from '../../lib/checker'
 import { Separator } from '../ui/separator'
@@ -9,6 +8,7 @@ import { Slider } from '../ui/slider'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { useEditorStoreApi } from '../../store/context'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
+import { Segmented } from './PropertyControls'
 
 // The color picker widget. Opacity is an explicit, labelled slider (users don't
 // have to discover the alpha track inside the saturation picker), and the RGB
@@ -38,23 +38,23 @@ const pctToHex = (pct: number) =>
 // Canonical form for comparison/dedup ('transparent' or '#rrggbbaa').
 const norm = (c?: string) => (isTransparent(c) ? 'transparent' : `${toRgbHex(c)}${alphaOf(c)}`.toLowerCase())
 
-// The color used by an element on a given channel ('stroke' | 'fill' | a figure
-// color slot like 'yc-color-1').
-function channelColor(el: BoardElement, channel: string): string | undefined {
-  if (channel === 'stroke') return el.stroke
-  if (channel === 'fill') return el.fill
-  return el.type === 'figure' ? el.colors?.[channel] : undefined
-}
-
 export function ColorPickerWidget({
   value,
   onChange,
-  channel,
+  fillStyle,
+  onFillStyleChange,
+  presets,
+  showOpacity = true,
 }: {
   value: string | undefined
   onChange: (c: string) => void
-  /** Which color is being edited — drives which used colors are collected. */
-  channel: string
+  /** When set (fill/background channel), show a Solid/Striped fill-style toggle. */
+  fillStyle?: 'solid' | 'striped'
+  onFillStyleChange?: (s: 'solid' | 'striped') => void
+  /** Override the swatch palette (and skip the document-used colors). */
+  presets?: string[]
+  /** Hide the opacity slider and emit plain 6-digit hex (no alpha suffix). */
+  showOpacity?: boolean
 }) {
   const storeApi = useEditorStoreApi()
   // Coalesce only the CONTINUOUS controls (opacity slider + the picker drag) into
@@ -66,47 +66,74 @@ export function ColorPickerWidget({
   // Picking a swatch sets it wholesale (so collected colors restore their opacity).
   const setColor = (c: string) => onChange(c)
   const setAlpha = (pct: number) => onChange(`${toRgbHex(value)}${pctToHex(pct)}`)
-  // Snapshot the document-used colors ONCE, when the picker opens. Picking a
-  // color mutates the doc; if we recomputed this live, the extended swatches
-  // would shift/reorder under the cursor while the picker is open. The widget
-  // remounts on each open (Radix unmounts closed popover content), so the
-  // snapshot — and thus the extended set — refreshes the next time it's opened.
+  // Carry the current alpha onto a freshly-picked RGB — unless opacity is off, in
+  // which case we emit plain 6-digit hex.
+  const withAlpha = (rgb: string) => (showOpacity ? `${rgb}${alphaOf(value)}` : rgb)
+  // Snapshot the document-used colors ONCE, when the picker opens — a SINGLE set
+  // shared across all properties (every stroke, fill and figure color slot used
+  // anywhere), so a color picked for one property is offered for the others too.
+  // (Snapshotted, not live, so the swatches don't reorder under the cursor as you
+  // edit; the widget remounts on each open, refreshing the set.)
   const [used] = useState<string[]>(() => {
     const seen = new Set(PREDEFINED.map(norm))
     const out: string[] = []
-    for (const el of storeApi.getState().doc.elements) {
-      const c = channelColor(el, channel)
-      if (!c || isTransparent(c)) continue
+    const add = (c?: string) => {
+      if (!c || isTransparent(c)) return
       const n = norm(c)
-      if (seen.has(n)) continue
+      if (seen.has(n)) return
       seen.add(n)
       out.push(c)
     }
+    for (const el of storeApi.getState().doc.elements) {
+      add(el.stroke)
+      add(el.fill)
+      if (el.type === 'figure' && el.colors) for (const c of Object.values(el.colors)) add(c)
+    }
     return out
   })
-  const palette = [...PREDEFINED, ...used]
+  // A custom preset list (e.g. background) replaces both PREDEFINED and the
+  // document-used colors; otherwise it's PREDEFINED followed by used colors.
+  const palette = presets ?? [...PREDEFINED, ...used]
   return (
     <div className="grid gap-2.5">
 
-      <div className="grid gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Opacity</span>
-        <div className="flex items-center gap-2">
-          <Slider
-            min={0}
-            max={100}
-            step={1}
-            value={[alphaPct(value)]}
-            onValueChange={([v]) => {
-              arm() // first change of the drag begins the (one) undo transaction
-              setAlpha(v)
-            }}
-            className="flex-1"
+      {onFillStyleChange && (
+        <div className="grid gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Fill style</span>
+          <Segmented
+            items={[
+              { value: 'solid', label: 'Solid', render: <span className="size-4 rounded-[3px]" style={{ background: 'currentColor' }} /> },
+              { value: 'striped', label: 'Striped', render: <span className="size-4 rounded-[3px]" style={{ backgroundImage: 'repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 4px)' }} /> },
+            ]}
+            value={fillStyle}
+            onChange={onFillStyleChange}
           />
-          <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">{alphaPct(value)}%</span>
         </div>
-      </div>
+      )}
 
-      <Separator />
+      {showOpacity && (
+        <>
+          <div className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Opacity</span>
+            <div className="flex items-center gap-2">
+              <Slider
+                min={0}
+                max={100}
+                step={1}
+                value={[alphaPct(value)]}
+                onValueChange={([v]) => {
+                  arm() // first change of the drag begins the (one) undo transaction
+                  setAlpha(v)
+                }}
+                className="flex-1"
+              />
+              <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">{alphaPct(value)}%</span>
+            </div>
+          </div>
+
+          <Separator />
+        </>
+      )}
 
       <div className="flex flex-wrap gap-1">
         {palette.map((c) => (
@@ -133,7 +160,7 @@ export function ColorPickerWidget({
               color={toRgbHex(value)}
               onChange={(c) => {
                 arm()
-                onChange(`${c}${alphaOf(value)}`)
+                onChange(withAlpha(c))
               }}
             />
           </PopoverContent>
@@ -142,7 +169,7 @@ export function ColorPickerWidget({
           <span className="text-xs text-muted-foreground">#</span>
           <HexColorInput
             color={toRgbHex(value)}
-            onChange={(c) => onChange(`${c}${alphaOf(value)}`)}
+            onChange={(c) => onChange(withAlpha(c))}
             prefixed={false}
             className="w-full min-w-0 flex-1 border-0 bg-transparent pl-1 font-mono text-xs uppercase outline-none"
           />
@@ -156,7 +183,7 @@ export function ColorPickerWidget({
               try {
                 // @ts-expect-error EyeDropper isn't in the TS lib yet.
                 const r = await new window.EyeDropper().open()
-                onChange(`${r.sRGBHex}${alphaOf(value)}`)
+                onChange(withAlpha(r.sRGBHex))
               } catch {
                 /* cancelled */
               }

@@ -1,5 +1,5 @@
 import { getLocalBounds, catmullRomCubics, cubicPointAt, type BoardElement, type Box } from '@youcoach-board/core'
-import { elementToBoard, localCorners, type Pt, type CornerId } from '../lib/geometry-2d'
+import { elementToBoard, localCorners, tokenLabelBand, type Pt, type CornerId } from '../lib/geometry-2d'
 
 export type HandleId = CornerId | 'rotate' | `point-${number}` | `anchor-${number}`
 
@@ -103,11 +103,16 @@ export function SelectionHandles({ element, scale, onHandleDown, hideFrame = fal
   const pad = SELECTION_PAD_PX / scale
   const pbox = { x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 }
   const c = localCorners(pbox)
+  // A token with a caption extends the selection's BOTTOM by the caption band (a
+  // fixed-px height below the badge), so the frame + bottom resize handles wrap
+  // the label. The box keeps the badge's local frame (rotation about badge
+  // center), only the se/sw corners drop by the band.
+  const labelPad = tokenLabelBand(element, scale)
   const corners: Record<CornerId, Pt> = {
     nw: elementToBoard(c.nw, pbox, t),
     ne: elementToBoard(c.ne, pbox, t),
-    se: elementToBoard(c.se, pbox, t),
-    sw: elementToBoard(c.sw, pbox, t),
+    se: elementToBoard({ x: c.se.x, y: c.se.y + labelPad }, pbox, t),
+    sw: elementToBoard({ x: c.sw.x, y: c.sw.y + labelPad }, pbox, t),
   }
   const poly = `${corners.nw.x},${corners.nw.y} ${corners.ne.x},${corners.ne.y} ${corners.se.x},${corners.se.y} ${corners.sw.x},${corners.sw.y}`
   // Crisp (no anti-alias) only while the outline is axis-aligned; rotated edges

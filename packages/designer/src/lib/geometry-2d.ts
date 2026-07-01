@@ -6,7 +6,14 @@
 // space and BOARD space, and compute resize/rotate results that keep the
 // expected anchor fixed even when the element is rotated.
 
-import { getLocalBounds, type Box, type BoardElement, type ElementTransform } from '@youcoach-board/core'
+import { getLocalBounds, TOKEN_LABEL_PX, TOKEN_LABEL_GAP_PX, type Box, type BoardElement, type ElementTransform } from '@youcoach-board/core'
+
+/** Board-unit height of a token's caption band below the badge (0 if none), used
+ *  to extend the selection frame/handles over the fixed-px label. Divided by the
+ *  fit-scale so it tracks the on-screen caption (+ a small margin for descenders). */
+export function tokenLabelBand(el: BoardElement, scale: number): number {
+  return el.type === 'token' && el.showLabel ? (TOKEN_LABEL_GAP_PX + TOKEN_LABEL_PX + 4) / scale : 0
+}
 
 export interface Pt {
   x: number

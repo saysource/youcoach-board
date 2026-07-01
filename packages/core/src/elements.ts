@@ -33,9 +33,12 @@ export interface ElementTransform {
 
 export const IDENTITY_TRANSFORM: ElementTransform = { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1 }
 
-export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw' | 'figure'
+export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw' | 'figure' | 'token'
 
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
+
+/** How a closed shape's fill is painted: a flat color, or 45° stripes of it. */
+export type FillStyle = 'solid' | 'striped'
 
 /** Arrow tip drawn at a polyline endpoint. Extensible (triangle/circle/bar…);
  *  for now a plain filled arrowhead or none. Only meaningful on OPEN polylines. */
@@ -52,6 +55,8 @@ interface BaseElement {
   strokeStyle: StrokeStyle
   /** Fill (CSS color, or 'transparent'). */
   fill: string
+  /** How the fill is painted (only meaningful for closed shapes). */
+  fillStyle: FillStyle
 }
 
 /** Dash array (in board units) for a stroke style, or undefined for solid.
@@ -83,12 +88,26 @@ export interface EllipseElement extends BaseElement {
  *  tips it's an arrow. `closed` (only with ≥3 points) joins last→first into a
  *  fillable polygon. Tips apply at the first/last point of an OPEN polyline.
  *  `curve` renders a smooth (auto, Catmull-Rom → cubic bézier) path through the
- *  points instead of straight segments. Points are in local coordinates. */
+ *  points instead of straight segments. `zigzag` renders a wave along that smooth
+ *  path (editing is identical to a curved line). Points are in local coords. */
 export interface PolylineElement extends BaseElement {
   type: 'polyline'
   points: Array<[number, number]>
   closed: boolean
   curve: boolean
+  /** Render the (curved) path as a wave; anchors still sit on the smooth path. */
+  zigzag: boolean
+  /** Wave period in board units (one full crest→crest). Smaller = more waves
+   *  (higher frequency). Only used when `zigzag`. */
+  waveLength: number
+  /** Wave peak-to-trough height in board units. 0 = AUTO: use `waveLength` (so a
+   *  single wave is as tall as it is wide). Only used when `zigzag`. */
+  waveAmplitude: number
+  /** Render two parallel lines straddling the (curved) reference path. Mutually
+   *  exclusive with `zigzag`. */
+  double: boolean
+  /** Gap between the two parallel lines in board units. Only used when `double`. */
+  linesOffset: number
   startTip: ArrowTip
   endTip: ArrowTip
 }
@@ -125,7 +144,36 @@ export interface FigureElement extends BaseElement {
   ball?: boolean
 }
 
-export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement
+/** A token: an internally-managed disc/jersey badge with a configurable fill and
+ *  a short text label — NOT a catalog figure. `shape` picks the silhouette;
+ *  `tokenFill` picks how the badge interior is painted from `color1`/`color2`;
+ *  `text` is the (inline-editable) label drawn in `textColor`. Box geometry like
+ *  rect/figure so move/resize/group reuse the same machinery. */
+export type TokenShape = 'token' | 'jersey'
+export type TokenFill = 'solid' | 'vstripes' | 'hstripes' | 'vstripe' | 'hstripe' | 'checker'
+
+export interface TokenElement extends BaseElement {
+  type: 'token'
+  x: number
+  y: number
+  width: number
+  height: number
+  shape: TokenShape
+  tokenFill: TokenFill
+  /** Primary / secondary badge colors (CSS). */
+  color1: string
+  color2: string
+  /** Label color (CSS). */
+  textColor: string
+  /** The short label drawn in the badge. */
+  text: string
+  /** A caption drawn UNDER the badge (always black). Empty renders as "Player". */
+  label: string
+  /** Whether the under-badge caption is shown. */
+  showLabel: boolean
+}
+
+export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement
 
 // ── Smooth curves (auto, no user handles) ───────────────────────────────────
 // A polyline with `curve` renders as a Catmull-Rom spline through its points,
@@ -175,6 +223,374 @@ export function curvedPathD(pts: Array<[number, number]>, closed: boolean): stri
   return d
 }
 
+/** Parameters t in (0,1) where a cubic's derivative is 0 on one axis (its
+ *  extrema), given the four control values for that axis. */
+function cubicExtremaT(p0: number, p1: number, p2: number, p3: number): number[] {
+  // B'(t) = 3[(A) + 2t(B-A) + t²(A-2B+C)], with A=p1-p0, B=p2-p1, C=p3-p2.
+  const A = p1 - p0
+  const B = p2 - p1
+  const C = p3 - p2
+  const qa = A - 2 * B + C
+  const qb = 2 * (B - A)
+  const qc = A
+  const ts: number[] = []
+  if (Math.abs(qa) < 1e-9) {
+    if (Math.abs(qb) > 1e-9) {
+      const t = -qc / qb
+      if (t > 0 && t < 1) ts.push(t)
+    }
+  } else {
+    const disc = qb * qb - 4 * qa * qc
+    if (disc >= 0) {
+      const sq = Math.sqrt(disc)
+      for (const t of [(-qb + sq) / (2 * qa), (-qb - sq) / (2 * qa)]) if (t > 0 && t < 1) ts.push(t)
+    }
+  }
+  return ts
+}
+
+/** Tight bounding box of the smooth curve through `pts` — includes the bézier
+ *  overshoot between anchors, not just the anchors themselves. */
+export function curveBounds(pts: Array<[number, number]>, closed: boolean): Box {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  const acc = (x: number, y: number) => {
+    if (x < minX) minX = x
+    if (y < minY) minY = y
+    if (x > maxX) maxX = x
+    if (y > maxY) maxY = y
+  }
+  for (const c of catmullRomCubics(pts, closed)) {
+    acc(c[0][0], c[0][1])
+    acc(c[3][0], c[3][1])
+    for (const t of cubicExtremaT(c[0][0], c[1][0], c[2][0], c[3][0])) acc(cubicPointAt(c, t)[0], cubicPointAt(c, t)[1])
+    for (const t of cubicExtremaT(c[0][1], c[1][1], c[2][1], c[3][1])) acc(cubicPointAt(c, t)[0], cubicPointAt(c, t)[1])
+  }
+  return normalizeBox(minX, minY, maxX, maxY)
+}
+
+// ── Zigzag (wave) rendering ─────────────────────────────────────────────────
+// A 'zigzag' line follows the SAME smooth curve as a curved line, but the drawn
+// stroke is a sine wave riding along it. Two per-element controls (ported from
+// the old editor): `waveLength` is the period (crest→crest, in board units;
+// smaller = higher frequency, range ~6–80), and `waveAmplitude` is the
+// peak-to-trough height (0 = AUTO → equals waveLength, i.e. a square-ish wave).
+export const WAVE_LENGTH_MIN = 20
+export const WAVE_LENGTH_MAX = 60
+export const WAVE_AMPLITUDE_MAX = 100
+export const DEFAULT_WAVE_LENGTH = 40
+export const DEFAULT_WAVE_AMPLITUDE = 12
+const ZIGZAG_SAMPLE_STEP = 3 // board units between samples along the centerline
+
+/** Resolve a zigzag's wave geometry: the perpendicular offset (half of the
+ *  peak-to-trough height) and the period, applying the AUTO-amplitude rule. */
+export function waveParams(el: PolylineElement): { offset: number; wavelength: number } {
+  const wavelength = el.waveLength > 0 ? el.waveLength : DEFAULT_WAVE_LENGTH
+  const peak = el.waveAmplitude > 0 ? el.waveAmplitude : wavelength // 0 = auto
+  return { offset: peak / 2, wavelength }
+}
+
+/** Tangent (dx,dy) of a cubic bézier at parameter t. */
+function cubicTangent(c: Cubic, t: number): [number, number] {
+  const m = 1 - t
+  const dx = 3 * m * m * (c[1][0] - c[0][0]) + 6 * m * t * (c[2][0] - c[1][0]) + 3 * t * t * (c[3][0] - c[2][0])
+  const dy = 3 * m * m * (c[1][1] - c[0][1]) + 6 * m * t * (c[2][1] - c[1][1]) + 3 * t * t * (c[3][1] - c[2][1])
+  return [dx, dy]
+}
+
+/** Smoothstep ease (0→1) used to blend a straightened tail in. */
+function smoothstep(f: number): number {
+  return f * f * (3 - 2 * f)
+}
+
+/** SVG path `d` for a wave running along the smooth curve through `pts`.
+ *  `amplitude` here is the perpendicular OFFSET (half the peak-to-trough).
+ *  When an end carries an arrow tip, that end's tail is straightened toward the
+ *  straight line through the endpoint and its adjacent anchor — so the arrow
+ *  marker (which orients to the last segment) faces along the reference line. */
+export function zigzagPathD(
+  pts: Array<[number, number]>,
+  closed: boolean,
+  amplitude = DEFAULT_WAVE_AMPLITUDE / 2,
+  wavelength = DEFAULT_WAVE_LENGTH,
+  startArrow = false,
+  endArrow = false,
+): string {
+  if (pts.length < 2) return ''
+  const cubics = catmullRomCubics(pts, closed)
+  const out: Array<[number, number]> = []
+  const arc: number[] = []
+  let s = 0 // arc length along the centerline
+  let prev: [number, number] | null = null
+  // Sample finely enough that one wave period gets ~20 points (so crests stay
+  // round), but never coarser than the base step on long-wavelength waves.
+  const sampleStep = Math.max(0.8, Math.min(ZIGZAG_SAMPLE_STEP, wavelength / 20))
+  for (let ci = 0; ci < cubics.length; ci++) {
+    const c = cubics[ci]
+    const chord = Math.hypot(c[3][0] - c[0][0], c[3][1] - c[0][1])
+    const steps = Math.max(2, Math.round(chord / sampleStep))
+    for (let i = ci === 0 ? 0 : 1; i <= steps; i++) {
+      const t = i / steps
+      const pt = cubicPointAt(c, t)
+      if (prev) s += Math.hypot(pt[0] - prev[0], pt[1] - prev[1])
+      prev = pt
+      const tan = cubicTangent(c, t)
+      const len = Math.hypot(tan[0], tan[1]) || 1
+      const off = amplitude * Math.sin((2 * Math.PI * s) / wavelength)
+      out.push([pt[0] + (-tan[1] / len) * off, pt[1] + (tan[0] / len) * off])
+      arc.push(s)
+    }
+  }
+  const total = s || 1
+  const straightLen = Math.min(wavelength, total * 0.45)
+  // Arrow direction = the smooth curve's tangent at the endpoint (how the line
+  // visually arrives at the tip), so the arrow marker reads naturally.
+  if (!closed && endArrow) {
+    const E = pts[pts.length - 1]
+    const dir = vunit(cubicTangent(cubics[cubics.length - 1], 1))
+    for (let k = 0; k < out.length; k++) {
+      const dEnd = total - arc[k]
+      if (dEnd < straightLen) {
+        const f = smoothstep(1 - dEnd / straightLen)
+        const tx = E[0] - dir[0] * dEnd
+        const ty = E[1] - dir[1] * dEnd
+        out[k] = [out[k][0] + (tx - out[k][0]) * f, out[k][1] + (ty - out[k][1]) * f]
+      }
+    }
+  }
+  if (!closed && startArrow) {
+    const S = pts[0]
+    const inward = vunit(cubicTangent(cubics[0], 0))
+    for (let k = 0; k < out.length; k++) {
+      const dStart = arc[k]
+      if (dStart < straightLen) {
+        const f = smoothstep(1 - dStart / straightLen)
+        const tx = S[0] + inward[0] * dStart
+        const ty = S[1] + inward[1] * dStart
+        out[k] = [out[k][0] + (tx - out[k][0]) * f, out[k][1] + (ty - out[k][1]) * f]
+      }
+    }
+  }
+  // Smooth the sampled wave into a quadratic path (control point = each sample,
+  // endpoints = midpoints between samples) so crests read as round curves rather
+  // than faceted segments. The very ends are drawn straight to the exact sample,
+  // keeping arrow-marker orientation (the straightened tail) intact.
+  let d = `M ${out[0][0]},${out[0][1]}`
+  if (out.length === 2) {
+    d += ` L ${out[1][0]},${out[1][1]}`
+  } else {
+    for (let i = 1; i < out.length - 1; i++) {
+      const mx = (out[i][0] + out[i + 1][0]) / 2
+      const my = (out[i][1] + out[i + 1][1]) / 2
+      d += ` Q ${out[i][0]},${out[i][1]} ${mx},${my}`
+    }
+    const last = out[out.length - 1]
+    d += ` L ${last[0]},${last[1]}`
+  }
+  if (closed) d += ' Z'
+  return d
+}
+
+// ── Double line (two parallel strokes) ──────────────────────────────────────
+// A 'double' line follows the SAME smooth curve as a curved line, but draws two
+// strokes offset ±linesOffset/2 along the path normal. `linesOffset` is the gap.
+// When an end carries an arrow tip, that end is straightened along the reference
+// tangent and the two strokes are capped by a single arrowhead spanning the gap.
+export const LINES_OFFSET_MIN = 5
+export const LINES_OFFSET_MAX = 25
+export const DEFAULT_LINES_OFFSET = 10
+
+type Vec = [number, number]
+function vunit(v: Vec): Vec {
+  const l = Math.hypot(v[0], v[1]) || 1
+  return [v[0] / l, v[1] / l]
+}
+function polyD(pts: Vec[], close: boolean): string {
+  if (pts.length === 0) return ''
+  let d = `M ${pts[0][0]},${pts[0][1]}`
+  for (let i = 1; i < pts.length; i++) d += ` L ${pts[i][0]},${pts[i][1]}`
+  if (close) d += ' Z'
+  return d
+}
+
+export interface DoubleLineGeom {
+  /** The two parallel stroke paths. */
+  left: string
+  right: string
+  /** Filled arrowhead path(s), one per tipped end. */
+  arrows: string[]
+}
+
+/** Build the two parallel stroke paths (and any arrowheads) for a double line. */
+export function doubleLinePaths(
+  pts: Array<[number, number]>,
+  closed: boolean,
+  linesOffset: number,
+  startArrow: boolean,
+  endArrow: boolean,
+): DoubleLineGeom {
+  if (pts.length < 2) return { left: '', right: '', arrows: [] }
+  const half = linesOffset / 2
+  const cubics = catmullRomCubics(pts, closed)
+  // Sample the centerline into points + unit tangents.
+  const P: Vec[] = []
+  const T: Vec[] = []
+  for (let ci = 0; ci < cubics.length; ci++) {
+    const c = cubics[ci]
+    const chord = Math.hypot(c[3][0] - c[0][0], c[3][1] - c[0][1])
+    const steps = Math.max(2, Math.round(chord / ZIGZAG_SAMPLE_STEP))
+    for (let i = ci === 0 ? 0 : 1; i <= steps; i++) {
+      const t = i / steps
+      P.push(cubicPointAt(c, t))
+      T.push(vunit(cubicTangent(c, t)))
+    }
+  }
+  const n = P.length
+  const cum = new Array<number>(n).fill(0)
+  for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1])
+  const total = cum[n - 1] || 1
+  // Arrow direction = the smooth curve's tangent AT the endpoint (captured before
+  // the tail is straightened). This is how the line visually arrives at the tip,
+  // so the arrowhead reads naturally even on looping paths.
+  const startDir = T[0]
+  const endDir = T[n - 1]
+  // Arrowhead depth (along the line) and its base half-width. The base spans
+  // 2×linesOffset, so the head overhangs the parallel strokes on both sides.
+  const arrowLen = Math.min(Math.max(linesOffset * 1.4, 14), total * 0.45)
+  const baseHalf = linesOffset
+  const straightLen = Math.min(arrowLen + half, total * 0.49)
+
+  // Straighten the tail near a tipped end so the arrowhead approach is parallel
+  // to (and aligned with) the curve's endpoint tangent.
+  if (!closed && endArrow) {
+    const E = P[n - 1]
+    const dir = endDir
+    for (let i = 0; i < n; i++) {
+      const dEnd = total - cum[i]
+      if (dEnd < straightLen) {
+        const f = smoothstep(1 - dEnd / straightLen)
+        const tx = E[0] - dir[0] * dEnd
+        const ty = E[1] - dir[1] * dEnd
+        P[i] = [P[i][0] + (tx - P[i][0]) * f, P[i][1] + (ty - P[i][1]) * f]
+        T[i] = vunit([T[i][0] + (dir[0] - T[i][0]) * f, T[i][1] + (dir[1] - T[i][1]) * f])
+      }
+    }
+  }
+  if (!closed && startArrow) {
+    const S = P[0]
+    const dir = startDir
+    for (let i = 0; i < n; i++) {
+      const dStart = cum[i]
+      if (dStart < straightLen) {
+        const f = smoothstep(1 - dStart / straightLen)
+        const tx = S[0] + dir[0] * dStart
+        const ty = S[1] + dir[1] * dStart
+        P[i] = [P[i][0] + (tx - P[i][0]) * f, P[i][1] + (ty - P[i][1]) * f]
+        T[i] = vunit([T[i][0] + (dir[0] - T[i][0]) * f, T[i][1] + (dir[1] - T[i][1]) * f])
+      }
+    }
+  }
+
+  // Offset points along the (now possibly straightened) normals.
+  const L: Vec[] = []
+  const R: Vec[] = []
+  for (let i = 0; i < n; i++) {
+    const nx = -T[i][1]
+    const ny = T[i][0]
+    L.push([P[i][0] + nx * half, P[i][1] + ny * half])
+    R.push([P[i][0] - nx * half, P[i][1] - ny * half])
+  }
+
+  const arrows: string[] = []
+  let lo = 0
+  let hi = n - 1
+  if (!closed && startArrow) {
+    const apex = P[0]
+    const dir = startDir // curve tangent at the start (points inward)
+    const np: Vec = [-dir[1], dir[0]]
+    const neck: Vec = [apex[0] + dir[0] * arrowLen, apex[1] + dir[1] * arrowLen]
+    // Strokes meet the neck on the base line; the head corners overhang to ±baseHalf.
+    while (lo < hi && cum[lo] < arrowLen) lo++
+    L[lo] = [neck[0] + np[0] * half, neck[1] + np[1] * half]
+    R[lo] = [neck[0] - np[0] * half, neck[1] - np[1] * half]
+    const cL: Vec = [neck[0] + np[0] * baseHalf, neck[1] + np[1] * baseHalf]
+    const cR: Vec = [neck[0] - np[0] * baseHalf, neck[1] - np[1] * baseHalf]
+    arrows.push(polyD([cL, apex, cR], true))
+  }
+  if (!closed && endArrow) {
+    const apex = P[n - 1]
+    const dir = endDir // curve tangent at the end
+    const np: Vec = [-dir[1], dir[0]]
+    const neck: Vec = [apex[0] - dir[0] * arrowLen, apex[1] - dir[1] * arrowLen]
+    while (hi > lo && total - cum[hi] < arrowLen) hi--
+    L[hi] = [neck[0] + np[0] * half, neck[1] + np[1] * half]
+    R[hi] = [neck[0] - np[0] * half, neck[1] - np[1] * half]
+    const cL: Vec = [neck[0] + np[0] * baseHalf, neck[1] + np[1] * baseHalf]
+    const cR: Vec = [neck[0] - np[0] * baseHalf, neck[1] - np[1] * baseHalf]
+    arrows.push(polyD([cL, apex, cR], true))
+  }
+
+  return {
+    left: polyD(L.slice(lo, hi + 1), closed),
+    right: polyD(R.slice(lo, hi + 1), closed),
+    arrows,
+  }
+}
+
+// ── Token (disc / jersey badge) geometry ────────────────────────────────────
+// Both silhouettes are authored in a 100×100 box (from assets/token_plain.svg
+// and assets/token_tshirt.svg); the renderer scales this into the element box.
+// `clip` is the fillable silhouette (used as a clipPath AND the stroked outline);
+// `strokeWidth` is the outline width in that 100-space; `text` positions the
+// label. Pattern tiling constants live here too so fills are consistent.
+export interface TokenGeometry {
+  /** SVG fragment string for the silhouette (circle/path), without paint. */
+  shape: 'circle' | 'path'
+  /** circle: [cx, cy, r]; path: the `d`. */
+  circle?: [number, number, number]
+  path?: string
+  strokeWidth: number
+  text: { x: number; y: number; size: number }
+}
+
+export const TOKEN_GEOMETRY: Record<TokenShape, TokenGeometry> = {
+  token: {
+    shape: 'circle',
+    circle: [50, 50, 45.445],
+    strokeWidth: 8.33,
+    text: { x: 50, y: 50, size: 50 },
+  },
+  jersey: {
+    shape: 'path',
+    path: 'M50,9.485C44.518,9.485 42.116,8.247 37.951,5.058C20.026,12.144 18.784,15.497 18.784,15.497C18.784,15.497 15.531,29.859 11.379,40.664L26.292,43.875L27.717,38.416C29.224,57.179 27.996,74.392 25.831,91.072C36.314,91.301 47.444,91.974 50,91.974C52.556,91.974 63.686,91.301 74.169,91.072C72.004,74.392 70.776,57.179 72.283,38.416L74.062,44.206L88.621,40.664C84.469,29.859 81.216,15.497 81.216,15.497C81.216,15.497 79.974,12.144 62.049,5.058C57.884,8.247 55.482,9.485 50,9.485Z',
+    strokeWidth: 3.96,
+    text: { x: 50, y: 48, size: 25 },
+  },
+}
+
+/** The token badge is authored in this square coordinate space. */
+export const TOKEN_VIEW = 100
+/** Vertical/horizontal stripe period (100-space). */
+export const TOKEN_STRIPE_PERIOD = 20
+/** Width of the lone band for the single-stripe fills (100-space). */
+export const TOKEN_SINGLE_STRIPE = 36
+/** Checkerboard square size (100-space). */
+export const TOKEN_CHECKER_SIZE = 14
+/** Label font for tokens — shared by the rendered SVG label and the inline
+ *  editor so they match exactly. (Loaded by the host; falls back to sans-serif.) */
+export const TOKEN_FONT = "'Asap Condensed', system-ui, sans-serif"
+export const TOKEN_FONT_WEIGHT = 600
+/** Under-badge caption: a FIXED on-screen size (px), independent of the token's
+ *  size and the board's fit-scale — the renderer divides by the px-per-board-unit
+ *  it's given (falls back to board units when none is provided, e.g. export). */
+export const TOKEN_LABEL_PX = 14
+/** Gap (px) between the badge bottom and the caption baseline. */
+export const TOKEN_LABEL_GAP_PX = 3
+/** Shown when a token's `label` is empty. */
+export const TOKEN_LABEL_PLACEHOLDER = 'Player'
+
 export interface Box {
   x: number
   y: number
@@ -194,6 +610,22 @@ export function normalizeBox(ax: number, ay: number, bx: number, by: number): Bo
 
 /** The element's bounding box in its OWN coordinates, ignoring the transform. */
 export function getLocalBounds(el: BoardElement): Box {
+  // A curved/zigzag/double polyline's bbox must cover the bézier overshoot (and
+  // the wave amplitude / parallel offset), not just the anchors.
+  if (el.type === 'polyline' && (el.curve || el.zigzag || el.double) && el.points.length >= 2) {
+    const b = curveBounds(el.points, el.closed)
+    if (el.zigzag) {
+      const { offset } = waveParams(el)
+      return { x: b.x - offset, y: b.y - offset, width: b.width + 2 * offset, height: b.height + 2 * offset }
+    }
+    if (el.double) {
+      // Arrowheads overhang to ±linesOffset; the plain strokes only to ±half.
+      const arrowed = !el.closed && (el.startTip === 'arrow' || el.endTip === 'arrow')
+      const m = arrowed ? el.linesOffset : el.linesOffset / 2
+      return { x: b.x - m, y: b.y - m, width: b.width + 2 * m, height: b.height + 2 * m }
+    }
+    return b
+  }
   if (el.type === 'polyline' || el.type === 'draw') {
     if (el.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
     const xs = el.points.map((p) => p[0])
@@ -224,6 +656,10 @@ function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, v))
+}
+
 function str(v: unknown, fallback: string): string {
   return typeof v === 'string' ? v : fallback
 }
@@ -252,6 +688,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     strokeWidth: num(o.strokeWidth) ?? 3,
     strokeStyle: (o.strokeStyle === 'dashed' || o.strokeStyle === 'dotted' ? o.strokeStyle : 'solid') as StrokeStyle,
     fill: str(o.fill, 'transparent'),
+    fillStyle: (o.fillStyle === 'striped' ? 'striped' : 'solid') as FillStyle,
   }
 
   if (o.type === 'rect' || o.type === 'ellipse') {
@@ -269,7 +706,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     const x2 = num(o.x2)
     const y2 = num(o.y2)
     if (x1 === null || y1 === null || x2 === null || y2 === null) return null
-    return { ...base, type: 'polyline', points: [[x1, y1], [x2, y2]], closed: false, curve: false, startTip: 'none', endTip: 'none' }
+    return { ...base, type: 'polyline', points: [[x1, y1], [x2, y2]], closed: false, curve: false, zigzag: false, waveLength: DEFAULT_WAVE_LENGTH, waveAmplitude: DEFAULT_WAVE_AMPLITUDE, double: false, linesOffset: DEFAULT_LINES_OFFSET, startTip: 'none', endTip: 'none' }
   }
   if (o.type === 'polyline') {
     if (!Array.isArray(o.points)) return null
@@ -282,7 +719,23 @@ export function parseElement(raw: unknown): BoardElement | null {
       points.push([x, y])
     }
     if (points.length < 2) return null
-    return { ...base, type: 'polyline', points, closed: o.closed === true, curve: o.curve === true, startTip: parseTip(o.startTip), endTip: parseTip(o.endTip) }
+    const wl = num(o.waveLength)
+    const wa = num(o.waveAmplitude)
+    const lo = num(o.linesOffset)
+    return {
+      ...base,
+      type: 'polyline',
+      points,
+      closed: o.closed === true,
+      curve: o.curve === true,
+      zigzag: o.zigzag === true,
+      waveLength: wl === null ? DEFAULT_WAVE_LENGTH : clamp(wl, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX),
+      waveAmplitude: wa === null ? DEFAULT_WAVE_AMPLITUDE : clamp(wa, 0, WAVE_AMPLITUDE_MAX),
+      double: o.double === true,
+      linesOffset: lo === null ? DEFAULT_LINES_OFFSET : clamp(lo, LINES_OFFSET_MIN, LINES_OFFSET_MAX),
+      startTip: parseTip(o.startTip),
+      endTip: parseTip(o.endTip),
+    }
   }
   if (o.type === 'draw') {
     if (!Array.isArray(o.points)) return null
@@ -303,6 +756,28 @@ export function parseElement(raw: unknown): BoardElement | null {
     const height = num(o.height)
     if (!figureId || width === null || height === null) return null
     return { ...base, type: 'figure', figureId, x: num(o.x) ?? 0, y: num(o.y) ?? 0, width, height, colors: parseColors(o.colors), mirror: o.mirror === true, ball: o.ball === true || undefined }
+  }
+  if (o.type === 'token') {
+    const width = num(o.width)
+    const height = num(o.height)
+    if (width === null || height === null) return null
+    const fills: TokenFill[] = ['solid', 'vstripes', 'hstripes', 'vstripe', 'hstripe', 'checker']
+    return {
+      ...base,
+      type: 'token',
+      x: num(o.x) ?? 0,
+      y: num(o.y) ?? 0,
+      width,
+      height,
+      shape: o.shape === 'jersey' ? 'jersey' : 'token',
+      tokenFill: fills.includes(o.tokenFill as TokenFill) ? (o.tokenFill as TokenFill) : 'solid',
+      color1: str(o.color1, '#ebebeb'),
+      color2: str(o.color2, '#1e1e1e'),
+      textColor: str(o.textColor, '#111111'),
+      text: typeof o.text === 'string' ? o.text : '',
+      label: typeof o.label === 'string' ? o.label : '',
+      showLabel: o.showLabel === true,
+    }
   }
   return null
 }

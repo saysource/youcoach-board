@@ -326,32 +326,19 @@ We still need to define what to show in each category, for now use an empty div.
 - canvas zoom
 - laser pointer
 - presentation mode
-- slider undo/redo aggregation (undo begin/commit)
-- color picker
 - Skin Editor
 - Kit Editor
 - Import image (where to save it?)
-- Line / arrow > support for quadratic and cubic beziers
-- Line / arrow > support for synoisodal rendering included for beziers
-- Line / arrow > support for double lines.
-- Shapes > Diamon, penthagon, triangle, isometric trpezoid
 - Text support with frame
-- Disc with text
-- Open/close polyline
-- Drawer and categories
-- auto-scale based on field
-- remember recent colors
-- proper color picker
 - export image
 - animation mode
-- watermark and wotermark position
 - snap to geometry
 - mini-tool help
 - keyboard shortcuts
 - create formation
 - i18n
-- colors persistance
 - favorites figures
+- multiline point dragging align with other points.
 
 
 ## Properties element by element
@@ -634,7 +621,63 @@ For now we have a single type of disc, which is driven by the catalog. We will a
 Ignore it for now by providing a single option.
 
 
+## Zigzag lines
+
+Implement the line syile "Zigzag". The line will work like a curved line (bezier), but the actual line is rendered as zigzag curve along the main path based on two parameters:
+- frequency
+- amplitude
+
+The editig should be similar to a regular curved line, with the same logic for the anchor points.
+
+Zigzag will be a third line style, with icon @assets/line_style_zigzag.zvg
+
+## Double lines
+
+A double line is our forth type of line style. Like the zigzag, it is based on a curved line (bezier) and it renders two parallel lines equally distant from the reference path.
+The distance between the two lines will be governed by the property lines offset (from 10 to 100).
 
 
-- multiselection resolution
-- implement frequency/amplitude and double lines.
+- Add an action to the context menu to transform a rectangle to a polyline.
+
+## Text elements
+
+Text elements show a text on the canvas. The text should support multiline.
+The text is wrapped by a rounded rectangle, which can eventually be transparent, having 5px pad.
+In the properties panel we present:
+- Text Color (similar to stroke color widget) default should be black-
+- Background Color (we can use the background widget), without the background style, just the color and opacity
+- Text Setting
+- Font size (slider from 2 to 200)
+- text alignment (default center, useful only where there are multiple lines)
+
+On double click on the element, the user should be able to edit the text. Enter should be accepted as characted. The start of the text editing starts and undo transaction, which is closed on blur of the inline fully transparent textarea used for the editing of the text.
+When editing, we we want to have the feeling of editing the SVG. The inline editing 
+
+The background rounded rectangle should be calculated accordingli to the text bbox with a min width and height to fit the M character.
+ 
+
+
+
+## Background Editig
+
+So far we show the handle to move the background and the background properties panel when the we show the fields category in the drawer.
+Centering (or moving) the background should be a clear state of the editor that disable all the other actions and shold be committed somehow.
+Here is the idea
+
+The background toolbar should be shown upon clicking edit background and we enter the edit background mode, showing the arrows indicating the possibility to move the background.
+
+In the toolbar we show
+- background color icon, which would open a color picker with the default colors we provide for the background
+- the settings icon to edit scale and logo position
+- a reset background icon
+
+- In background edit mode, the drawer only show fields categories
+- The main toolbar will show just a button "Finish editing background" (or something similar) which will allow to exit the background mode.
+
+At any time, by pressing, ESC we will exit the background editing mode.
+
+The arrows icon shown in the canvas to move the background should be bigger.
+
+
+- When we create a new token, if a token is present on the board, we want to use the same size, if not present, we want to honour the selected backgorund scale.
+

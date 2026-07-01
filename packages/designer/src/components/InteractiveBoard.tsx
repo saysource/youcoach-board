@@ -7,6 +7,12 @@ import {
   getElementBounds,
   getLocalBounds,
   normalizeBox,
+  TOKEN_GEOMETRY,
+  TOKEN_VIEW,
+  TOKEN_FONT,
+  TOKEN_FONT_WEIGHT,
+  TOKEN_LABEL_PX,
+  TOKEN_LABEL_GAP_PX,
   type ArrowTip,
   type BoardElement,
   type ElementTransform,
@@ -20,6 +26,9 @@ import {
   makeLine,
   makePolyline,
   makeDraw,
+  makeToken,
+  nextTokenText,
+  TOKEN_SIZE,
   squareCorner,
   applyFigureStyle,
   isDragSignificant,
@@ -28,12 +37,14 @@ import {
   toolElementType,
   toolEndTip,
   toolIsCurved,
+  toolIsZigzag,
+  toolIsDouble,
   isLineTool,
   MIN_DRAG,
   type DraftType,
   type Point,
 } from '../lib/draw'
-import { computeResize, rotationFor, boardToElement, elementToBoard, localCorners, boardCorners, type CornerId } from '../lib/geometry-2d'
+import { computeResize, rotationFor, boardToElement, elementToBoard, localCorners, boardCorners, tokenLabelBand, type CornerId } from '../lib/geometry-2d'
 import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
 import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
@@ -45,7 +56,7 @@ const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-ca
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
 const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
 const MOVE_THRESHOLD_PX = 4 // on-screen drag distance before a move engages
-const BG_MOVE_HANDLE_PX = 40 // on-screen size of the background pan handle (icon viewBox 46×46)
+const BG_MOVE_HANDLE_PX = 72 // on-screen size of the background pan handle (icon viewBox 46×46)
 // 4-way move arrows (assets/move_background.svg), centered in a 46×46 viewBox.
 const BG_MOVE_PATH =
   'M18.648,18.648L18.648,6.688L15.815,6.688L22.504,0L29.192,6.688L26.36,6.688L26.36,18.648L38.319,18.648L38.319,15.815L45.008,22.504L38.319,29.192L38.319,26.36L26.36,26.36L26.36,38.319L29.192,38.319L22.504,45.008L15.815,38.319L18.648,38.319L18.648,26.36L6.688,26.36L6.688,29.192L0,22.504L6.688,15.815L6.688,18.648L18.648,18.648Z'
@@ -63,8 +74,11 @@ interface Draft {
   current: Point
   // For 'line' drafts: the end arrow tip (arrow tool → 'arrow').
   endTip: ArrowTip
-  // For 'line' drafts: draw a smooth (curved) line (elbow tools).
+  // For 'line' drafts: draw a smooth (curved) line (elbow / zigzag / double tools).
   curve: boolean
+  // For 'line' drafts: wave (zigzag-arrow) / parallel (double-arrow) render style.
+  zigzag: boolean
+  double: boolean
   // Shift held — snap a line's angle to 15° steps (see snapLineEnd).
   snap: boolean
 }
@@ -88,8 +102,11 @@ interface PolyDraft {
   points: Point[]
   cursor: Point
   endTip: ArrowTip
-  // Draw a smooth (curved) multi-point line (elbow tools).
+  // Draw a smooth (curved) multi-point line (elbow / zigzag / double tools).
   curve: boolean
+  // Wave (zigzag-arrow) / parallel (double-arrow) render style.
+  zigzag: boolean
+  double: boolean
   // Shift held — angle-snap the next segment (from the last point) to 15°.
   snap: boolean
 }
@@ -172,6 +189,8 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
+  const tokenDefaults = useEditorStore((s) => s.tokenDefaults)
+  const lastTokenId = useEditorStore((s) => s.lastTokenId)
   const setSelection = useEditorStore((s) => s.setSelection)
   const createFigure = useEditorStore((s) => s.createFigure)
   const setBackground = useEditorStore((s) => s.setBackground)
@@ -193,6 +212,20 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   const [polyDraft, setPolyDraft] = useState<PolyDraft | null>(null)
   // In-progress freehand stroke: the captured points (board coords).
   const [freeDraft, setFreeDraft] = useState<Point[] | null>(null)
+  // Inline token editing: which token + which field (the badge number or the
+  // under-badge label) + the in-progress text. Double-click / touch long-press;
+  // committed on Enter/blur.
+  type EditField = 'text' | 'label'
+  const [editing, setEditing] = useState<{ id: string; field: EditField; text: string } | null>(null)
+  // Screen placement of the inline editor (computed in an effect — needs the CTM).
+  const [editPos, setEditPos] = useState<{ left: number; top: number; width: number; font: number; color: string } | null>(null)
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Last token pointer-down (id + field + timestamp) to detect a double-tap
+  // manually — the native dblclick can't fire once the selection frame covers the
+  // token (the two clicks land on different DOM nodes). `pressTokenField` records
+  // which text the current press landed on (badge number vs label).
+  const tokenTapRef = useRef<{ id: string; field: EditField; t: number } | null>(null)
+  const pressTokenFieldRef = useRef<EditField>('text')
   // In-progress background pan (dragging the move handle): the pointer-down
   // board point + the field's offset at that moment.
   const [bgPan, setBgPan] = useState<{ start: Point; origin: [number, number] } | null>(null)
@@ -229,7 +262,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
       if (e.key !== 'Escape') return
       e.preventDefault()
       e.stopPropagation()
-      if (polyDraft.points.length >= 2) createFigure(applyFigureStyle(makePolyline(crypto.randomUUID(), polyDraft.points, false, 'none', polyDraft.endTip, polyDraft.curve), toolDefaults))
+      if (polyDraft.points.length >= 2) createFigure(applyFigureStyle(makePolyline(crypto.randomUUID(), polyDraft.points, false, 'none', polyDraft.endTip, polyDraft.curve, polyDraft.zigzag, polyDraft.double), toolDefaults))
       setPolyDraft(null)
     }
     window.addEventListener('keydown', onKey, true)
@@ -351,6 +384,19 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     return { lp: boardToElement(board, g.box0, g.t0), guides: [] }
   }
 
+  // Resize pointer for a token's bottom handles: those sit a caption-band below
+  // the badge corner (so the frame wraps the label), but resize math uses the
+  // badge box — so shift the pointer up by the band to avoid a jump on grab.
+  function resizeCurrent(el: BoardElement, g: Gesture): Point {
+    const band = tokenLabelBand(el, scale)
+    if (band > 0 && (g.handle === 'se' || g.handle === 'sw')) {
+      const L = band * g.t0.scale
+      const th = (g.t0.rotate * Math.PI) / 180
+      return { x: g.current.x + L * Math.sin(th), y: g.current.y - L * Math.cos(th) }
+    }
+    return g.current
+  }
+
   // The element as it should render RIGHT NOW — committed state plus any
   // in-progress move / resize / rotate / endpoint gesture.
   function liveElement(el: BoardElement): BoardElement {
@@ -368,10 +414,10 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
         return { ...el, transform: { ...gesture.t0, rotate: rotationFor(gesture.box0, gesture.t0, gesture.current, gesture.snap) } }
       }
       if (gesture.kind === 'resize') {
-        const { box, transform } = computeResize(gesture.box0, gesture.t0, gesture.handle as CornerId, clampToCanvas(gesture.current), MIN_SIZE, {
+        const { box, transform } = computeResize(gesture.box0, gesture.t0, gesture.handle as CornerId, clampToCanvas(resizeCurrent(el, gesture)), MIN_SIZE, {
           fromCenter: gesture.alt,
-          // Figures keep their SVG aspect ratio, so the frame always matches it.
-          proportional: gesture.snap || el.type === 'figure',
+          // Figures + tokens keep their aspect ratio, so the frame always matches it.
+          proportional: gesture.snap || el.type === 'figure' || el.type === 'token',
         })
         if (el.type === 'polyline' || el.type === 'draw') {
           return { ...el, points: scalePoints(el.points, gesture.box0, box), transform }
@@ -417,7 +463,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     if (!polyDraft) return
     if (polyDraft.points.length >= (closed ? 3 : 2)) {
       // Closed polygons carry no tips; an open polyline keeps the tool's end tip.
-      createFigure(applyFigureStyle(makePolyline(crypto.randomUUID(), polyDraft.points, closed, 'none', closed ? 'none' : polyDraft.endTip, polyDraft.curve), toolDefaults))
+      createFigure(applyFigureStyle(makePolyline(crypto.randomUUID(), polyDraft.points, closed, 'none', closed ? 'none' : polyDraft.endTip, polyDraft.curve, polyDraft.zigzag, polyDraft.double), toolDefaults))
     }
     setPolyDraft(null)
   }
@@ -425,6 +471,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   function onContainerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only the LEFT button drives interactions (touch/pen primary press is 0 too).
     if (e.button !== 0) return
+    if (backgroundMode) return // background-edit mode: only the bg move handle is active
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
@@ -433,6 +480,28 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     if (activeTool === 'draw') {
       setFreeDraft([clampToCanvas(p)])
       containerRef.current?.setPointerCapture(e.pointerId)
+      return
+    }
+
+    // Token: a stamp tool — a single click drops a default token at the cursor
+    // (createFigure selects it and reverts to the select tool unless locked).
+    if (activeTool === 'token') {
+      const c = clampToCanvas(p)
+      // Use the editable next-token defaults (style + starting text/label).
+      const td = tokenDefaults
+      // Size: copy the last selected/created token's CURRENT size (so resizes are
+      // honoured); else match any token already on the board; else honour the
+      // field's figure scale (the same multiplier placed figures use).
+      const ref =
+        doc.elements.find((e) => e.id === lastTokenId && e.type === 'token') ??
+        [...doc.elements].reverse().find((e) => e.type === 'token')
+      const size = ref?.type === 'token' ? ref.width : Math.round(TOKEN_SIZE * doc.background.figureScale)
+      const tok = makeToken(crypto.randomUUID(), c.x, c.y, td, td.text, size)
+      if (tok.type === 'token') {
+        tok.label = td.label
+        tok.text = nextTokenText(doc.elements, tok, td.text)
+      }
+      createFigure(tok)
       return
     }
 
@@ -451,7 +520,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     if (type) {
       // line/arrow start as a 'line' draft: a drag → straight line, a click →
       // multi-point polyline (resolved on pointer-up). rect/ellipse → box draft.
-      setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool), curve: toolIsCurved(activeTool), snap: e.shiftKey })
+      setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool), curve: toolIsCurved(activeTool), zigzag: toolIsZigzag(activeTool), double: toolIsDouble(activeTool), snap: e.shiftKey })
       containerRef.current?.setPointerCapture(e.pointerId)
     } else {
       setMarquee({ start: p, current: p, additive: e.shiftKey, base: selectedIds })
@@ -474,10 +543,13 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
 
   function onElementPointerDown(e: React.PointerEvent, el: BoardElement) {
     if (e.button !== 0) return
-    if (creating) return
+    if (creating || backgroundMode) return // background-edit mode: elements are inert
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
+    // Note which token text this press landed on (the under-badge label carries a
+    // data-token-label marker), so a double-tap edits the right field.
+    pressTokenFieldRef.current = (e.target as Element | null)?.closest?.('[data-token-label]') ? 'label' : 'text'
     const next = new Set(selectedIds)
     let willMove: boolean
     if (e.shiftKey) {
@@ -498,6 +570,77 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     const ids = [...next]
     setSelection(ids)
     if (willMove && ids.length) startMove(ids, clientToBoard(svg, e.clientX, e.clientY), e.pointerId)
+    // Touch long-press on a token → inline edit (fires only if the finger stays
+    // put; any drag/up clears the timer). Double-click is the pointer path.
+    cancelLongPress()
+    if (el.type === 'token') {
+      const field = pressTokenFieldRef.current
+      longPressRef.current = setTimeout(() => startTokenEdit(el, field), 500)
+    }
+  }
+
+  function cancelLongPress() {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current)
+      longPressRef.current = null
+    }
+  }
+
+  // Map a board point to a position within the container (for the inline editor).
+  function boardToContainer(bx: number, by: number): { x: number; y: number; scale: number } | null {
+    const svg = svgRef.current
+    const cont = containerRef.current
+    if (!svg || !cont) return null
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return null
+    const sp = new DOMPoint(bx, by).matrixTransform(ctm)
+    const r = cont.getBoundingClientRect()
+    return { x: sp.x - r.left, y: sp.y - r.top, scale: ctm.a }
+  }
+
+  function startTokenEdit(el: BoardElement, field: EditField) {
+    if (el.type !== 'token') return
+    if (field === 'label' && !el.showLabel) return // nothing to edit if hidden
+    cancelLongPress()
+    setSelection([el.id])
+    setEditing({ id: el.id, field, text: field === 'label' ? el.label : el.text })
+    let cx: number
+    let cy: number
+    let font: number // editor font in screen px (overlays the rendered glyph 1:1)
+    if (field === 'label') {
+      // Caption: a fixed on-screen size centered just below the badge (mirrors the
+      // renderer, which divides the px sizes by the fit-scale to get board units).
+      const gapBoard = TOKEN_LABEL_GAP_PX / scale
+      const fontBoard = TOKEN_LABEL_PX / scale
+      cx = el.x + el.width / 2 + el.transform.x
+      cy = el.y + el.height + gapBoard + fontBoard / 2 + el.transform.y
+      font = TOKEN_LABEL_PX
+    } else {
+      // Badge number: anchored at the geometry's text point, sized into the box.
+      const g = TOKEN_GEOMETRY[el.shape]
+      cx = el.x + (g.text.x / TOKEN_VIEW) * el.width + el.transform.x
+      cy = el.y + (g.text.y / TOKEN_VIEW) * el.height + el.transform.y
+      font = (g.text.size / TOKEN_VIEW) * (el.width * el.transform.scale * scale)
+    }
+    const pos = boardToContainer(cx, cy)
+    if (pos) {
+      const px = el.width * el.transform.scale * pos.scale // token width in screen px
+      const width = Math.max(40, field === 'label' ? px * 1.8 : px * 0.9)
+      // The label is always black; the badge number uses the token's text color.
+      setEditPos({ left: pos.x - width / 2, top: pos.y - font, width, font, color: field === 'label' ? '#000000' : el.textColor })
+    }
+  }
+
+  function commitTokenEdit() {
+    if (!editing) return
+    const el = doc.elements.find((e) => e.id === editing.id)
+    if (el && el.type === 'token') {
+      const cur = editing.field === 'label' ? el.label : el.text
+      if (cur !== editing.text) {
+        updateElements([{ id: editing.id, before: { [editing.field]: cur }, after: { [editing.field]: editing.text } }])
+      }
+    }
+    setEditing(null)
   }
 
   function onHandleDown(handle: HandleId, e: React.PointerEvent, el: BoardElement) {
@@ -561,6 +704,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    cancelLongPress() // any movement aborts a pending long-press
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
@@ -589,6 +733,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    cancelLongPress() // a tap/drag release aborts a pending long-press
     // Only release if we actually captured (polyline clicks don't capture).
     if (containerRef.current?.hasPointerCapture?.(e.pointerId)) {
       containerRef.current.releasePointerCapture(e.pointerId)
@@ -602,16 +747,16 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
       // Need at least a short stroke (≥2 distinct points) to keep it.
       if (pts.length >= 2) createFigure(applyFigureStyle(makeDraw(crypto.randomUUID(), pts), toolDefaults))
     } else if (draft) {
-      const { type, start, current, endTip, curve, snap } = draft
+      const { type, start, current, endTip, curve, zigzag, double, snap } = draft
       setDraft(null)
       if (type === 'line') {
         if (isDragSignificant('line', start, current)) {
           // A real drag → a straight line (2-point polyline, end-tipped if arrow).
           const end = snap ? snapLineEnd(start, current) : current
-          createFigure(applyFigureStyle(makeLine(crypto.randomUUID(), start, end, endTip, curve), toolDefaults))
+          createFigure(applyFigureStyle(makeLine(crypto.randomUUID(), start, end, endTip, curve, zigzag, double), toolDefaults))
         } else {
           // A click → switch to multi-point polyline mode, seeded with this point.
-          setPolyDraft({ points: [start], cursor: current, endTip, curve, snap })
+          setPolyDraft({ points: [start], cursor: current, endTip, curve, zigzag, double, snap })
         }
       } else if (isDragSignificant(type, start, current)) {
         // Shift keeps the shape's proportion (square bounding box → regular shape).
@@ -649,6 +794,24 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
               after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } },
             })),
         )
+      } else if (ids.length === 1) {
+        // A tap (no drag) on a single token: a second one within 400ms opens the
+        // inline editor. Detected on pointerup — after the press's default focus
+        // has settled — so the editor's autofocus isn't immediately stolen. This
+        // is also capture-proof (the synthetic click goes to the capture target).
+        const el = doc.elements.find((x) => x.id === ids[0])
+        if (el?.type === 'token') {
+          const field = pressTokenFieldRef.current // which text this tap landed on
+          const prev = tokenTapRef.current
+          if (prev && prev.id === el.id && prev.field === field && e.timeStamp - prev.t < 400) {
+            tokenTapRef.current = null
+            startTokenEdit(el, field)
+          } else {
+            tokenTapRef.current = { id: el.id, field, t: e.timeStamp }
+          }
+        } else {
+          tokenTapRef.current = null
+        }
       }
     } else if (marquee) {
       setSelection(marqueeSelection(marquee))
@@ -664,10 +827,10 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     if (g.kind === 'rotate') {
       updateElements([{ id: g.id, before: { transform: g.t0 }, after: { transform: { ...g.t0, rotate: rotationFor(g.box0, g.t0, g.current, g.snap) } } }])
     } else if (g.kind === 'resize') {
-      const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, clampToCanvas(g.current), MIN_SIZE, {
+      const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, clampToCanvas(resizeCurrent(el, g)), MIN_SIZE, {
         fromCenter: g.alt,
-        // Figures keep their SVG aspect ratio, so the frame always matches it.
-        proportional: g.snap || el.type === 'figure',
+        // Figures + tokens keep their aspect ratio, so the frame always matches it.
+        proportional: g.snap || el.type === 'figure' || el.type === 'token',
       })
       if (el.type === 'polyline' || el.type === 'draw') {
         updateElements([
@@ -717,6 +880,10 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     const pbox = { x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 }
     const c = localCorners(pbox)
     const t = el.transform
+    // Note: the move hit-area stays on the badge (NOT extended over the caption),
+    // so double-clicking the caption still hits the label text (not this overlay)
+    // and edits the label. The caption is independently grabbable via its own
+    // element group, so moving by the label still works.
     return [c.nw, c.ne, c.se, c.sw]
       .map((p) => {
         const b = elementToBoard(p, pbox, t)
@@ -776,7 +943,7 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
     <div
       ref={containerRef}
       data-board-surface
-      className={cn('h-full w-full touch-none', creating ? 'cursor-crosshair' : 'cursor-default')}
+      className={cn('relative h-full w-full touch-none select-none', creating ? 'cursor-crosshair' : 'cursor-default')}
       onPointerDown={onContainerPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -871,14 +1038,14 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
             )}
             {draft &&
               (draft.type === 'line' ? (
-                <ElementView element={applyFigureStyle(makeLine('draft', draft.start, draft.snap ? snapLineEnd(draft.start, draft.current) : draft.current, draft.endTip, draft.curve), toolDefaults)} />
+                <ElementView element={applyFigureStyle(makeLine('draft', draft.start, draft.snap ? snapLineEnd(draft.start, draft.current) : draft.current, draft.endTip, draft.curve, draft.zigzag, draft.double), toolDefaults)} />
               ) : (
                 <ElementView element={applyFigureStyle(makeFigure(draft.type, 'draft', draft.start, draft.snap ? squareCorner(draft.start, draft.current) : draft.current), toolDefaults)} />
               ))}
             {polyDraft && (
               <>
                 {/* Live preview: placed segments + the segment to the (snapped) cursor. */}
-                <ElementView element={applyFigureStyle(makePolyline('poly-draft', [...polyDraft.points, polyDraftEnd(polyDraft)], false, 'none', polyDraft.endTip, polyDraft.curve), toolDefaults)} />
+                <ElementView element={applyFigureStyle(makePolyline('poly-draft', [...polyDraft.points, polyDraftEnd(polyDraft)], false, 'none', polyDraft.endTip, polyDraft.curve, polyDraft.zigzag, polyDraft.double), toolDefaults)} />
                 {/* First dot → close; last dot → end open. Hover bounce via CSS. */}
                 <circle
                   className="ycb-poly-end"
@@ -933,17 +1100,66 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
           </>
         }
       >
-        <g style={{ pointerEvents: creating ? 'none' : 'auto' }}>
+        <g style={{ pointerEvents: creating || backgroundMode ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
             const live = liveElement(el)
+            // Hide the token field being edited (the HTML input shows the live
+            // value) ONLY in the rendered element — the selection chrome still
+            // sees the real `showLabel`, so the frame doesn't shrink while editing.
+            const render =
+              editing && editing.id === el.id && live.type === 'token'
+                ? editing.field === 'label'
+                  ? { ...live, showLabel: false }
+                  : { ...live, text: '' }
+                : live
             return (
               <g key={el.id} style={{ cursor: 'move' }} onPointerDown={(e) => onElementPointerDown(e, el)}>
-                {live.type === 'figure' ? <FigureView element={live} /> : <ElementView element={live} />}
+                {render.type === 'figure' ? <FigureView element={render} /> : <ElementView element={render} viewScale={scale} />}
               </g>
             )
           })}
         </g>
       </BoardCanvas>
+      {editing && editPos && (
+        <input
+          autoFocus
+          value={editing.text}
+          placeholder={editing.field === 'label' ? 'Player' : ''}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => setEditing((cur) => (cur ? { ...cur, text: e.target.value } : cur))}
+          onBlur={commitTokenEdit}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commitTokenEdit()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setEditing(null)
+            }
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            left: editPos.left,
+            top: editPos.top,
+            width: editPos.width,
+            height: editPos.font * 2,
+            fontFamily: TOKEN_FONT,
+            fontSize: editPos.font,
+            fontWeight: TOKEN_FONT_WEIGHT,
+            textAlign: 'center',
+            border: 'none',
+            background: 'transparent',
+            color: editPos.color,
+            outline: 'none',
+            padding: 0,
+            margin: 0,
+            lineHeight: 1,
+          }}
+          className="z-40 select-text outline-none"
+        />
+      )}
     </div>
   )
 }

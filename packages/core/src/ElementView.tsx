@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import type { BoardElement } from './elements'
-import { getLocalBounds, curvedPathD, strokeDash } from './elements'
+import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, strokeDash, TOKEN_GEOMETRY, TOKEN_VIEW, TOKEN_STRIPE_PERIOD, TOKEN_SINGLE_STRIPE, TOKEN_CHECKER_SIZE, TOKEN_FONT, TOKEN_FONT_WEIGHT, TOKEN_LABEL_PX, TOKEN_LABEL_GAP_PX, TOKEN_LABEL_PLACEHOLDER } from './elements'
 
 // Renders a single board element to SVG. Presentational and shared: the viewer
 // renders elements through this directly, and the designer wraps it with
@@ -9,7 +9,10 @@ import { getLocalBounds, curvedPathD, strokeDash } from './elements'
 //
 // The element's `transform` (placement) is applied on a wrapping <g>, kept
 // separate from the intrinsic geometry below it.
-export function ElementView({ element }: { element: BoardElement }) {
+// `viewScale` = screen px per board unit. When provided, the token caption renders
+// at a FIXED on-screen size (TOKEN_LABEL_PX) regardless of the board's fit-scale or
+// the token's size; without it (viewer/export) the caption falls back to board units.
+export function ElementView({ element, viewScale }: { element: BoardElement; viewScale?: number }) {
   const { x, y, rotate, scale, opacity } = element.transform
   const c = getLocalBounds(element)
   const cx = c.x + c.width / 2
@@ -21,7 +24,7 @@ export function ElementView({ element }: { element: BoardElement }) {
 
   return (
     <g transform={transform} opacity={opacity}>
-      <Shape element={element} />
+      <Shape element={element} viewScale={viewScale} />
     </g>
   )
 }
@@ -43,17 +46,131 @@ function freehandPath(pts: Array<[number, number]>): string {
   return d
 }
 
-function Shape({ element }: { element: BoardElement }) {
-  // Unique per instance, so each element's arrow marker def doesn't collide.
+// Stripe tile (board units) for the 'striped' fill — a 45° hatch of the fill
+// color over transparent gaps.
+const STRIPE = 12
+
+function Shape({ element, viewScale }: { element: BoardElement; viewScale?: number }) {
+  // Unique per instance, so each element's marker/pattern/clip defs don't collide.
   const markerId = useId()
+  const patternId = useId()
+  const clipId = useId()
   const dash = strokeDash(element.strokeStyle, element.strokeWidth)
   // Dotted needs round caps to render as dots rather than vanishing.
   const cap = element.strokeStyle === 'dotted' ? 'round' : undefined
+  // Striped fill: paint via a 45° line pattern when the shape has a real fill.
+  const hasFill = element.fill !== 'transparent' && element.fill !== ''
+  const striped = element.fillStyle === 'striped' && hasFill
+  const fillPaint = striped ? `url(#${patternId})` : element.fill
+  const stripesDef = striped ? (
+    <defs>
+      <pattern id={patternId} patternUnits="userSpaceOnUse" width={STRIPE} height={STRIPE} patternTransform="rotate(45)">
+        <line x1={STRIPE / 2} y1={0} x2={STRIPE / 2} y2={STRIPE} stroke={element.fill} strokeWidth={STRIPE / 2} />
+      </pattern>
+    </defs>
+  ) : null
   const paint = {
-    fill: element.fill,
+    fill: fillPaint,
     stroke: element.stroke,
     strokeWidth: element.strokeWidth,
     strokeDasharray: dash,
+  }
+
+  if (element.type === 'token') {
+    const g = TOKEN_GEOMETRY[element.shape]
+    const { x, y, width, height } = element
+    // Place + scale the 100-space badge into the element box.
+    const t = `translate(${x} ${y}) scale(${width / TOKEN_VIEW} ${height / TOKEN_VIEW})`
+    // The silhouette, reused as clip (fillable interior) and stroked outline.
+    const silhouette =
+      g.shape === 'circle'
+        ? <circle cx={g.circle![0]} cy={g.circle![1]} r={g.circle![2]} />
+        : <path d={g.path!} />
+    const f = element.tokenFill
+    const P = TOKEN_STRIPE_PERIOD
+    const C = TOKEN_CHECKER_SIZE
+    // color2 overlay on a color1 base, all clipped to the silhouette.
+    const overlay =
+      f === 'vstripes' ? <rect x={0} y={0} width={TOKEN_VIEW} height={TOKEN_VIEW} fill={`url(#${patternId})`} />
+      : f === 'hstripes' ? <rect x={0} y={0} width={TOKEN_VIEW} height={TOKEN_VIEW} fill={`url(#${patternId})`} />
+      : f === 'checker' ? <rect x={0} y={0} width={TOKEN_VIEW} height={TOKEN_VIEW} fill={`url(#${patternId})`} />
+      : f === 'vstripe' ? <rect x={TOKEN_VIEW / 2 - TOKEN_SINGLE_STRIPE / 2} y={0} width={TOKEN_SINGLE_STRIPE} height={TOKEN_VIEW} fill={element.color2} />
+      : f === 'hstripe' ? <rect x={0} y={TOKEN_VIEW / 2 - TOKEN_SINGLE_STRIPE / 2} width={TOKEN_VIEW} height={TOKEN_SINGLE_STRIPE} fill={element.color2} />
+      : null
+    const patternDef =
+      f === 'vstripes' ? (
+        <pattern id={patternId} patternUnits="userSpaceOnUse" width={P} height={P}>
+          <rect x={0} y={0} width={P / 2} height={P} fill={element.color2} />
+        </pattern>
+      ) : f === 'hstripes' ? (
+        <pattern id={patternId} patternUnits="userSpaceOnUse" width={P} height={P}>
+          <rect x={0} y={0} width={P} height={P / 2} fill={element.color2} />
+        </pattern>
+      ) : f === 'checker' ? (
+        <pattern id={patternId} patternUnits="userSpaceOnUse" width={C * 2} height={C * 2}>
+          <rect x={0} y={0} width={C} height={C} fill={element.color2} />
+          <rect x={C} y={C} width={C} height={C} fill={element.color2} />
+        </pattern>
+      ) : null
+    // Caption sizing: fixed on-screen px when a viewScale is known, else board units.
+    const labelFont = viewScale && viewScale > 0 ? TOKEN_LABEL_PX / viewScale : TOKEN_LABEL_PX
+    const labelGap = viewScale && viewScale > 0 ? TOKEN_LABEL_GAP_PX / viewScale : TOKEN_LABEL_GAP_PX
+    return (
+      <>
+        <g transform={t}>
+          <defs>
+            <clipPath id={clipId}>{silhouette}</clipPath>
+            {patternDef}
+          </defs>
+          {g.shape === 'circle' ? (
+            <circle cx={g.circle![0]} cy={g.circle![1]} r={g.circle![2]} fill="#000000" style={{ filter: 'drop-shadow(rgba(0, 0, 0, 0.5) 8px 8px 3px)' }} />
+          ) : (
+            <path d={g.path!} fill="#000000" style={{ filter: 'drop-shadow(rgba(0, 0, 0, 0.5) 8px 8px 3px)' }} />
+          )}
+          <g clipPath={`url(#${clipId})`}>
+            <rect x={0} y={0} width={TOKEN_VIEW} height={TOKEN_VIEW} fill={element.color1} />
+            {overlay}
+          </g>
+          {/* Outline drawn on top so the fill never bleeds past the silhouette. */}
+          {g.shape === 'circle' ? (
+            <circle cx={g.circle![0]} cy={g.circle![1]} r={g.circle![2]} fill="none" stroke={element.stroke} strokeWidth={g.strokeWidth} />
+          ) : (
+            <path d={g.path!} fill="none" stroke={element.stroke} strokeWidth={g.strokeWidth} />
+          )}
+          {element.text && (
+            <text
+              x={g.text.x}
+              y={g.text.y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={g.text.size}
+              fontWeight={TOKEN_FONT_WEIGHT}
+              fill={element.textColor}
+              style={{ fontFamily: TOKEN_FONT }}
+            >
+              {element.text}
+            </text>
+          )}
+        </g>
+        {/* Caption: outside the size-scaled group so its font stays fixed (px) and
+            doesn't grow/shrink with the token; centered just below the badge. */}
+        {element.showLabel && (
+          <text
+            data-token-label=""
+            x={element.x + element.width / 2}
+            y={element.y + element.height + labelGap + labelFont / 2}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={labelFont}
+            fontWeight={TOKEN_FONT_WEIGHT}
+            fill="#000000"
+            style={{ fontFamily: TOKEN_FONT }}
+          >
+            {element.label || TOKEN_LABEL_PLACEHOLDER}
+          </text>
+        )}
+      </>
+    )
   }
 
   if (element.type === 'figure') {
@@ -91,20 +208,26 @@ function Shape({ element }: { element: BoardElement }) {
 
   if (element.type === 'rect') {
     return (
-      <rect x={element.x} y={element.y} width={element.width} height={element.height} {...paint} strokeLinecap={cap} />
+      <g>
+        {stripesDef}
+        <rect x={element.x} y={element.y} width={element.width} height={element.height} {...paint} strokeLinecap={cap} />
+      </g>
     )
   }
 
   if (element.type === 'ellipse') {
     return (
-      <ellipse
-        cx={element.x + element.width / 2}
-        cy={element.y + element.height / 2}
-        rx={element.width / 2}
-        ry={element.height / 2}
-        {...paint}
-        strokeLinecap={cap}
-      />
+      <g>
+        {stripesDef}
+        <ellipse
+          cx={element.x + element.width / 2}
+          cy={element.y + element.height / 2}
+          rx={element.width / 2}
+          ry={element.height / 2}
+          {...paint}
+          strokeLinecap={cap}
+        />
+      </g>
     )
   }
 
@@ -132,16 +255,42 @@ function Shape({ element }: { element: BoardElement }) {
   // fat companion stroke widens the hit area; arrow tips are drawn as a marker at
   // the first/last point of an OPEN polyline.
   const hit = Math.max(element.strokeWidth * 4, 16)
-  const fill = element.closed ? element.fill : 'none'
+  const fill = element.closed ? fillPaint : 'none'
   const tips = !element.closed && (element.startTip === 'arrow' || element.endTip === 'arrow')
+
+  // Double line: two parallel strokes straddling the smooth reference path, with
+  // any arrow tips drawn as a single filled head spanning the gap. The reference
+  // path provides the (invisible) hit area.
+  if (element.double) {
+    const g = doubleLinePaths(
+      element.points,
+      element.closed,
+      element.linesOffset,
+      !element.closed && element.startTip === 'arrow',
+      !element.closed && element.endTip === 'arrow',
+    )
+    return (
+      <g>
+        <path d={curvedPathD(element.points, element.closed)} stroke="transparent" strokeWidth={hit} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={g.left} stroke={element.stroke} strokeWidth={element.strokeWidth} strokeDasharray={dash} fill="none" strokeLinecap={cap} strokeLinejoin="round" />
+        <path d={g.right} stroke={element.stroke} strokeWidth={element.strokeWidth} strokeDasharray={dash} fill="none" strokeLinecap={cap} strokeLinejoin="round" />
+        {g.arrows.map((d, i) => (
+          <path key={i} d={d} fill={element.stroke} stroke={element.stroke} strokeWidth={element.strokeWidth} strokeLinejoin="round" />
+        ))}
+      </g>
+    )
+  }
   // Curved → a single <path>; straight → <polyline>/<polygon>. Both take the same
   // paint + marker props (markers work on path and polyline alike).
-  const geom = element.curve
+  const geom = element.zigzag
+    ? { Tag: 'path' as const, attr: { d: (() => { const w = waveParams(element); return zigzagPathD(element.points, element.closed, w.offset, w.wavelength, tips && element.startTip === 'arrow', tips && element.endTip === 'arrow') })() } }
+    : element.curve
     ? { Tag: 'path' as const, attr: { d: curvedPathD(element.points, element.closed) } }
     : { Tag: (element.closed ? 'polygon' : 'polyline') as 'polygon' | 'polyline', attr: { points: element.points.map((p) => `${p[0]},${p[1]}`).join(' ') } }
   const Tag = geom.Tag
   return (
     <g>
+      {stripesDef}
       {tips && (
         <defs>
           {/* orient="auto-start-reverse" lets one marker serve both ends; sized

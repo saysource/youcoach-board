@@ -22,6 +22,8 @@ interface LibraryDrawerProps {
   /** Selected category (controlled — lives in the shell so the toolbar can jump). */
   categoryId: string | null
   onCategoryChange: (id: string) => void
+  /** Background-edit mode: restrict the category list to field categories. */
+  fieldsOnly?: boolean
 }
 
 // Right-side figures library. Header hosts the relocated AI / fill-viewport / pin
@@ -29,7 +31,7 @@ interface LibraryDrawerProps {
 // list) over the selected category's element palette: facet filters (action /
 // facing, or material type) + a thumbnail grid; clicking a thumbnail drops the
 // figure centered on the board. Categories come from the catalog (assets).
-export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen, categoryId, onCategoryChange }: LibraryDrawerProps) {
+export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, fieldsOnly = false }: LibraryDrawerProps) {
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
   const setBackground = useEditorStore((s) => s.setBackground)
@@ -121,6 +123,13 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   // Drag-to-drop: hand the descriptor to the board, which places a figure at the
   // cursor or applies a field as the background.
   function onDragStart(e: React.DragEvent, f: CatalogFigure) {
+    // Use the bare thumbnail as the drag image, so the ghost shows just the
+    // figure — without the button's hover border/background.
+    const img = e.currentTarget.querySelector('img')
+    if (img) {
+      const r = img.getBoundingClientRect()
+      e.dataTransfer.setDragImage(img, r.width / 2, r.height / 2)
+    }
     const field = fieldDescriptor(f)
     if (field) {
       e.dataTransfer.setData(FIELD_DND_MIME, JSON.stringify(field))
@@ -196,7 +205,10 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
           {listOpen ? (
             /* Full categorized list fills the panel. */
             <div className="flex-1 overflow-y-auto">
-              {catalog.groups.map((g) => (
+              {catalog.groups
+                .map((g) => (fieldsOnly ? { ...g, categories: g.categories.filter((id) => catalog.categories[id]?.kind === 'field') } : g))
+                .filter((g) => g.categories.length > 0)
+                .map((g) => (
                 <div key={g.id}>
                   <div className="sticky top-0 z-10 mt-4 bg-foreground/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm2">{g.name}</div>
                   {g.categories.map((id) => {

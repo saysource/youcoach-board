@@ -68,13 +68,15 @@ export function Swatches({
   )
 }
 
-export function Segmented<T extends string | number>({
+export function Segmented<T extends string | number | boolean>({
   items,
   value,
   onChange,
+  className,
 }: {
   items: { value: T; label: string; render: ReactNode }[]
-  value: T | undefined
+  value: T | undefined,
+  className?: string
   onChange: (v: T) => void
 }) {
   return (
@@ -90,7 +92,7 @@ export function Segmented<T extends string | number>({
             onClick={() => onChange(it.value)}
             className={cn(
               'flex size-8 items-center justify-center rounded-md border border-transparent text-foreground hover:bg-accent',
-              active && 'border-border bg-accent',
+              active && 'border-border bg-accent', className
             )}
           >
             {it.render}

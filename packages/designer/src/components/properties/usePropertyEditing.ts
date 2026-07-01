@@ -1,18 +1,18 @@
-import type { ArrowTip, BoardElement, ElementPatch, StrokeStyle } from '@youcoach-board/core'
+import type { ArrowTip, BoardElement, ElementPatch, StrokeStyle, FillStyle, TokenShape, TokenFill } from '@youcoach-board/core'
+
+/** The line renderings, surfaced as one multi-state in the Settings popover. */
+export type LineStyle = 'straight' | 'curved' | 'zigzag' | 'double'
+
+/** A token's visual identity (the "team look") — everything but its text/label.
+ *  Used by the copy-style buttons that re-style the selection from a board token. */
+export type TokenVisualStyle = { shape: TokenShape; tokenFill: TokenFill; color1: string; color2: string; textColor: string }
 import { useEditorStore } from '../../store/context'
 import { isCreationTool } from '../../store/editorStore'
-import { toolCreatesClosed } from '../../lib/draw'
+import { toolCreatesClosed, nextTokenText } from '../../lib/draw'
 
 /** Closed shapes can be filled (background color); open ones can't. */
 export function isClosed(el: BoardElement): boolean {
   return el.type === 'rect' || el.type === 'ellipse' || (el.type === 'polyline' && el.closed)
-}
-
-/** Shared value across a set, or undefined when they differ (mixed). */
-function common<T>(els: BoardElement[], get: (el: BoardElement) => T): T | undefined {
-  if (els.length === 0) return undefined
-  const first = get(els[0])
-  return els.every((e) => get(e) === first) ? first : undefined
 }
 
 // The properties panel edits one of two subjects:
@@ -27,55 +27,110 @@ export function usePropertyEditing() {
   const updateElements = useEditorStore((s) => s.updateElements)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const setToolDefaults = useEditorStore((s) => s.setToolDefaults)
+  const tokenDefaults = useEditorStore((s) => s.tokenDefaults)
+  const setTokenDefaults = useEditorStore((s) => s.setTokenDefaults)
   const els = doc.elements.filter((e) => selectedIds.includes(e.id))
   const editingSelection = els.length > 0
-  // Whether the panel currently has an editable subject (a selection, or a tool
-  // that will create a styled figure). Otherwise it shows just the header.
+  // Whether the panel currently has an editable subject: a selection, or any
+  // creation tool (incl. the Token stamp, which pre-shows its next-token defaults).
   const editable = editingSelection || isCreationTool(activeTool)
+  // The Token stamp shows its token editor (bound to the next-token defaults).
+  const tokenTool = activeTool === 'token'
+  // In creation mode (incl. a LOCKED tool that auto-selected its last creation) the
+  // bar targets the NEXT element's defaults, never the incidental selection — so
+  // e.g. picking a token preset re-styles the next token, not the last stamped one.
+  const editDefaults = !editingSelection || isCreationTool(activeTool)
 
-  if (!editingSelection) {
+  if (editDefaults) {
     // Edit the tool defaults. `hasClosed` follows the future element's shape.
     return {
-      editingSelection,
+      editingSelection: false,
       editable,
       count: 0,
       activeTool,
       els,
       hasClosed: toolCreatesClosed(activeTool),
       // Polyline/figure-specific affordances are only meaningful on a selection.
-      polyCount: 0,
-      openPolyCount: 0,
-      closableCount: 0,
-      figureCount: 0,
+      allPoly: false,
+      allOpenPoly: false,
+      allClosablePoly: false,
+      allFigure: false,
+      allRect: false,
+      allToken: tokenTool,
       values: {
         stroke: toolDefaults.stroke as string | undefined,
         strokeWidth: toolDefaults.strokeWidth as number | undefined,
         strokeStyle: toolDefaults.strokeStyle as StrokeStyle | undefined,
         fill: toolDefaults.fill as string | undefined,
+        fillStyle: toolDefaults.fillStyle as FillStyle | undefined,
         opacity: toolDefaults.opacity as number | undefined,
         curve: undefined as boolean | undefined,
+        zigzag: undefined as boolean | undefined,
+        lineStyle: undefined as LineStyle | undefined,
+        waveLength: undefined as number | undefined,
+        waveAmplitude: undefined as number | undefined,
+        linesOffset: undefined as number | undefined,
         closed: undefined as boolean | undefined,
         startTip: undefined as ArrowTip | undefined,
         endTip: undefined as ArrowTip | undefined,
+        // Token-tool defaults (the next token to be stamped); undefined otherwise.
+        tokenShape: tokenTool ? tokenDefaults.shape : undefined,
+        tokenFill: tokenTool ? tokenDefaults.tokenFill : undefined,
+        color1: tokenTool ? tokenDefaults.color1 : undefined,
+        color2: tokenTool ? tokenDefaults.color2 : undefined,
+        textColor: tokenTool ? tokenDefaults.textColor : undefined,
+        text: tokenTool ? tokenDefaults.text : undefined,
+        label: tokenTool ? tokenDefaults.label : undefined,
+        showLabel: tokenTool ? tokenDefaults.showLabel : undefined,
       },
       setStroke: (stroke: string) => setToolDefaults({ stroke }),
       setStrokeWidth: (strokeWidth: number) => setToolDefaults({ strokeWidth }),
       setStrokeStyle: (strokeStyle: StrokeStyle) => setToolDefaults({ strokeStyle }),
       setFill: (fill: string) => setToolDefaults({ fill }),
+      setFillStyle: (fillStyle: FillStyle) => setToolDefaults({ fillStyle }),
       setOpacity: (opacity: number) => setToolDefaults({ opacity }),
       setCurve: () => {},
+      setLineStyle: () => {},
+      setWaveLength: () => {},
+      setWaveAmplitude: () => {},
+      setLinesOffset: () => {},
       setClosed: () => {},
       setStartTip: () => {},
       setEndTip: () => {},
       flip: () => {},
+      // No selection: applying a preset updates the next-token defaults. Switching
+      // team also re-sequences the next number for that team (so the panel and the
+      // next stamp show the right value straight away, not the old team's).
+      applyTokenStyle: (style: TokenVisualStyle) => setTokenDefaults({ ...style, text: nextTokenText(doc.elements, style, tokenDefaults.text) }),
+      // Token tool: edit the next-token defaults directly.
+      setTokenShape: (shape: TokenShape) => setTokenDefaults({ shape }),
+      setTokenFill: (tokenFill: TokenFill) => setTokenDefaults({ tokenFill }),
+      setColor1: (color1: string) => setTokenDefaults({ color1 }),
+      setColor2: (color2: string) => setTokenDefaults({ color2 }),
+      setTextColor: (textColor: string) => setTokenDefaults({ textColor }),
+      setText: (text: string) => setTokenDefaults({ text }),
+      setLabel: (label: string) => setTokenDefaults({ label }),
+      setShowLabel: (showLabel: boolean) => setTokenDefaults({ showLabel }),
     }
   }
 
   const closedEls = els.filter(isClosed)
   const polys = els.filter((e): e is Extract<BoardElement, { type: 'polyline' }> => e.type === 'polyline')
   const openPolys = polys.filter((p) => !p.closed)
-  const closablePolys = polys.filter((p) => p.points.length >= 3)
   const figures = els.filter((e) => e.type === 'figure')
+  // "Shared" = a property is shown only when it applies to EVERY selected element.
+  const allClosed = els.every(isClosed)
+  const allPoly = polys.length === els.length
+  const allOpenPoly = allPoly && polys.every((p) => !p.closed)
+  const allClosablePoly = allPoly && polys.every((p) => p.points.length >= 3)
+  const allFigure = figures.length === els.length
+  const allRect = els.every((e) => e.type === 'rect')
+  const tokens = els.filter((e): e is Extract<BoardElement, { type: 'token' }> => e.type === 'token')
+  const allToken = tokens.length === els.length
+  // Each displayed value is the FIRST selected element's (not blanked when mixed).
+  const first = els[0]
+  const firstPoly = first.type === 'polyline' ? first : undefined
+  const firstToken = first.type === 'token' ? first : undefined
 
   function patch(targets: BoardElement[], make: (el: BoardElement) => { before: ElementPatch; after: ElementPatch }) {
     if (targets.length === 0) return
@@ -90,21 +145,37 @@ export function usePropertyEditing() {
     count: els.length,
     activeTool,
     els,
-    hasClosed: closedEls.length > 0,
-    polyCount: polys.length,
-    openPolyCount: openPolys.length,
-    closableCount: closablePolys.length,
-    figureCount: figures.length,
+    hasClosed: allClosed,
+    allPoly,
+    allOpenPoly,
+    allClosablePoly,
+    allFigure,
+    allRect,
+    allToken,
     values: {
-      stroke: common(els, (e) => e.stroke),
-      strokeWidth: common(els, (e) => e.strokeWidth),
-      strokeStyle: common(els, (e) => e.strokeStyle),
-      fill: common(closedEls, (e) => e.fill),
-      opacity: common(els, (e) => e.transform.opacity),
-      curve: common(polys, (e) => (e as Extract<BoardElement, { type: 'polyline' }>).curve),
-      closed: common(polys, (e) => (e as Extract<BoardElement, { type: 'polyline' }>).closed),
-      startTip: common(openPolys, (e) => (e as Extract<BoardElement, { type: 'polyline' }>).startTip),
-      endTip: common(openPolys, (e) => (e as Extract<BoardElement, { type: 'polyline' }>).endTip),
+      stroke: first.stroke,
+      strokeWidth: first.strokeWidth,
+      strokeStyle: first.strokeStyle,
+      fill: first.fill,
+      fillStyle: first.fillStyle,
+      opacity: first.transform.opacity,
+      curve: firstPoly?.curve,
+      zigzag: firstPoly?.zigzag,
+      lineStyle: (firstPoly ? (firstPoly.double ? 'double' : firstPoly.zigzag ? 'zigzag' : firstPoly.curve ? 'curved' : 'straight') : undefined) as LineStyle | undefined,
+      waveLength: firstPoly?.waveLength,
+      waveAmplitude: firstPoly?.waveAmplitude,
+      linesOffset: firstPoly?.linesOffset,
+      closed: firstPoly?.closed,
+      startTip: firstPoly?.startTip,
+      endTip: firstPoly?.endTip,
+      tokenShape: firstToken?.shape,
+      tokenFill: firstToken?.tokenFill,
+      color1: firstToken?.color1,
+      color2: firstToken?.color2,
+      textColor: firstToken?.textColor,
+      text: firstToken?.text,
+      label: firstToken?.label,
+      showLabel: firstToken?.showLabel,
     },
     setStroke: (stroke: string) => {
       patch(els, (e) => ({ before: { stroke: e.stroke }, after: { stroke } }))
@@ -122,14 +193,76 @@ export function usePropertyEditing() {
       patch(closedEls, (e) => ({ before: { fill: e.fill }, after: { fill } }))
       remember({ fill })
     },
+    setFillStyle: (fillStyle: FillStyle) => {
+      patch(closedEls, (e) => ({ before: { fillStyle: e.fillStyle }, after: { fillStyle } }))
+      remember({ fillStyle })
+    },
     setOpacity: (opacity: number) => {
       patch(els, (e) => ({ before: { transform: e.transform }, after: { transform: { ...e.transform, opacity } } }))
       remember({ opacity })
     },
     setCurve: (curve: boolean) => patch(polys, (e) => ({ before: { curve: (e as Extract<BoardElement, { type: 'polyline' }>).curve }, after: { curve } })),
+    // One tri-state sets both flags: zigzag rides the same smooth path as curved.
+    setLineStyle: (style: LineStyle) =>
+      patch(polys, (e) => {
+        const p = e as Extract<BoardElement, { type: 'polyline' }>
+        return {
+          before: { curve: p.curve, zigzag: p.zigzag, double: p.double },
+          after: { curve: style !== 'straight', zigzag: style === 'zigzag', double: style === 'double' },
+        }
+      }),
+    setWaveLength: (waveLength: number) =>
+      patch(polys, (e) => ({ before: { waveLength: (e as Extract<BoardElement, { type: 'polyline' }>).waveLength }, after: { waveLength } })),
+    setWaveAmplitude: (waveAmplitude: number) =>
+      patch(polys, (e) => ({ before: { waveAmplitude: (e as Extract<BoardElement, { type: 'polyline' }>).waveAmplitude }, after: { waveAmplitude } })),
+    setLinesOffset: (linesOffset: number) =>
+      patch(polys, (e) => ({ before: { linesOffset: (e as Extract<BoardElement, { type: 'polyline' }>).linesOffset }, after: { linesOffset } })),
     setClosed: (closed: boolean) => patch(polys, (e) => ({ before: { closed: (e as Extract<BoardElement, { type: 'polyline' }>).closed }, after: { closed } })),
     setStartTip: (startTip: ArrowTip) => patch(openPolys, (e) => ({ before: { startTip: (e as Extract<BoardElement, { type: 'polyline' }>).startTip }, after: { startTip } })),
     setEndTip: (endTip: ArrowTip) => patch(openPolys, (e) => ({ before: { endTip: (e as Extract<BoardElement, { type: 'polyline' }>).endTip }, after: { endTip } })),
     flip: () => patch(figures, (e) => ({ before: { mirror: (e as Extract<BoardElement, { type: 'figure' }>).mirror }, after: { mirror: !(e as Extract<BoardElement, { type: 'figure' }>).mirror } })),
+    // Editing a selected token also updates the next-token defaults (so the next
+    // stamp inherits the change) — except the label, which stays per-token.
+    setTokenShape: (shape: TokenShape) => {
+      patch(tokens, (e) => ({ before: { shape: (e as Extract<BoardElement, { type: 'token' }>).shape }, after: { shape } }))
+      setTokenDefaults({ shape })
+    },
+    setTokenFill: (tokenFill: TokenFill) => {
+      patch(tokens, (e) => ({ before: { tokenFill: (e as Extract<BoardElement, { type: 'token' }>).tokenFill }, after: { tokenFill } }))
+      setTokenDefaults({ tokenFill })
+    },
+    setColor1: (color1: string) => {
+      patch(tokens, (e) => ({ before: { color1: (e as Extract<BoardElement, { type: 'token' }>).color1 }, after: { color1 } }))
+      setTokenDefaults({ color1 })
+    },
+    setColor2: (color2: string) => {
+      patch(tokens, (e) => ({ before: { color2: (e as Extract<BoardElement, { type: 'token' }>).color2 }, after: { color2 } }))
+      setTokenDefaults({ color2 })
+    },
+    setTextColor: (textColor: string) => {
+      patch(tokens, (e) => ({ before: { textColor: (e as Extract<BoardElement, { type: 'token' }>).textColor }, after: { textColor } }))
+      setTokenDefaults({ textColor })
+    },
+    setText: (text: string) => {
+      patch(tokens, (e) => ({ before: { text: (e as Extract<BoardElement, { type: 'token' }>).text }, after: { text } }))
+      setTokenDefaults({ text })
+    },
+    // Copy/paste style: re-style the selected token(s) from a board token in ONE
+    // undoable op (text/label untouched); also remembered as the next-token default.
+    applyTokenStyle: (style: TokenVisualStyle) => {
+      patch(tokens, (e) => {
+        const t = e as Extract<BoardElement, { type: 'token' }>
+        return {
+          before: { shape: t.shape, tokenFill: t.tokenFill, color1: t.color1, color2: t.color2, textColor: t.textColor },
+          after: { ...style },
+        }
+      })
+      setTokenDefaults({ ...style })
+    },
+    setLabel: (label: string) => patch(tokens, (e) => ({ before: { label: (e as Extract<BoardElement, { type: 'token' }>).label }, after: { label } })),
+    setShowLabel: (showLabel: boolean) => {
+      patch(tokens, (e) => ({ before: { showLabel: (e as Extract<BoardElement, { type: 'token' }>).showLabel }, after: { showLabel } }))
+      setTokenDefaults({ showLabel })
+    },
   }
 }

@@ -10,14 +10,15 @@ import {
   invertOperation,
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
-import { type FigureStyle, DEFAULT_FIGURE_STYLE, figureStyleOf, isShapeTool, isLineTool } from '../lib/draw'
+import defaultFieldImage from '../assets/field0.jpg'
+import { type FigureStyle, type TokenDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline } from '../lib/draw'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
  *  elements non-interactive, selection cleared). The line/arrow tools draft a
  *  straight line on drag, or a multi-point polyline on click (see
  *  InteractiveBoard); see toolElementType for the drag-create mapping. */
 export function isCreationTool(tool: ToolId): boolean {
-  return isShapeTool(tool) || isLineTool(tool) || tool === 'draw'
+  return isShapeTool(tool) || isLineTool(tool) || tool === 'draw' || tool === 'token'
 }
 
 export interface EditorState {
@@ -25,6 +26,16 @@ export interface EditorState {
   activeTool: ToolId
   /** Currently selected element ids (multi-selection). */
   selectedIds: string[]
+  /** Id of the last token selected or created — its live style seeds the next
+   *  stamped token ("team kit" inheritance). Kept even when the selection moves
+   *  off tokens; cleared lazily if the element no longer exists. */
+  /** Style + starting text/label for the NEXT token: inherited from the last
+   *  selected/created token, and edited via the panel while the Token tool is up. */
+  tokenDefaults: TokenDefaults
+  /** Id of the most recently selected/created token. A new token copies this
+   *  token's CURRENT size (so resizes are reflected); null falls back to any
+   *  token on the board, else the field's figure scale. */
+  lastTokenId: string | null
   /** When true, a creation tool stays active after creating (the lock toggle);
    *  otherwise the editor falls back to the selection tool, per the spec. */
   keepToolActive: boolean
@@ -51,6 +62,8 @@ export interface EditorState {
   toggleKeepTool: () => void
   /** Merge changes into the next-element style defaults. */
   setToolDefaults: (patch: Partial<FigureStyle>) => void
+  /** Merge changes into the next-token defaults (style/text/label). */
+  setTokenDefaults: (patch: Partial<TokenDefaults>) => void
   /** Replace the current selection (pass [] to clear). */
   setSelection: (ids: string[]) => void
   /** Create a figure (records it on the undo stack), select it, and — unless
@@ -62,6 +75,8 @@ export interface EditorState {
   updateElements: (changes: ElementChange[]) => void
   /** Merge changes into the document background (not on the undo stack for now). */
   setBackground: (patch: Partial<BoardBackground>) => void
+  /** Restore the background to its default (one undoable op). */
+  resetBackground: () => void
   /** Clone the selected elements (offset) as one undoable op; select the clones. */
   duplicateSelected: () => void
   /** Change the selected elements' z-order (one undoable reorder op). */
@@ -69,6 +84,9 @@ export interface EditorState {
   /** Copy the (single) selected element's style; paste it onto the selection. */
   copyStyle: () => void
   pasteStyle: () => void
+  /** Convert every selected rectangle into an equivalent closed polyline (one
+   *  undoable op); non-rectangles in the selection are left untouched. */
+  convertRectsToPolylines: () => void
   /** Begin coalescing property edits (e.g. while a color picker is open):
    *  `updateElements` applies live for feedback but does NOT push to the undo
    *  stack. `commitTransaction` then records the *net* before→after as ONE op,
@@ -121,6 +139,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       doc: initialDoc,
       activeTool: 'select',
       selectedIds: [],
+      tokenDefaults: { ...DEFAULT_TOKEN_DEFAULTS },
+      lastTokenId: null,
       keepToolActive: false,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
@@ -139,13 +159,30 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       setToolDefaults: (patch) => set((s) => ({ toolDefaults: { ...s.toolDefaults, ...patch } })),
 
-      setSelection: (ids) => set({ selectedIds: ids }),
+      setTokenDefaults: (patch) => set((s) => ({ tokenDefaults: { ...s.tokenDefaults, ...patch } })),
+
+      setSelection: (ids) =>
+        set((s) => {
+          // Selecting a token makes its style (+ starting text) the next-token
+          // defaults — but not its label (names stay per-token).
+          const tok = ids.map((id) => s.doc.elements.find((e) => e.id === id)).find((e) => e?.type === 'token')
+          if (tok && tok.type === 'token') {
+            const { shape, tokenFill, color1, color2, textColor, showLabel, text } = tok
+            return { selectedIds: ids, lastTokenId: tok.id, tokenDefaults: { ...s.tokenDefaults, shape, tokenFill, color1, color2, textColor, showLabel, text } }
+          }
+          return { selectedIds: ids }
+        }),
 
       createFigure: (element) => {
         const { doc, keepToolActive, activeTool } = get()
         push({ kind: 'add', element, index: doc.elements.length })
         set((s) => ({
           selectedIds: [element.id],
+          lastTokenId: element.type === 'token' ? element.id : s.lastTokenId,
+          tokenDefaults:
+            element.type === 'token'
+              ? { ...s.tokenDefaults, shape: element.shape, tokenFill: element.tokenFill, color1: element.color1, color2: element.color2, textColor: element.textColor, showLabel: element.showLabel, text: element.text }
+              : s.tokenDefaults,
           activeTool: keepToolActive ? activeTool : 'select',
           // Remember the created element's style as the next-figure default.
           toolDefaults: figureStyleOf(element),
@@ -244,6 +281,15 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         push({ kind: 'background', before: doc.background, after: next })
       },
 
+      resetBackground: () => {
+        const { doc } = get()
+        // Clear the placement (position/scale), restore the default field image
+        // (the "transparent" swatch behavior), and recenter the logo.
+        const next = { ...doc.background, position: [0, 0] as [number, number], scale: 1, image: defaultFieldImage, logo: 'center' as const }
+        if (JSON.stringify(doc.background) === JSON.stringify(next)) return
+        push({ kind: 'background', before: doc.background, after: next })
+      },
+
       duplicateSelected: () => {
         const { doc, selectedIds } = get()
         const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
@@ -303,6 +349,22 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
             after: { stroke: st.stroke, strokeWidth: st.strokeWidth, strokeStyle: st.strokeStyle, fill: st.fill, transform: { ...e.transform, opacity: st.opacity } },
           })),
         })
+      },
+
+      convertRectsToPolylines: () => {
+        const { doc, selectedIds } = get()
+        // Each conversion is remove(rect)+add(polyline) at the SAME index, reusing
+        // the rect's id — net-neutral on indices, so original indices stay valid.
+        const rects = doc.elements
+          .map((el, index) => ({ el, index }))
+          .filter(({ el }) => selectedIds.includes(el.id) && el.type === 'rect')
+        if (rects.length === 0) return
+        const ops: Operation[] = []
+        for (const { el, index } of rects) {
+          ops.push({ kind: 'remove', element: el, index })
+          ops.push({ kind: 'add', element: rectToPolyline(el as Extract<BoardElement, { type: 'rect' }>), index })
+        }
+        push({ kind: 'transaction', label: 'to polyline', ops })
       },
 
       undo: () => {

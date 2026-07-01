@@ -1,6 +1,6 @@
 import { type ComponentType } from 'react'
 import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Hand, Pencil, Eraser } from 'lucide-react'
-import { TrapezoidIcon, ElbowLineIcon, ElbowArrowIcon } from '../icons'
+import { TrapezoidIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from '../icons'
 import type { BoardElement } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
 import type { ToolId } from '../Toolbar'
@@ -13,6 +13,8 @@ type Subject = { icon: ComponentType<{ className?: string }>; label: string }
 function polylineSubject(el: Extract<BoardElement, { type: 'polyline' }>): Subject {
   if (el.closed) return { icon: Shapes, label: 'Shape' }
   const arrow = el.startTip === 'arrow' || el.endTip === 'arrow'
+  if (el.zigzag) return { icon: LineZigzagArrowIcon, label: arrow ? 'Zigzag arrow' : 'Zigzag line' }
+  if (el.double) return { icon: LineStyleDoubleIcon, label: arrow ? 'Double arrow' : 'Double line' }
   if (el.curve) return { icon: arrow ? ElbowArrowIcon : ElbowLineIcon, label: arrow ? 'Curved arrow' : 'Curved line' }
   if (el.points.length === 2) return arrow ? { icon: MoveRight, label: 'Arrow' } : { icon: Minus, label: 'Line' }
   return { icon: Spline, label: 'Polyline' }
@@ -23,6 +25,7 @@ function elementSubject(el: BoardElement): Subject {
   if (el.type === 'ellipse') return { icon: Circle, label: 'Ellipse' }
   if (el.type === 'draw') return { icon: Pencil, label: 'Drawing' }
   if (el.type === 'figure') return { icon: Shapes, label: 'Figure' }
+  if (el.type === 'token') return { icon: TokenIcon, label: el.shape === 'jersey' ? 'Jersey' : 'Token' }
   // Diamond/pentagon/triangle/trapezoid are created as closed polylines, so they
   // surface here through polylineSubject (a closed polyline → "Shape").
   return polylineSubject(el)
@@ -43,6 +46,9 @@ const TOOL_SUBJECT: Record<ToolId, Subject> = {
   line: { icon: Minus, label: 'Line' },
   'elbow-arrow': { icon: ElbowArrowIcon, label: 'Elbow arrow' },
   'elbow-line': { icon: ElbowLineIcon, label: 'Elbow line' },
+  'zigzag-arrow': { icon: LineZigzagArrowIcon, label: 'Zigzag arrow' },
+  'double-arrow': { icon: LineStyleDoubleIcon, label: 'Double arrow' },
+  token: { icon: TokenIcon, label: 'Token' },
   draw: { icon: Pencil, label: 'Draw' },
   eraser: { icon: Eraser, label: 'Eraser' },
 }
