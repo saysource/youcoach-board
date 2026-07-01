@@ -12,6 +12,7 @@ import {
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
 import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline } from '../lib/draw'
+import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
  *  elements non-interactive, selection cleared). The line/arrow tools draft a
@@ -50,6 +51,9 @@ export interface EditorState {
   /** The last selected player's skin/kit color slots, so a newly added player
    *  inherits its look (like material color / figure size). */
   playerColors: Record<string, string>
+  /** The last few configured kits (FIFO, newest first) shown as presets in the
+   *  kit editor. */
+  kitHistory: PlayerKit[]
   /** When true, a creation tool stays active after creating (the lock toggle);
    *  otherwise the editor falls back to the selection tool, per the spec. */
   keepToolActive: boolean
@@ -86,6 +90,8 @@ export interface EditorState {
   rememberFigureScale: (figureId: string, scale: number) => void
   /** Remember the last selected player's skin/kit color slots. */
   rememberPlayerColors: (colors: Record<string, string>) => void
+  /** Push a configured kit to the front of the FIFO history (deduped). */
+  pushKit: (kit: PlayerKit) => void
   /** Replace the current selection (pass [] to clear). */
   setSelection: (ids: string[]) => void
   /** Create a figure (records it on the undo stack), select it, and — unless
@@ -167,6 +173,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       materialColors: {},
       figureScales: {},
       playerColors: {},
+      kitHistory: [],
       keepToolActive: false,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
@@ -197,6 +204,13 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       rememberPlayerColors: (colors) =>
         set((s) => (JSON.stringify(s.playerColors) === JSON.stringify(colors) ? s : { playerColors: colors })),
+
+      pushKit: (kit) =>
+        set((s) => {
+          const rest = s.kitHistory.filter((k) => kitKey(k) !== kitKey(kit))
+          if (rest.length === s.kitHistory.length && s.kitHistory[0] && kitKey(s.kitHistory[0]) === kitKey(kit)) return s
+          return { kitHistory: [kit, ...rest].slice(0, KIT_HISTORY_SIZE) }
+        }),
 
       setSelection: (ids) =>
         set((s) => {

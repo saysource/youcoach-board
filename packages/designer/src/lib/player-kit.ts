@@ -25,6 +25,14 @@ export const PLAYER_SLOTS = [SKIN_SLOT, HAIR_SLOT, JERSEY_SLOT, SHORTS_SLOT, VST
  *  style icons (a jersey shirt, white base + gray stripes). */
 export type KitStyle = 'solid' | 'vstripes' | 'hstripes' | 'checker'
 
+/** A player's kit: jersey/shorts/socks/stripe colors + the stripe style. */
+export type PlayerKit = { jersey: string; shorts: string; socks: string; stripe: string; style: KitStyle }
+/** Number of recent kits kept in the FIFO history grid. */
+export const KIT_HISTORY_SIZE = 4
+/** An "empty" history slot renders all-black. */
+export const EMPTY_KIT: PlayerKit = { jersey: '#000000', shorts: '#000000', socks: '#000000', stripe: '#000000', style: 'solid' }
+export const kitKey = (k: PlayerKit) => `${k.style}|${k.jersey}|${k.stripe}|${k.shorts}|${k.socks}`
+
 // ── Skin editor palettes ─────────────────────────────────────────────────────
 export const DEFAULT_SKIN = '#f1c39c'
 export const DEFAULT_HAIR = '#8f3c00'

@@ -10,10 +10,7 @@ import { useEditorStore } from '../../store/context'
 import { isCreationTool } from '../../store/editorStore'
 import { toolCreatesClosed, nextTokenText, measureTextBox } from '../../lib/draw'
 import { useAssets } from '../../lib/assets'
-import { playerSvgs, SKIN_SLOT, HAIR_SLOT, JERSEY_SLOT, SHORTS_SLOT, VSTRIPE_SLOT, HSTRIPE_SLOT, SOCKS_SLOT, DEFAULT_SKIN, DEFAULT_HAIR, stripeFills, type KitStyle } from '../../lib/player-kit'
-
-/** A player's kit: jersey/shorts/socks/stripe colors + the stripe style. */
-export type PlayerKit = { jersey: string; shorts: string; socks: string; stripe: string; style: KitStyle }
+import { playerSvgs, SKIN_SLOT, HAIR_SLOT, JERSEY_SLOT, SHORTS_SLOT, VSTRIPE_SLOT, HSTRIPE_SLOT, SOCKS_SLOT, DEFAULT_SKIN, DEFAULT_HAIR, stripeFills, type KitStyle, type PlayerKit } from '../../lib/player-kit'
 
 /** Closed shapes can be filled (background color); open ones can't. */
 export function isClosed(el: BoardElement): boolean {

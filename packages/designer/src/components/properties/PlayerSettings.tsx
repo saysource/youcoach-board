@@ -1,13 +1,23 @@
 import { useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
+import { ElementView, IDENTITY_TRANSFORM } from '@youcoach-board/core'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { cn } from '../../lib/cn'
+import { CHECKER_IMAGE } from '../../lib/checker'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
+import { useEditorStore } from '../../store/context'
 import { usePropertyEditing } from './usePropertyEditing'
-import { facePreview, SKIN_PRESETS, HAIR_COLORS, SKIN_COLORS, DEFAULT_SKIN, DEFAULT_HAIR } from '../../lib/player-kit'
+import { ColorPickerWidget } from './ColorPickerWidget'
+import { facePreview, kitPreview, SKIN_PRESETS, HAIR_COLORS, SKIN_COLORS, DEFAULT_SKIN, DEFAULT_HAIR, EMPTY_KIT, KIT_HISTORY_SIZE, type KitStyle, type PlayerKit } from '../../lib/player-kit'
+
+// Keep a nested editor/color popover from closing this popover.
+const keepOpenOnNested = (e: { detail: { originalEvent: Event }; preventDefault: () => void }) => {
+  const t = (e.detail.originalEvent.target as HTMLElement | null) ?? null
+  if (t?.closest('[data-radix-popper-content-wrapper]')) e.preventDefault()
+}
 
 // A recolored face.svg (skin + hair) on a neutral circle — the skin preview.
 function FaceAvatar({ skin, hair, size = 40, active }: { skin: string; hair: string; size?: number; active?: boolean }) {
@@ -124,8 +134,153 @@ function OpacityRow() {
   )
 }
 
-// The player settings popover: skin (and later kit) previews side by side, with
-// the opacity slider beneath.
+// ── Kit editor ───────────────────────────────────────────────────────────────
+
+// A recolored kit.svg (body silhouette + colored kit).
+function KitFigure({ kit, size = 40 }: { kit: PlayerKit; size?: number }) {
+  const pv = kitPreview(kit)
+  return (
+    <span className="flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted border border-border" style={{ width: size, height: size }}>
+      {pv && <svg style={{ width: size * 0.9, height: size * 0.9 }} viewBox={pv.viewBox} preserveAspectRatio="xMidYMid meet" dangerouslySetInnerHTML={{ __html: pv.inner }} aria-hidden />}
+    </span>
+  )
+}
+
+// A jersey-style icon: the token jersey shirt (white base, mid-gray stripes) with
+// the fill style matching the kit style (KitStyle === the token fill names).
+function KitStyleIcon({ style, size = 28 }: { style: KitStyle; size?: number }) {
+  const el = {
+    id: 'kit-style',
+    type: 'token' as const,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    shape: 'jersey' as const,
+    tokenFill: style,
+    color1: '#ffffff',
+    color2: '#888888',
+    textColor: '#111111',
+    text: '',
+    label: '',
+    showLabel: false,
+    transform: IDENTITY_TRANSFORM,
+    stroke: '#111111',
+    strokeWidth: 3,
+    strokeStyle: 'solid' as const,
+    fill: 'transparent',
+    fillStyle: 'solid' as const,
+  }
+  return (
+    <svg width={size} height={size} viewBox="-4 -4 118 118" aria-hidden>
+      <ElementView element={el} />
+    </svg>
+  )
+}
+
+// A solid color swatch → opens the stroke-like color widget (no opacity).
+function KitColorButton({ color, label, onChange }: { color: string; label: string; onChange: (c: string) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label={label} className="size-6 shrink-0 overflow-hidden rounded-md border border-border/70">
+          <span className="block size-full" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#fff' }}>
+            <span className="block size-full" style={{ background: color }} />
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="right" align="start" className="w-56" onInteractOutside={keepOpenOnNested}>
+        <ColorPickerWidget value={color} onChange={onChange} showOpacity={false} />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+const KIT_STYLES: KitStyle[] = ['solid', 'vstripes', 'hstripes', 'checker']
+
+// The kit editor: big preview | controls (style + colors) | recent-kits grid.
+function KitEditor() {
+  const p = usePropertyEditing()
+  const kit = p.values.kit ?? EMPTY_KIT
+  const history = useEditorStore((s) => s.kitHistory)
+  const set = (patch: Partial<PlayerKit>) => p.setKit({ ...kit, ...patch })
+  return (
+    <div className="flex items-start gap-3">
+      <KitFigure kit={kit} size={130} />
+      <div className="grid gap-2">
+        <div className="flex gap-1">
+          {KIT_STYLES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              aria-label={s}
+              aria-pressed={kit.style === s}
+              onClick={() => set({ style: s })}
+              className={cn('flex items-center justify-center rounded-md border p-0.5', kit.style === s ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-accent')}
+            >
+              <KitStyleIcon style={s} />
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <KitColorButton color={kit.jersey} label="Jersey" onChange={(c) => set({ jersey: c })} />
+          <span className="text-xs text-muted-foreground">Jersey</span>
+        </div>
+        {kit.style !== 'solid' && (
+          <div className="flex items-center gap-2">
+            <KitColorButton color={kit.stripe} label="Stripes" onChange={(c) => set({ stripe: c })} />
+            <span className="text-xs text-muted-foreground">Stripes</span>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <KitColorButton color={kit.shorts} label="Shorts" onChange={(c) => set({ shorts: c })} />
+          <span className="text-xs text-muted-foreground">Shorts</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <KitColorButton color={kit.socks} label="Socks" onChange={(c) => set({ socks: c })} />
+          <span className="text-xs text-muted-foreground">Socks</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-1 self-start">
+        {Array.from({ length: KIT_HISTORY_SIZE }).map((_, i) => {
+          const k = history[i]
+          return (
+            <button key={i} type="button" aria-label="Recent kit" disabled={!k} onClick={() => k && p.setKit(k)} className="rounded-md disabled:cursor-default">
+              <KitFigure kit={k ?? EMPTY_KIT} size={44} />
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// The kit preview button → opens the kit editor (pushed to history on close).
+function KitButton() {
+  const p = usePropertyEditing()
+  const pushKit = useEditorStore((s) => s.pushKit)
+  const kit = p.values.kit ?? EMPTY_KIT
+  return (
+    <Popover onOpenChange={(o) => { if (!o && p.values.kit) pushKit(p.values.kit) }}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button size="icon" aria-label="Kit" className="p-0">
+              <KitFigure kit={kit} size={48} />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Kit</TooltipContent>
+      </Tooltip>
+      <PopoverContent side="bottom" align="start" sideOffset={8} className="w-auto" onInteractOutside={keepOpenOnNested}>
+        <KitEditor />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// The player settings popover: skin + kit previews side by side, with the opacity
+// slider beneath.
 export function PlayerSettingsButton({ side }: { side: 'right' | 'top' }) {
   return (
     <Popover>
@@ -139,19 +294,11 @@ export function PlayerSettingsButton({ side }: { side: 'right' | 'top' }) {
         </TooltipTrigger>
         <TooltipContent>Player</TooltipContent>
       </Tooltip>
-      <PopoverContent
-        side={side}
-        align="start"
-        className="w-52"
-        // Keep open while a nested editor popover is in use.
-        onInteractOutside={(e) => {
-          const t = (e.detail.originalEvent.target as HTMLElement | null) ?? null
-          if (t?.closest('[data-radix-popper-content-wrapper]')) e.preventDefault()
-        }}
-      >
+      <PopoverContent side={side} align="start" className="w-auto" onInteractOutside={keepOpenOnNested}>
         <div className="grid gap-3">
           <div className="flex items-center gap-2">
             <SkinButton />
+            <KitButton />
           </div>
           <OpacityRow />
         </div>
