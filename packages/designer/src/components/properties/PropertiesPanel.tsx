@@ -37,6 +37,7 @@ import { ClosePathIcon, LineStylePlainIcon, LineStyleCurvedIcon, LineStyleZigzag
 import { PropertyControls, Segmented } from './PropertyControls'
 import { ColorPickerWidget } from './ColorPickerWidget'
 import { usePropertyEditing, type TokenVisualStyle } from './usePropertyEditing'
+import { PlayerSettingsButton } from './PlayerSettings'
 import { SubjectHeader } from './SubjectHeader'
 import { BackgroundSettings, BackgroundColorPicker } from './BackgroundSettings'
 
@@ -126,6 +127,9 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
             <ColorButton kind="fill" label="Background" value={p.values.bgColor} onChange={p.setBgColor} side="right" />
             <TextSettingsButton side="right" />
           </>
+        ) : p.allPlayer ? (
+          // Player: skin/kit editors + opacity in one settings popover.
+          <PlayerSettingsButton side="right" />
         ) : p.allMaterialColor ? (
           // Material: a single custom color (yc-color-1), no opacity, + opacity settings.
           <>

@@ -10,6 +10,7 @@ import { useElementSize } from '../lib/use-element-size'
 import type { Breakpoint } from '../lib/use-breakpoint'
 import { cn } from '../lib/cn'
 import { useAssets, figureColorInfo, figureIndex, figureBaseSize } from '../lib/assets'
+import { playerSvgs, PLAYER_SLOTS } from '../lib/player-kit'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { isCreationTool } from '../store/editorStore'
 import { Toolbar } from './Toolbar'
@@ -99,6 +100,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const figureScale = useEditorStore((s) => s.doc.background.figureScale)
   const rememberMaterialColor = useEditorStore((s) => s.rememberMaterialColor)
   const rememberFigureScale = useEditorStore((s) => s.rememberFigureScale)
+  const rememberPlayerColors = useEditorStore((s) => s.rememberPlayerColors)
   useEffect(() => {
     const remember = () => {
       if (selectedIds.length !== 1) return
@@ -114,9 +116,15 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
         const base = figureBaseSize(meta, figureScale)
         if (base.w) rememberFigureScale(el.figureId, el.width / base.w)
       }
+      // A selected player's skin/kit slots become the next player's defaults.
+      if (playerSvgs(catalog).has(el.figureId) && el.colors) {
+        const kit: Record<string, string> = {}
+        for (const slot of PLAYER_SLOTS) if (el.colors[slot]) kit[slot] = el.colors[slot]
+        if (Object.keys(kit).length) rememberPlayerColors(kit)
+      }
     }
     remember()
-  }, [selectedIds, elements, catalog, figureScale, rememberMaterialColor, rememberFigureScale])
+  }, [selectedIds, elements, catalog, figureScale, rememberMaterialColor, rememberFigureScale, rememberPlayerColors])
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.pointer >= 0)

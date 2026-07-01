@@ -53,6 +53,8 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const figureScales = useEditorStore((s) => s.figureScales)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const elements = useEditorStore((s) => s.doc.elements)
+  // Last player's skin/kit slots, inherited by newly added players.
+  const playerColors = useEditorStore((s) => s.playerColors)
 
   const [listOpen, setListOpen] = useState(false)
   const [facing, setFacing] = useState<string | null>(null)
@@ -104,6 +106,10 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
     if (f.colors?.length && f.actions?.length) {
       const cached = materialColors[f.actions[0]]
       if (cached) colors = { ...colors, [f.colors[0]]: cached }
+    }
+    // Players inherit the last player's skin/kit slots.
+    if (categoryId === 'players' && Object.keys(playerColors).length) {
+      colors = { ...colors, ...playerColors }
     }
     // Inherit the size (as a scale over the default): first this exact figure's
     // remembered scale; else a reference figure of the same category on the board —

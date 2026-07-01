@@ -689,13 +689,128 @@ When a material is selected, in the properties toolbar show a single color selec
 
 Not all the materials use this custom color, we may consider to mark in our catalog which elements actually make use of it. This would involve in look for the presence of yc-color-1 in the svg withing the @packages/designer/public/images/optimized/materials path (a grep command could be enough).
 
-## Player skin editor
+## Player settings
 
-Players can be customized by changing the appearance of kit and skin/hair. This taks is focusing on skin/hair editor.
+Players can be customized by changing the appearance of kit and skin/hair.
+
+
+In the toolbar, we show for player elements only the settings icon, which will contain:
+
+The skin preview icon, which, on click will show the skin editor.
+The kit preview icon, which on click will show the kit editor.
+
+Both are shown next to each other.
+
+Under them, we show the opacity slider.
+
+### Skin editor
 
 I prepared an SVG that represents a face at @assets/face.svg
 This SVG contains 3 path, one is used for the main figure, the other two have id "skin" and "hair".
 By setting the fill of skin and hair paths, we can effectivaly dynamically change the color of skin and hair.
 
-In the toolbar we show an icon of the properly coloured face. On click we open a widget that presents to the user a set of typical races. A "more options" button replace the basic presets selecor with a slightly more advanced editor where the user can pick a specific color for hair and skin: this advanced editor contains 3 sections: a set of proposed colors for the hairs, then the preview by using our face.svg and another series of colors for the skin.
+We will store two values;
+- skin color
+- hair color
+
+The editor is shown by pressing a button that shows the preview icon of the hair/skin coloured with the current element hair and skin colors.
+
+By pressing the button, in a dropdown we show the actual editor, which presents two mode: simple and advanced.
+
+The simple mode shows a set of preset skin/hair combination, which include the most common races or skin/hair combinations. This is a set of 8 predefined (skin, hair) values.
+
+A "More options/less options" small button/link allows to swithch between simple and advanced mode.
+In the advanced mode the user can pick a specific color for hair and skin: this advanced editor contains 3 sections: 
+- a set of proposed colors for the hairs
+- the preview by using our face.svg
+- a set of proposed colors for the skin.
+
+There is no way for the user to pick a custom color.
+
+
+### Kit editor
+
+The kit editor allows to modify the player kit. Just like for the skin, we present a button/icon with the preview. The preview will be based on @assets/kit.svg which is a complex SVG with paths tagged with classes:
+
+base_tshirt
+shorts
+h_stripe
+v_stripe
+
+which control the colors that make up the kit.
+
+By clicking the button, we show the editor itself which is made of 3 columns:
+A big preview, a controls column where we present:
+- style of jersey (solid / vertical stripes / horizontal stripes / chekerboard)
+- the for colors for:
+  - Jersey
+  - Stripes (if the style is no solid)
+  - Shorts
+  - Socks
+
+In the third column we show a grid with the 4 last configured kits.
+We don't forget the created kits, when the kit value is committed, we just push the designed kit to this 4-elements list with a FIFO logic.
+Empty slots simply show all colors as black.
+By clicking a preset, we load the values in the editor, like if the user whould have picked them by himself, without closing the editor.
+
+For the jersey style buttons/options, use the same shirt we used for the tokens: @assets/token_tshirt.svg without the text, using white and mid gray for the stripes.
+
+Individual colors should be solid, on color click we let the user pick the color with our stroke-like color widget.
+
+
 See attached pictures for a better understanding of the UI.
+
+
+
+## Keyboard shortcuts
+
+We want to implement a set of keyboard shortcuts when working with the designer.
+
+Tools
+
+V / H	Select tool / Hand
+T	Text
+S	Shapes (open the shapes menu)
+R	Rectangle
+O	Oval
+L	line / arrow (open the arrows menu)
+A line / arrow 
+P	Players (open the players drawer)
+M Materials (open the materials drawer)
+B Ball
+D Pen
+T Token
+E	Eraser
+⌘ + Z	Undo
+⌘ + shift + Z	Redo
+
+General
+⌘ + C	⌘ + V	Copy / Paste
+⌘ + X	Cut
+⌘ + D	Duplicate
+⌥ + drag	Duplicate
+⌘ + click	Select multiple objects
+⌘ + ⌥ + shift + ← → ↑ ↓	Select closest object in a direction
+⌘ + A	Select all
+esc	Deselect, quit edit, switch to cursor
+backspace	Delete
+fn + ↑	Send to front
+fn + ↓	Send to back
+⌘ + ⌥ + shift + plus / minus	Increase / decrease object size
+
+Navigation
+← → ↑ ↓	Move objects / Canvas
+⌘ +	+	Zoom in
+⌘ –	–	Zoom out
+⌘ + 0	Zoom to 100%
+⌥ + 1	Zoom to fit
+⌥ + 2	Zoom to selected object
+space + drag	Move canvas
+G	Toggle grid
+Tab	Move focus to next object
+shift + tab	Move focus to previous object
+⌘ + ← → ↑ ↓	Select closest object in a direction
+
+Text
+⌘ + B	Bold
+

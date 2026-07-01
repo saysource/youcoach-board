@@ -47,6 +47,9 @@ export interface EditorState {
    *  figureId, so re-adding that figure reuses the size. Updated when a figure is
    *  selected or resized. */
   figureScales: Record<string, number>
+  /** The last selected player's skin/kit color slots, so a newly added player
+   *  inherits its look (like material color / figure size). */
+  playerColors: Record<string, string>
   /** When true, a creation tool stays active after creating (the lock toggle);
    *  otherwise the editor falls back to the selection tool, per the spec. */
   keepToolActive: boolean
@@ -81,6 +84,8 @@ export interface EditorState {
   rememberMaterialColor: (action: string, color: string) => void
   /** Remember the last size (scale multiplier) used for a figure. */
   rememberFigureScale: (figureId: string, scale: number) => void
+  /** Remember the last selected player's skin/kit color slots. */
+  rememberPlayerColors: (colors: Record<string, string>) => void
   /** Replace the current selection (pass [] to clear). */
   setSelection: (ids: string[]) => void
   /** Create a figure (records it on the undo stack), select it, and — unless
@@ -161,6 +166,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       lastTokenId: null,
       materialColors: {},
       figureScales: {},
+      playerColors: {},
       keepToolActive: false,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
@@ -188,6 +194,9 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       rememberFigureScale: (figureId, scale) =>
         set((s) => (s.figureScales[figureId] === scale ? s : { figureScales: { ...s.figureScales, [figureId]: scale } })),
+
+      rememberPlayerColors: (colors) =>
+        set((s) => (JSON.stringify(s.playerColors) === JSON.stringify(colors) ? s : { playerColors: colors })),
 
       setSelection: (ids) =>
         set((s) => {

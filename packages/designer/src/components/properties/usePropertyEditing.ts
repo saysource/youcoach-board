@@ -10,6 +10,10 @@ import { useEditorStore } from '../../store/context'
 import { isCreationTool } from '../../store/editorStore'
 import { toolCreatesClosed, nextTokenText, measureTextBox } from '../../lib/draw'
 import { useAssets } from '../../lib/assets'
+import { playerSvgs, SKIN_SLOT, HAIR_SLOT, JERSEY_SLOT, SHORTS_SLOT, VSTRIPE_SLOT, HSTRIPE_SLOT, SOCKS_SLOT, DEFAULT_SKIN, DEFAULT_HAIR, stripeFills, type KitStyle } from '../../lib/player-kit'
+
+/** A player's kit: jersey/shorts/socks/stripe colors + the stripe style. */
+export type PlayerKit = { jersey: string; shorts: string; socks: string; stripe: string; style: KitStyle }
 
 /** Closed shapes can be filled (background color); open ones can't. */
 export function isClosed(el: BoardElement): boolean {
@@ -75,6 +79,7 @@ export function usePropertyEditing() {
       allToken: tokenTool,
       allText: textTool,
       allMaterialColor: false,
+      allPlayer: false,
       values: {
         stroke: toolDefaults.stroke as string | undefined,
         strokeWidth: toolDefaults.strokeWidth as number | undefined,
@@ -106,6 +111,10 @@ export function usePropertyEditing() {
         align: textTool ? textDefaults.align : undefined,
         bold: textTool ? textDefaults.bold : undefined,
         materialColor: undefined as string | undefined,
+        // Player skin/kit (selection-only).
+        skin: undefined as string | undefined,
+        hair: undefined as string | undefined,
+        kit: undefined as PlayerKit | undefined,
       },
       setStroke: (stroke: string) => setToolDefaults({ stroke }),
       setStrokeWidth: (strokeWidth: number) => setToolDefaults({ strokeWidth }),
@@ -142,6 +151,10 @@ export function usePropertyEditing() {
       setAlign: (align: TextAlign) => setTextDefaults({ align }),
       setBold: (bold: boolean) => setTextDefaults({ bold }),
       setMaterialColor: () => {},
+      setSkin: () => {},
+      setHair: () => {},
+      setSkinHair: () => {},
+      setKit: () => {},
     }
   }
 
@@ -171,6 +184,23 @@ export function usePropertyEditing() {
   // The slot the single color selector edits (the first custom color of the first figure).
   const materialSlot = firstFigure ? figureColorSlots.get(firstFigure.figureId)?.[0] : undefined
 
+  // Players (players category only) get the skin/kit editors.
+  const playerSet = playerSvgs(catalog)
+  const allPlayer = els.length > 0 && els.every((e) => e.type === 'figure' && playerSet.has(e.figureId))
+  const pc = firstFigure?.colors ?? {}
+  const kitJersey = pc[JERSEY_SLOT] ?? '#ff0000'
+  const kitV = pc[VSTRIPE_SLOT]
+  const kitH = pc[HSTRIPE_SLOT]
+  const kitStyle: KitStyle =
+    kitV && kitH && kitV !== kitJersey && kitH !== kitJersey ? 'checker' : kitV && kitV !== kitJersey ? 'vstripes' : kitH && kitH !== kitJersey ? 'hstripes' : 'solid'
+  const playerKit: PlayerKit = {
+    jersey: kitJersey,
+    shorts: pc[SHORTS_SLOT] ?? '#1e1e1e',
+    socks: pc[SOCKS_SLOT] ?? '#ff0000',
+    stripe: kitV && kitV !== kitJersey ? kitV : kitH && kitH !== kitJersey ? kitH : '#1e1e1e',
+    style: kitStyle,
+  }
+
   function patch(targets: BoardElement[], make: (el: BoardElement) => { before: ElementPatch; after: ElementPatch }) {
     if (targets.length === 0) return
     updateElements(targets.map((el) => ({ id: el.id, ...make(el) })))
@@ -193,6 +223,7 @@ export function usePropertyEditing() {
     allToken,
     allText,
     allMaterialColor,
+    allPlayer,
     values: {
       stroke: first.stroke,
       strokeWidth: first.strokeWidth,
@@ -224,6 +255,10 @@ export function usePropertyEditing() {
       bold: firstText?.bold,
       // A material's current custom color (its first slot; falls back to the default).
       materialColor: materialSlot ? (firstFigure!.colors?.[materialSlot] ?? defaultColorFor(materialSlot)) : undefined,
+      // Player skin/hair + kit (from the first selected player).
+      skin: allPlayer ? (pc[SKIN_SLOT] ?? DEFAULT_SKIN) : undefined,
+      hair: allPlayer ? (pc[HAIR_SLOT] ?? DEFAULT_HAIR) : undefined,
+      kit: allPlayer ? playerKit : undefined,
     },
     setStroke: (stroke: string) => {
       patch(els, (e) => ({ before: { stroke: e.stroke }, after: { stroke } }))
@@ -276,6 +311,21 @@ export function usePropertyEditing() {
         const slot = figureColorSlots.get(f.figureId)?.[0]
         if (!slot) return { before: {}, after: {} }
         return { before: { colors: f.colors }, after: { colors: { ...f.colors, [slot]: color } } }
+      }),
+    // Player skin/kit: patch the relevant color slots on the selected player(s).
+    // (The remember-effect re-captures them, so new players inherit the change.)
+    setSkin: (skin: string) => patch(figures, (e) => ({ before: { colors: (e as Extract<BoardElement, { type: 'figure' }>).colors }, after: { colors: { ...(e as Extract<BoardElement, { type: 'figure' }>).colors, [SKIN_SLOT]: skin } } })),
+    setHair: (hair: string) => patch(figures, (e) => ({ before: { colors: (e as Extract<BoardElement, { type: 'figure' }>).colors }, after: { colors: { ...(e as Extract<BoardElement, { type: 'figure' }>).colors, [HAIR_SLOT]: hair } } })),
+    setSkinHair: (skin: string, hair: string) =>
+      patch(figures, (e) => ({ before: { colors: (e as Extract<BoardElement, { type: 'figure' }>).colors }, after: { colors: { ...(e as Extract<BoardElement, { type: 'figure' }>).colors, [SKIN_SLOT]: skin, [HAIR_SLOT]: hair } } })),
+    setKit: (kit: PlayerKit) =>
+      patch(figures, (e) => {
+        const f = e as Extract<BoardElement, { type: 'figure' }>
+        const { v, h } = stripeFills(kit.style, kit.jersey, kit.stripe)
+        return {
+          before: { colors: f.colors },
+          after: { colors: { ...f.colors, [JERSEY_SLOT]: kit.jersey, [SHORTS_SLOT]: kit.shorts, [SOCKS_SLOT]: kit.socks, [VSTRIPE_SLOT]: v, [HSTRIPE_SLOT]: h } },
+        }
       }),
     // Editing a selected token also updates the next-token defaults (so the next
     // stamp inherits the change) — except the label, which stays per-token.
