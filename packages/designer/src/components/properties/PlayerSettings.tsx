@@ -1,26 +1,37 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import { ElementView, IDENTITY_TRANSFORM } from '@youcoach-board/core'
 import { Button } from '../ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { cn } from '../../lib/cn'
 import { CHECKER_IMAGE } from '../../lib/checker'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
+import { usePortalContainer } from '../../lib/board-root'
 import { useEditorStore } from '../../store/context'
 import { usePropertyEditing } from './usePropertyEditing'
 import { ColorPickerWidget } from './ColorPickerWidget'
 import { facePreview, kitPreview, SKIN_PRESETS, HAIR_COLORS, SKIN_COLORS, DEFAULT_SKIN, DEFAULT_HAIR, EMPTY_KIT, KIT_HISTORY_SIZE, type KitStyle, type PlayerKit } from '../../lib/player-kit'
 
-// Keep a nested editor/color popover from closing this popover.
+// Keep a nested editor/color popover (or the backdrop) from closing this popover.
 const keepOpenOnNested = (e: { detail: { originalEvent: Event }; preventDefault: () => void }) => {
   const t = (e.detail.originalEvent.target as HTMLElement | null) ?? null
-  if (t?.closest('[data-radix-popper-content-wrapper]')) e.preventDefault()
+  if (t?.closest('[data-radix-popper-content-wrapper]') || t?.closest('[data-player-backdrop]')) e.preventDefault()
+}
+
+// A fully-transparent full-viewport layer under the open editor: any click on it
+// closes the editor and is swallowed (so it never reaches the canvas and blurs the
+// selection). Portaled next to the popovers so it sits above the board.
+function Backdrop({ onClose }: { onClose: () => void }) {
+  const container = usePortalContainer()
+  const node = <div data-player-backdrop className="fixed inset-0 z-40" onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onClose() }} />
+  return container ? createPortal(node, container) : node
 }
 
 // A recolored face.svg (skin + hair) on a neutral circle — the skin preview.
-function FaceAvatar({ skin, hair, size = 40, active }: { skin: string; hair: string; size?: number; active?: boolean }) {
+function FaceAvatar({ skin, hair, size = 60, active }: { skin: string; hair: string; size?: number; active?: boolean }) {
   const pv = facePreview(skin, hair)
   return (
     <span
@@ -59,7 +70,7 @@ function SkinEditor() {
         <div className="grid grid-cols-4 gap-2">
           {SKIN_PRESETS.map((preset) => (
             <button key={`${preset.skin}-${preset.hair}`} type="button" aria-label="Skin preset" onClick={() => p.setSkinHair(preset.skin, preset.hair)} className="flex items-center justify-center">
-              <FaceAvatar skin={preset.skin} hair={preset.hair} size={44} active={preset.skin === skin && preset.hair === hair} />
+              <FaceAvatar skin={preset.skin} hair={preset.hair} size={60} active={preset.skin === skin && preset.hair === hair} />
             </button>
           ))}
         </div>
@@ -87,27 +98,27 @@ function SkinEditor() {
   )
 }
 
-// The skin preview button → opens the skin editor.
-function SkinButton() {
+// The skin preview button → opens the skin editor. Controlled by the parent so
+// skin and kit are mutually exclusive; closing happens via trigger or backdrop
+// (never Radix's own outside-click), so switching editors is a single click.
+function SkinButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const p = usePropertyEditing()
   const skin = p.values.skin ?? DEFAULT_SKIN
   const hair = p.values.hair ?? DEFAULT_HAIR
   return (
-    <Popover>
+    <Popover open={open}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button size="icon" aria-label="Skin & hair" className="p-0">
-              <FaceAvatar skin={skin} hair={hair} size={48} />
+          <PopoverAnchor asChild>
+            <Button size="icon" aria-label="Skin & hair" className="p-0 size-18" onClick={onToggle}>
+              <FaceAvatar skin={skin} hair={hair} size={60} />
             </Button>
-          </PopoverTrigger>
+          </PopoverAnchor>
         </TooltipTrigger>
         <TooltipContent>Skin &amp; hair</TooltipContent>
       </Tooltip>
-      {/* Open BELOW the settings popover (not over the canvas), so the settings
-          popover stays visible as a click target to dismiss this — clicking the
-          canvas would blur the selection. */}
-      <PopoverContent side="bottom" align="start" sideOffset={8} className="w-auto">
+      {/* Open BELOW the settings popover (not over the canvas). */}
+      <PopoverContent side="bottom" align="start" sideOffset={8} className="w-auto" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
         <SkinEditor />
       </PopoverContent>
     </Popover>
@@ -140,7 +151,7 @@ function OpacityRow() {
 function KitFigure({ kit, size = 40 }: { kit: PlayerKit; size?: number }) {
   const pv = kitPreview(kit)
   return (
-    <span className="flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted border border-border" style={{ width: size, height: size }}>
+    <span className="flex shrink-0 items-center justify-center overflow-hidden bg-muted border border-border rounded-full" style={{ width: size, height: size }}>
       {pv && <svg style={{ width: size * 0.9, height: size * 0.9 }} viewBox={pv.viewBox} preserveAspectRatio="xMidYMid meet" dangerouslySetInnerHTML={{ __html: pv.inner }} aria-hidden />}
     </span>
   )
@@ -179,9 +190,10 @@ function KitStyleIcon({ style, size = 28 }: { style: KitStyle; size?: number }) 
 }
 
 // A solid color swatch → opens the stroke-like color widget (no opacity).
-function KitColorButton({ color, label, onChange }: { color: string; label: string; onChange: (c: string) => void }) {
+// Controlled by the kit editor so only one color picker is open at a time.
+function KitColorButton({ color, label, onChange, open, onOpenChange }: { color: string; label: string; onChange: (c: string) => void; open: boolean; onOpenChange: (o: boolean) => void }) {
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <button type="button" aria-label={label} className="size-6 shrink-0 overflow-hidden rounded-md border border-border/70">
           <span className="block size-full" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#fff' }}>
@@ -204,6 +216,12 @@ function KitEditor() {
   const kit = p.values.kit ?? EMPTY_KIT
   const history = useEditorStore((s) => s.kitHistory)
   const set = (patch: Partial<PlayerKit>) => p.setKit({ ...kit, ...patch })
+  // Only one color picker open at a time.
+  const [openColor, setOpenColor] = useState<'jersey' | 'stripe' | 'shorts' | 'socks' | null>(null)
+  const colorProps = (which: 'jersey' | 'stripe' | 'shorts' | 'socks') => ({
+    open: openColor === which,
+    onOpenChange: (o: boolean) => setOpenColor(o ? which : null),
+  })
   return (
     <div className="flex items-start gap-3">
       <KitFigure kit={kit} size={130} />
@@ -223,21 +241,21 @@ function KitEditor() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <KitColorButton color={kit.jersey} label="Jersey" onChange={(c) => set({ jersey: c })} />
+          <KitColorButton color={kit.jersey} label="Jersey" onChange={(c) => set({ jersey: c })} {...colorProps('jersey')} />
           <span className="text-xs text-muted-foreground">Jersey</span>
         </div>
         {kit.style !== 'solid' && (
           <div className="flex items-center gap-2">
-            <KitColorButton color={kit.stripe} label="Stripes" onChange={(c) => set({ stripe: c })} />
+            <KitColorButton color={kit.stripe} label="Stripes" onChange={(c) => set({ stripe: c })} {...colorProps('stripe')} />
             <span className="text-xs text-muted-foreground">Stripes</span>
           </div>
         )}
         <div className="flex items-center gap-2">
-          <KitColorButton color={kit.shorts} label="Shorts" onChange={(c) => set({ shorts: c })} />
+          <KitColorButton color={kit.shorts} label="Shorts" onChange={(c) => set({ shorts: c })} {...colorProps('shorts')} />
           <span className="text-xs text-muted-foreground">Shorts</span>
         </div>
         <div className="flex items-center gap-2">
-          <KitColorButton color={kit.socks} label="Socks" onChange={(c) => set({ socks: c })} />
+          <KitColorButton color={kit.socks} label="Socks" onChange={(c) => set({ socks: c })} {...colorProps('socks')} />
           <span className="text-xs text-muted-foreground">Socks</span>
         </div>
       </div>
@@ -255,24 +273,24 @@ function KitEditor() {
   )
 }
 
-// The kit preview button → opens the kit editor (pushed to history on close).
-function KitButton() {
+// The kit preview button → opens the kit editor. Controlled by the parent (which
+// pushes the kit to history when the editor closes).
+function KitButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const p = usePropertyEditing()
-  const pushKit = useEditorStore((s) => s.pushKit)
   const kit = p.values.kit ?? EMPTY_KIT
   return (
-    <Popover onOpenChange={(o) => { if (!o && p.values.kit) pushKit(p.values.kit) }}>
+    <Popover open={open}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button size="icon" aria-label="Kit" className="p-0">
-              <KitFigure kit={kit} size={48} />
+          <PopoverAnchor asChild>
+            <Button size="icon" aria-label="Kit" className="p-0 size-18" onClick={onToggle}>
+              <KitFigure kit={kit} size={60} />
             </Button>
-          </PopoverTrigger>
+          </PopoverAnchor>
         </TooltipTrigger>
         <TooltipContent>Kit</TooltipContent>
       </Tooltip>
-      <PopoverContent side="bottom" align="start" sideOffset={8} className="w-auto" onInteractOutside={keepOpenOnNested}>
+      <PopoverContent side="bottom" align="start" sideOffset={8} className="w-auto" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
         <KitEditor />
       </PopoverContent>
     </Popover>
@@ -282,6 +300,15 @@ function KitButton() {
 // The player settings popover: skin + kit previews side by side, with the opacity
 // slider beneath.
 export function PlayerSettingsButton({ side }: { side: 'right' | 'top' }) {
+  const p = usePropertyEditing()
+  const pushKit = useEditorStore((s) => s.pushKit)
+  const [editor, setEditor] = useState<'skin' | 'kit' | null>(null)
+  // Switch/close the active editor; pushing the kit to history whenever the kit
+  // editor is left.
+  const go = (next: 'skin' | 'kit' | null) => {
+    if (editor === 'kit' && next !== 'kit' && p.values.kit) pushKit(p.values.kit)
+    setEditor(next)
+  }
   return (
     <Popover>
       <Tooltip>
@@ -294,15 +321,16 @@ export function PlayerSettingsButton({ side }: { side: 'right' | 'top' }) {
         </TooltipTrigger>
         <TooltipContent>Player</TooltipContent>
       </Tooltip>
-      <PopoverContent side={side} align="start" className="w-auto" onInteractOutside={keepOpenOnNested}>
+      <PopoverContent side={side} align="start" className="w-50" onInteractOutside={keepOpenOnNested}>
         <div className="grid gap-3">
-          <div className="flex items-center gap-2">
-            <SkinButton />
-            <KitButton />
+          <div className="flex items-center gap-6">
+            <SkinButton open={editor === 'skin'} onToggle={() => go(editor === 'skin' ? null : 'skin')} />
+            <KitButton open={editor === 'kit'} onToggle={() => go(editor === 'kit' ? null : 'kit')} />
           </div>
           <OpacityRow />
         </div>
       </PopoverContent>
+      {editor && <Backdrop onClose={() => go(null)} />}
     </Popover>
   )
 }
