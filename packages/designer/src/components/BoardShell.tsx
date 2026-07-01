@@ -9,7 +9,7 @@ import { useTheme, type ThemeSetting } from '../lib/use-theme'
 import { useElementSize } from '../lib/use-element-size'
 import type { Breakpoint } from '../lib/use-breakpoint'
 import { cn } from '../lib/cn'
-import { useAssets, figureColorInfo } from '../lib/assets'
+import { useAssets, figureColorInfo, figureIndex, figureBaseSize } from '../lib/assets'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { isCreationTool } from '../store/editorStore'
 import { Toolbar } from './Toolbar'
@@ -90,23 +90,33 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const keepToolActive = useEditorStore((s) => s.keepToolActive)
   const toggleKeepTool = useEditorStore((s) => s.toggleKeepTool)
 
-  // Remember the custom color of the (single) selected material per its
-  // action/category, so a newly added material of that category inherits it.
+  // Remember, from the (single) selected figure: its material color (per its
+  // action/category) and its size (as a scale multiplier, per figureId), so newly
+  // added figures inherit them. Resizing keeps the figure selected, so its new
+  // size flows through here too.
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const elements = useEditorStore((s) => s.doc.elements)
+  const figureScale = useEditorStore((s) => s.doc.background.figureScale)
   const rememberMaterialColor = useEditorStore((s) => s.rememberMaterialColor)
+  const rememberFigureScale = useEditorStore((s) => s.rememberFigureScale)
   useEffect(() => {
     const remember = () => {
       if (selectedIds.length !== 1) return
       const el = elements.find((e) => e.id === selectedIds[0])
       if (!el || el.type !== 'figure') return
       const info = figureColorInfo(catalog).get(el.figureId)
-      if (!info?.action || !info.slots.length) return
-      const color = el.colors?.[info.slots[0]]
-      if (color) rememberMaterialColor(info.action, color)
+      if (info?.action && info.slots.length) {
+        const color = el.colors?.[info.slots[0]]
+        if (color) rememberMaterialColor(info.action, color)
+      }
+      const meta = figureIndex(catalog).get(el.figureId)
+      if (meta) {
+        const base = figureBaseSize(meta, figureScale)
+        if (base.w) rememberFigureScale(el.figureId, el.width / base.w)
+      }
     }
     remember()
-  }, [selectedIds, elements, catalog, rememberMaterialColor])
+  }, [selectedIds, elements, catalog, figureScale, rememberMaterialColor, rememberFigureScale])
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.pointer >= 0)

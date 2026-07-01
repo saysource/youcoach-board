@@ -43,6 +43,10 @@ export interface EditorState {
    *  "#ffcc00"), so a newly added material of that category inherits it. Updated
    *  when a recolorable material is selected or its color changes. */
   materialColors: Record<string, string>
+  /** Last size per figure (as a scale multiplier over its default), keyed by
+   *  figureId, so re-adding that figure reuses the size. Updated when a figure is
+   *  selected or resized. */
+  figureScales: Record<string, number>
   /** When true, a creation tool stays active after creating (the lock toggle);
    *  otherwise the editor falls back to the selection tool, per the spec. */
   keepToolActive: boolean
@@ -75,6 +79,8 @@ export interface EditorState {
   setTextDefaults: (patch: Partial<TextDefaults>) => void
   /** Remember the last custom color for a material action/category. */
   rememberMaterialColor: (action: string, color: string) => void
+  /** Remember the last size (scale multiplier) used for a figure. */
+  rememberFigureScale: (figureId: string, scale: number) => void
   /** Replace the current selection (pass [] to clear). */
   setSelection: (ids: string[]) => void
   /** Create a figure (records it on the undo stack), select it, and — unless
@@ -154,6 +160,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       textDefaults: { ...DEFAULT_TEXT_DEFAULTS },
       lastTokenId: null,
       materialColors: {},
+      figureScales: {},
       keepToolActive: false,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
@@ -178,6 +185,9 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       rememberMaterialColor: (action, color) =>
         set((s) => (s.materialColors[action] === color ? s : { materialColors: { ...s.materialColors, [action]: color } })),
+
+      rememberFigureScale: (figureId, scale) =>
+        set((s) => (s.figureScales[figureId] === scale ? s : { figureScales: { ...s.figureScales, [figureId]: scale } })),
 
       setSelection: (ids) =>
         set((s) => {

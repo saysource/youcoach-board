@@ -5,7 +5,7 @@ import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
-import { useAssets, buildFigureElement, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
+import { useAssets, buildFigureElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { clientToBoard } from '../lib/draw'
 import { useEditorStore } from '../store/context'
 
@@ -47,6 +47,12 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const figureScale = useEditorStore((s) => s.doc.background.figureScale)
   // Remembered custom color per material action, so a new material inherits it.
   const materialColors = useEditorStore((s) => s.materialColors)
+  // Remembered size (scale multiplier per figureId) + the current elements/
+  // selection, so a new figure inherits the size of its type / of a selected or
+  // existing figure in the same category.
+  const figureScales = useEditorStore((s) => s.figureScales)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
+  const elements = useEditorStore((s) => s.doc.elements)
 
   const [listOpen, setListOpen] = useState(false)
   const [facing, setFacing] = useState<string | null>(null)
@@ -92,18 +98,34 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
     // ratio; the active field's figureScale then multiplies that. Doing it this
     // way keeps the on-field proportions identical across board sizes (the old
     // editor used an 800×600 viewBox, we use 1200×900).
-    const longest = Math.max(f.w, f.h) || 1
-    const k = ((BOARD_WIDTH / 10) / longest) * figureScale * (f.sizeFactor ?? 1)
+    const base = figureBaseSize({ w: f.w, h: f.h, sizeFactor: f.sizeFactor ?? 1, category: categoryId ?? '' }, figureScale)
     let colors = cat.colors ? { ...catalog.defaults[cat.colors] } : undefined
     // Inherit the last custom color used for this material's action/category.
     if (f.colors?.length && f.actions?.length) {
       const cached = materialColors[f.actions[0]]
       if (cached) colors = { ...colors, [f.colors[0]]: cached }
     }
+    // Inherit the size (as a scale over the default): first this exact figure's
+    // remembered scale; else a reference figure of the same category on the board —
+    // preferring the SELECTED one, else the first found (e.g. the first player).
+    let scale = figureScales[f.svg]
+    if (scale === undefined) {
+      const idx = figureIndex(catalog)
+      const sameCat = (e: (typeof elements)[number]) => e.type === 'figure' && idx.get(e.figureId)?.category === categoryId
+      const ref = elements.find((e) => selectedIds.includes(e.id) && sameCat(e)) ?? elements.find(sameCat)
+      if (ref && ref.type === 'figure') {
+        const rm = idx.get(ref.figureId)
+        if (rm) {
+          const rb = figureBaseSize(rm, figureScale)
+          if (rb.w) scale = ref.width / rb.w
+        }
+      }
+    }
+    scale = scale ?? 1
     return {
       figureId: f.svg,
-      w: Math.round(f.w * k),
-      h: Math.round(f.h * k),
+      w: Math.round(base.w * scale),
+      h: Math.round(base.h * scale),
       mirror: !!f.mirror,
       colors,
     }

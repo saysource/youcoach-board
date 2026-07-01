@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import { IDENTITY_TRANSFORM, type BoardElement } from '@youcoach-board/core'
+import { IDENTITY_TRANSFORM, BOARD_WIDTH, type BoardElement } from '@youcoach-board/core'
 
 // Host-provided asset access (see specs/catalog.md). The board never hardcodes a
 // backend: the embedder says where figures/thumbnails/catalog live, and we
@@ -68,6 +68,31 @@ export function figureColorInfo(catalog: Catalog | null): Map<string, { slots: s
     for (const f of cat.figures) if (f.svg && f.colors?.length) out.set(f.svg, { slots: f.colors, action: f.actions?.[0] })
   }
   return out
+}
+
+/** Per-figure catalog facts needed to size a placed figure and group figures by
+ *  category (for size inheritance). Keyed by the figure's SVG path. */
+export interface FigureMeta {
+  w: number
+  h: number
+  sizeFactor: number
+  category: string
+}
+export function figureIndex(catalog: Catalog | null): Map<string, FigureMeta> {
+  const out = new Map<string, FigureMeta>()
+  for (const [catId, cat] of Object.entries(catalog?.categories ?? {})) {
+    for (const f of cat.figures) if (f.svg) out.set(f.svg, { w: f.w, h: f.h, sizeFactor: f.sizeFactor ?? 1, category: catId })
+  }
+  return out
+}
+
+/** The default on-board size (board units) of a figure at the given field figure
+ *  scale — the legacy sizing (longest side = boardWidth/10 · figureScale ·
+ *  sizeFactor). A remembered "scale" is a multiplier on top of this. */
+export function figureBaseSize(meta: FigureMeta, figureScale: number): { w: number; h: number } {
+  const longest = Math.max(meta.w, meta.h) || 1
+  const k = ((BOARD_WIDTH / 10) / longest) * figureScale * (meta.sizeFactor || 1)
+  return { w: meta.w * k, h: meta.h * k }
 }
 
 /** Build the asset-path → URL resolver from the host config. */
