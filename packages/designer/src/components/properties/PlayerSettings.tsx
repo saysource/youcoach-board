@@ -234,7 +234,7 @@ function KitEditor() {
   return (
     <div className="flex items-stretch gap-3">
       <KitSvg kit={kit} className="shrink-0 self-center" style={{ height: 240, width: 'auto' }} />
-      <div className="grid gap-2">
+      <div className="grid gap-2 border-l border-border pl-3">
         <div className="flex gap-1">
           {KIT_STYLES.map((s) => (
             <button
@@ -268,7 +268,7 @@ function KitEditor() {
           <span className="text-xs text-muted-foreground">Socks</span>
         </div>
       </div>
-      <div className="grid grid-cols-2 grid-rows-2 gap-1 self-stretch">
+      <div className="grid grid-cols-2 grid-rows-2 gap-1 self-stretch border-l border-border pl-3">
         {Array.from({ length: KIT_HISTORY_SIZE }).map((_, i) => {
           const k = history[i]
           return (
