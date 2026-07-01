@@ -151,23 +151,28 @@ function OpacityControl({ value, onChange }: { value: number | undefined; onChan
 // Settings popover. Colors are edited through the dedicated Background/Border
 // color buttons, not here.
 export function PropertyControls() {
-  const { values, setStrokeWidth, setStrokeStyle, setOpacity } = usePropertyEditing()
+  const { values, setStrokeWidth, setStrokeStyle, setOpacity, allFigure } = usePropertyEditing()
   return (
     <div className="grid gap-3">
-      <Field label="Stroke width">
-        <Segmented
-          items={STROKE_WIDTHS.map((w) => ({ value: w.value, label: w.label, render: <WidthIcon w={w.value} /> }))}
-          value={values.strokeWidth}
-          onChange={setStrokeWidth}
-        />
-      </Field>
-      <Field label="Stroke style">
-        <Segmented
-          items={STROKE_STYLES.map((s) => ({ value: s.value, label: s.label, render: <StyleIcon style={s.value} /> }))}
-          value={values.strokeStyle}
-          onChange={setStrokeStyle}
-        />
-      </Field>
+      {/* Figures ignore stroke — only opacity applies to them. */}
+      {!allFigure && (
+        <>
+          <Field label="Stroke width">
+            <Segmented
+              items={STROKE_WIDTHS.map((w) => ({ value: w.value, label: w.label, render: <WidthIcon w={w.value} /> }))}
+              value={values.strokeWidth}
+              onChange={setStrokeWidth}
+            />
+          </Field>
+          <Field label="Stroke style">
+            <Segmented
+              items={STROKE_STYLES.map((s) => ({ value: s.value, label: s.label, render: <StyleIcon style={s.value} /> }))}
+              value={values.strokeStyle}
+              onChange={setStrokeStyle}
+            />
+          </Field>
+        </>
+      )}
       <Field label="Opacity">
         <OpacityControl value={values.opacity} onChange={setOpacity} />
       </Field>

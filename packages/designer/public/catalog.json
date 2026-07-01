@@ -15841,7 +15841,10 @@
           "actions": [
             "material.balls"
           ],
-          "sizeFactor": 0.25
+          "sizeFactor": 0.25,
+          "colors": [
+            "yc-color-1"
+          ]
         },
         {
           "svg": "images/optimized/materials/1.svg",
@@ -15850,6 +15853,9 @@
           "h": 216,
           "actions": [
             "materials"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -15860,7 +15866,10 @@
           "actions": [
             "materials"
           ],
-          "sizeFactor": 0.25
+          "sizeFactor": 0.25,
+          "colors": [
+            "yc-color-1"
+          ]
         },
         {
           "svg": "images/optimized/materials/11.svg",
@@ -15870,7 +15879,10 @@
           "actions": [
             "materials"
           ],
-          "sizeFactor": 0.25
+          "sizeFactor": 0.25,
+          "colors": [
+            "yc-color-1"
+          ]
         },
         {
           "svg": "images/optimized/materials/12.svg",
@@ -15880,7 +15892,10 @@
           "actions": [
             "materials"
           ],
-          "sizeFactor": 0.25
+          "sizeFactor": 0.25,
+          "colors": [
+            "yc-color-1"
+          ]
         },
         {
           "svg": "images/optimized/materials/13.svg",
@@ -15890,7 +15905,10 @@
           "actions": [
             "materials"
           ],
-          "sizeFactor": 0.25
+          "sizeFactor": 0.25,
+          "colors": [
+            "yc-color-1"
+          ]
         },
         {
           "svg": "images/optimized/materials/33.svg",
@@ -15935,6 +15953,9 @@
           "h": 33,
           "actions": [
             "materials"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -15944,6 +15965,9 @@
           "h": 72,
           "actions": [
             "materials"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -15953,6 +15977,9 @@
           "h": 222,
           "actions": [
             "materials"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -15962,6 +15989,9 @@
           "h": 223,
           "actions": [
             "materials"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -15981,7 +16011,10 @@
           "actions": [
             "material.bose"
           ],
-          "sizeFactor": 0.25
+          "sizeFactor": 0.25,
+          "colors": [
+            "yc-color-1"
+          ]
         },
         {
           "svg": "images/optimized/materials/68.svg",
@@ -16020,6 +16053,9 @@
           "h": 332,
           "actions": [
             "material.wall"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16029,6 +16065,9 @@
           "h": 332,
           "actions": [
             "material.wall"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16038,6 +16077,9 @@
           "h": 356,
           "actions": [
             "material.wall"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16047,6 +16089,9 @@
           "h": 357,
           "actions": [
             "material.wall"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16056,6 +16101,9 @@
           "h": 356,
           "actions": [
             "material.wall"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16065,6 +16113,9 @@
           "h": 358,
           "actions": [
             "material.wall"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16074,6 +16125,9 @@
           "h": 353,
           "actions": [
             "material.wall"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16452,6 +16506,9 @@
           "h": 399,
           "actions": [
             "material.speedladder"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16461,6 +16518,9 @@
           "h": 403,
           "actions": [
             "material.speedladder"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16470,6 +16530,9 @@
           "h": 47,
           "actions": [
             "material.speedladder"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16479,6 +16542,9 @@
           "h": 242,
           "actions": [
             "material.speedladder"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16488,6 +16554,9 @@
           "h": 149,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16497,6 +16566,9 @@
           "h": 92,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16506,6 +16578,9 @@
           "h": 102,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16515,6 +16590,9 @@
           "h": 131,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16524,6 +16602,9 @@
           "h": 92,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16533,6 +16614,9 @@
           "h": 149,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16542,6 +16626,9 @@
           "h": 102,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16551,6 +16638,9 @@
           "h": 130,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16560,6 +16650,9 @@
           "h": 37,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16569,6 +16662,9 @@
           "h": 37,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16578,6 +16674,9 @@
           "h": 94,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16587,6 +16686,9 @@
           "h": 170,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         },
         {
@@ -16596,6 +16698,9 @@
           "h": 152,
           "actions": [
             "material.speedhurdle"
+          ],
+          "colors": [
+            "yc-color-1"
           ]
         }
       ],

@@ -5,6 +5,7 @@ import type { BoardElement } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
 import type { ToolId } from '../Toolbar'
 import { cn } from '../../lib/cn'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 type Subject = { icon: ComponentType<{ className?: string }>; label: string }
 
@@ -76,15 +77,23 @@ export function SubjectHeader({ compact = false }: { compact?: boolean }) {
 
   if (compact) {
     return (
-      <div
-        title={label}
-        aria-label={label}
-        className="flex size-8 items-center justify-center text-muted-foreground [&_svg]:size-5"
-      >
-        <Icon />
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            title={label}
+            aria-label={label}
+            className="flex size-8 items-center justify-center [&_svg]:size-5 rounded-lg opacity-25"
+          >
+            <Icon />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="right" align="center" className="w-max max-w-[200px]">
+          <p>{label}</p>
+        </TooltipContent>
+      </Tooltip>
     )
   }
+
   return (
     <div className={cn('flex items-center gap-2 px-1 text-sm font-medium text-foreground', '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground')}>
       <Icon />

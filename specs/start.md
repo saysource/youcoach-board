@@ -681,3 +681,21 @@ The arrows icon shown in the canvas to move the background should be bigger.
 
 - When we create a new token, if a token is present on the board, we want to use the same size, if not present, we want to honour the selected backgorund scale.
 
+## Materials
+
+Materials can have 0 or 1 custom color. The color needs to be applied as fill to SVGElements with the class yc-color-1.
+
+When a material is selected, in the properties toolbar show a single color selector (sililar to the background). For materials, the color should not have opacity.
+
+Not all the materials use this custom color, we may consider to mark in our catalog which elements actually make use of it. This would involve in look for the presence of yc-color-1 in the svg withing the @packages/designer/public/images/optimized/materials path (a grep command could be enough).
+
+## Player skin editor
+
+Players can be customized by changing the appearance of kit and skin/hair. This taks is focusing on skin/hair editor.
+
+I prepared an SVG that represents a face at @assets/face.svg
+This SVG contains 3 path, one is used for the main figure, the other two have id "skin" and "hair".
+By setting the fill of skin and hair paths, we can effectivaly dynamically change the color of skin and hair.
+
+In the toolbar we show an icon of the properly coloured face. On click we open a widget that presents to the user a set of typical races. A "more options" button replace the basic presets selecor with a slightly more advanced editor where the user can pick a specific color for hair and skin: this advanced editor contains 3 sections: a set of proposed colors for the hairs, then the preview by using our face.svg and another series of colors for the skin.
+See attached pictures for a better understanding of the UI.

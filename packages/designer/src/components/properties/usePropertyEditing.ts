@@ -9,6 +9,7 @@ export type TokenVisualStyle = { shape: TokenShape; tokenFill: TokenFill; color1
 import { useEditorStore } from '../../store/context'
 import { isCreationTool } from '../../store/editorStore'
 import { toolCreatesClosed, nextTokenText, measureTextBox } from '../../lib/draw'
+import { useAssets } from '../../lib/assets'
 
 /** Closed shapes can be filled (background color); open ones can't. */
 export function isClosed(el: BoardElement): boolean {
@@ -31,7 +32,18 @@ export function usePropertyEditing() {
   const setTokenDefaults = useEditorStore((s) => s.setTokenDefaults)
   const textDefaults = useEditorStore((s) => s.textDefaults)
   const setTextDefaults = useEditorStore((s) => s.setTextDefaults)
+  const { catalog } = useAssets()
   const els = doc.elements.filter((e) => selectedIds.includes(e.id))
+  // Map a figure's SVG path → the recolor-class slots it exposes (from the catalog).
+  // The current UI edits a single custom color (the first slot); the array leaves
+  // room for figures with several customizable colors later.
+  const figureColorSlots = new Map<string, string[]>()
+  for (const cat of Object.values(catalog?.categories ?? {})) for (const f of cat.figures) if (f.svg && f.colors?.length) figureColorSlots.set(f.svg, f.colors)
+  // Default fill for a slot when a figure has no override yet (search all palettes).
+  const defaultColorFor = (slot: string): string => {
+    for (const g of Object.values(catalog?.defaults ?? {})) if (g[slot]) return g[slot]
+    return '#e03131'
+  }
   const editingSelection = els.length > 0
   // Whether the panel currently has an editable subject: a selection, or any
   // creation tool (incl. the Token stamp, which pre-shows its next-token defaults).
@@ -62,6 +74,7 @@ export function usePropertyEditing() {
       allRect: false,
       allToken: tokenTool,
       allText: textTool,
+      allMaterialColor: false,
       values: {
         stroke: toolDefaults.stroke as string | undefined,
         strokeWidth: toolDefaults.strokeWidth as number | undefined,
@@ -92,6 +105,7 @@ export function usePropertyEditing() {
         fontSize: textTool ? textDefaults.fontSize : undefined,
         align: textTool ? textDefaults.align : undefined,
         bold: textTool ? textDefaults.bold : undefined,
+        materialColor: undefined as string | undefined,
       },
       setStroke: (stroke: string) => setToolDefaults({ stroke }),
       setStrokeWidth: (strokeWidth: number) => setToolDefaults({ strokeWidth }),
@@ -127,6 +141,7 @@ export function usePropertyEditing() {
       setFontSize: (fontSize: number) => setTextDefaults({ fontSize }),
       setAlign: (align: TextAlign) => setTextDefaults({ align }),
       setBold: (bold: boolean) => setTextDefaults({ bold }),
+      setMaterialColor: () => {},
     }
   }
 
@@ -150,6 +165,11 @@ export function usePropertyEditing() {
   const firstPoly = first.type === 'polyline' ? first : undefined
   const firstToken = first.type === 'token' ? first : undefined
   const firstText = first.type === 'text' ? first : undefined
+  const firstFigure = first.type === 'figure' ? first : undefined
+  // Every selected element is a figure that exposes at least one custom color.
+  const allMaterialColor = els.length > 0 && els.every((e) => e.type === 'figure' && !!figureColorSlots.get(e.figureId)?.length)
+  // The slot the single color selector edits (the first custom color of the first figure).
+  const materialSlot = firstFigure ? figureColorSlots.get(firstFigure.figureId)?.[0] : undefined
 
   function patch(targets: BoardElement[], make: (el: BoardElement) => { before: ElementPatch; after: ElementPatch }) {
     if (targets.length === 0) return
@@ -172,6 +192,7 @@ export function usePropertyEditing() {
     allRect,
     allToken,
     allText,
+    allMaterialColor,
     values: {
       stroke: first.stroke,
       strokeWidth: first.strokeWidth,
@@ -201,6 +222,8 @@ export function usePropertyEditing() {
       fontSize: firstText?.fontSize,
       align: firstText?.align,
       bold: firstText?.bold,
+      // A material's current custom color (its first slot; falls back to the default).
+      materialColor: materialSlot ? (firstFigure!.colors?.[materialSlot] ?? defaultColorFor(materialSlot)) : undefined,
     },
     setStroke: (stroke: string) => {
       patch(els, (e) => ({ before: { stroke: e.stroke }, after: { stroke } }))
@@ -246,6 +269,14 @@ export function usePropertyEditing() {
     setStartTip: (startTip: ArrowTip) => patch(openPolys, (e) => ({ before: { startTip: (e as Extract<BoardElement, { type: 'polyline' }>).startTip }, after: { startTip } })),
     setEndTip: (endTip: ArrowTip) => patch(openPolys, (e) => ({ before: { endTip: (e as Extract<BoardElement, { type: 'polyline' }>).endTip }, after: { endTip } })),
     flip: () => patch(figures, (e) => ({ before: { mirror: (e as Extract<BoardElement, { type: 'figure' }>).mirror }, after: { mirror: !(e as Extract<BoardElement, { type: 'figure' }>).mirror } })),
+    // Material custom color: set each figure's first custom-color slot.
+    setMaterialColor: (color: string) =>
+      patch(figures, (e) => {
+        const f = e as Extract<BoardElement, { type: 'figure' }>
+        const slot = figureColorSlots.get(f.figureId)?.[0]
+        if (!slot) return { before: {}, after: {} }
+        return { before: { colors: f.colors }, after: { colors: { ...f.colors, [slot]: color } } }
+      }),
     // Editing a selected token also updates the next-token defaults (so the next
     // stamp inherits the change) — except the label, which stays per-token.
     setTokenShape: (shape: TokenShape) => {

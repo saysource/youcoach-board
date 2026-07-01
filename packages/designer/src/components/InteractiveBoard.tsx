@@ -57,7 +57,6 @@ import { computeResize, rotationFor, boardToElement, elementToBoard, localCorner
 import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
 import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
-import { buildFigureElement, FIGURE_DND_MIME, FIELD_DND_MIME, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -1033,44 +1032,6 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
   }
   const snapGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
 
-  // Drag-and-drop a figure from the palette: allow the drop, then place it at the
-  // cursor (clamped to the canvas).
-  function onDragOver(e: React.DragEvent<HTMLDivElement>) {
-    const t = e.dataTransfer.types
-    if (t.includes(FIGURE_DND_MIME) || t.includes(FIELD_DND_MIME)) {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'copy'
-    }
-  }
-  function onDrop(e: React.DragEvent<HTMLDivElement>) {
-    // A dragged field applies as the background (position-independent, same as
-    // clicking it); a dragged figure is placed at the cursor.
-    const fieldRaw = e.dataTransfer.getData(FIELD_DND_MIME)
-    if (fieldRaw) {
-      e.preventDefault()
-      try {
-        const fd = JSON.parse(fieldRaw) as FieldDragData
-        setBackground({ fieldSvg: fd.fieldSvg, scale: 1, position: [0, 0], figureScale: fd.figureScale })
-      } catch {
-        /* ignore malformed payload */
-      }
-      return
-    }
-    const raw = e.dataTransfer.getData(FIGURE_DND_MIME)
-    if (!raw) return
-    e.preventDefault()
-    const svg = svgRef.current
-    if (!svg) return
-    let d: FigureDragData
-    try {
-      d = JSON.parse(raw) as FigureDragData
-    } catch {
-      return
-    }
-    const c = clampToCanvas(clientToBoard(svg, e.clientX, e.clientY))
-    createFigure(buildFigureElement(d, c.x, c.y))
-  }
-
   // Group frame box (padded for display) for a multi-selection — the interactive
   // group resize/rotate chrome is drawn on it.
   const groupUnion = liveSelected.length >= 2 ? unionBounds(liveSelected) : null
@@ -1087,8 +1048,6 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
       onPointerDown={onContainerPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
     >
       <BoardCanvas
         doc={doc}

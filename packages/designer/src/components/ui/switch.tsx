@@ -7,7 +7,7 @@ export function Switch({ className, ...props }: ComponentProps<typeof SwitchPrim
   return (
     <SwitchPrimitive.Root
       className={cn(
-        'peer inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full border border-transparent px-0.5 outline-none transition-colors',
+        'peer inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full border border-border px-0.5 outline-none transition-colors',
         'focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
         'data-[state=checked]:bg-primary data-[state=unchecked]:bg-input',
         className,

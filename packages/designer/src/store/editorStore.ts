@@ -39,6 +39,10 @@ export interface EditorState {
    *  token's CURRENT size (so resizes are reflected); null falls back to any
    *  token on the board, else the field's figure scale. */
   lastTokenId: string | null
+  /** Last custom color used per material action/category (e.g. "material.wall" →
+   *  "#ffcc00"), so a newly added material of that category inherits it. Updated
+   *  when a recolorable material is selected or its color changes. */
+  materialColors: Record<string, string>
   /** When true, a creation tool stays active after creating (the lock toggle);
    *  otherwise the editor falls back to the selection tool, per the spec. */
   keepToolActive: boolean
@@ -69,6 +73,8 @@ export interface EditorState {
   setTokenDefaults: (patch: Partial<TokenDefaults>) => void
   /** Merge changes into the next-text defaults (color/bg/size/align). */
   setTextDefaults: (patch: Partial<TextDefaults>) => void
+  /** Remember the last custom color for a material action/category. */
+  rememberMaterialColor: (action: string, color: string) => void
   /** Replace the current selection (pass [] to clear). */
   setSelection: (ids: string[]) => void
   /** Create a figure (records it on the undo stack), select it, and — unless
@@ -147,6 +153,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       tokenDefaults: { ...DEFAULT_TOKEN_DEFAULTS },
       textDefaults: { ...DEFAULT_TEXT_DEFAULTS },
       lastTokenId: null,
+      materialColors: {},
       keepToolActive: false,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
@@ -168,6 +175,9 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       setTokenDefaults: (patch) => set((s) => ({ tokenDefaults: { ...s.tokenDefaults, ...patch } })),
 
       setTextDefaults: (patch) => set((s) => ({ textDefaults: { ...s.textDefaults, ...patch } })),
+
+      rememberMaterialColor: (action, color) =>
+        set((s) => (s.materialColors[action] === color ? s : { materialColors: { ...s.materialColors, [action]: color } })),
 
       setSelection: (ids) =>
         set((s) => {

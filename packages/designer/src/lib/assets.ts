@@ -32,6 +32,10 @@ export interface CatalogFigure {
    *  for a handful of materials placed at 1/4 size). Defaults to 1. */
   sizeFactor?: number
   color?: string
+  /** The recolor-class names this figure's SVG exposes as user-customizable fills,
+   *  e.g. `["yc-color-1"]` (marked in the catalog from the SVG contents). Absent or
+   *  empty = no custom colors. An array so figures can expose more than one later. */
+  colors?: string[]
   /** App-managed element (no SVG to place) — e.g. "text". The app creates it. */
   tool?: string
 }
@@ -54,6 +58,16 @@ export interface Catalog {
   defaults: Record<string, Record<string, string>>
   groups: { id: string; name: string; categories: string[] }[]
   categories: Record<string, CatalogCategory>
+}
+
+/** For a recolorable figure SVG path, the recolor slots it exposes and its
+ *  action/category — used to remember & inherit a material's custom color. */
+export function figureColorInfo(catalog: Catalog | null): Map<string, { slots: string[]; action: string | undefined }> {
+  const out = new Map<string, { slots: string[]; action: string | undefined }>()
+  for (const cat of Object.values(catalog?.categories ?? {})) {
+    for (const f of cat.figures) if (f.svg && f.colors?.length) out.set(f.svg, { slots: f.colors, action: f.actions?.[0] })
+  }
+  return out
 }
 
 /** Build the asset-path → URL resolver from the host config. */
@@ -82,12 +96,8 @@ export function useAssets(): AssetsValue {
 }
 
 // ── Figure drag-and-drop (palette → board) ──
-/** dataTransfer MIME for a dragged catalog figure. */
-export const FIGURE_DND_MIME = 'application/x-ycb-figure'
-
-/** dataTransfer MIME for a dragged catalog field. Dropping a field anywhere on
- *  the board has the same effect as clicking it (sets the background). */
-export const FIELD_DND_MIME = 'application/x-ycb-field'
+// The palette drag is driven by pointer events (see LibraryDrawer), so it works
+// on touch too — no native HTML5 DnD / dataTransfer MIME types.
 
 /** Payload carried when dragging a field from the palette. */
 export interface FieldDragData {

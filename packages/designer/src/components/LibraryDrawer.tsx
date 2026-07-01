@@ -1,12 +1,20 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { X, Sparkles, Maximize, Minimize, Pin, PinOff, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, type LucideIcon } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
-import { useAssets, buildFigureElement, FIGURE_DND_MIME, FIELD_DND_MIME, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
+import { useAssets, buildFigureElement, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
+import { clientToBoard } from '../lib/draw'
 import { useEditorStore } from '../store/context'
+
+// Movement (px) below which a press is a tap, not a drag; touch hold (ms) to start.
+const TAP_SLOP = 8
+const TOUCH_HOLD = 220
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
+// Non-passive so it can cancel the drawer/page scroll while a touch drag is active.
+const preventTouchScroll = (e: TouchEvent) => e.preventDefault()
 
 const FACING_ORDER = ['left', 'up', 'down', 'right']
 const FACING_ICON: Record<string, LucideIcon> = { left: ArrowLeft, up: ArrowUp, down: ArrowDown, right: ArrowRight }
@@ -37,6 +45,8 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const setBackground = useEditorStore((s) => s.setBackground)
   // Active field's default figure scale — applied to figures as they're added.
   const figureScale = useEditorStore((s) => s.doc.background.figureScale)
+  // Remembered custom color per material action, so a new material inherits it.
+  const materialColors = useEditorStore((s) => s.materialColors)
 
   const [listOpen, setListOpen] = useState(false)
   const [facing, setFacing] = useState<string | null>(null)
@@ -84,62 +94,180 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
     // editor used an 800×600 viewBox, we use 1200×900).
     const longest = Math.max(f.w, f.h) || 1
     const k = ((BOARD_WIDTH / 10) / longest) * figureScale * (f.sizeFactor ?? 1)
+    let colors = cat.colors ? { ...catalog.defaults[cat.colors] } : undefined
+    // Inherit the last custom color used for this material's action/category.
+    if (f.colors?.length && f.actions?.length) {
+      const cached = materialColors[f.actions[0]]
+      if (cached) colors = { ...colors, [f.colors[0]]: cached }
+    }
     return {
       figureId: f.svg,
       w: Math.round(f.w * k),
       h: Math.round(f.h * k),
       mirror: !!f.mirror,
-      colors: cat.colors ? { ...catalog.defaults[cat.colors] } : undefined,
+      colors,
     }
   }
 
-  // Click a thumbnail: a field sets the board background; any other figure drops
-  // centered on the board.
-  function drop(f: CatalogFigure) {
-    if (cat?.kind === 'field') {
-      if (!f.svg) return
-      // The field SVG overlays the base background (the field0 image by default)
-      // and always renders at its native scale (1). The catalog `scale` is the
-      // default scale for figures added while this field is active.
-      setBackground({ fieldSvg: f.svg, scale: 1, position: [0, 0], figureScale: f.scale ?? 1 })
-      return
-    }
-    const d = descriptor(f)
-    if (d) createFigure(buildFigureElement(d, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
-  }
-
-  // Drag payload for a field thumbnail (background category). Dropping it on the
-  // board has the same effect as clicking it.
+  // Drag/tap payload for a field thumbnail (background category): applied as the
+  // board background (position-independent), whether tapped or dropped.
   function fieldDescriptor(f: CatalogFigure): FieldDragData | null {
     if (cat?.kind !== 'field' || !f.svg) return null
     return { fieldSvg: f.svg, figureScale: f.scale ?? 1 }
   }
 
-  // Whether a thumbnail can be dragged onto the board (figures and fields can).
-  function draggable(f: CatalogFigure): boolean {
-    return !!descriptor(f) || !!fieldDescriptor(f)
+  // ── Palette → canvas drag (pointer-based, so it works on touch too) ─────────
+  // Native HTML5 DnD never fires on touch devices, so we drive the drag with
+  // pointer events: press-drag on mouse/pen; long-press-then-drag on touch (a
+  // plain swipe still scrolls the list). Releasing over the board places the
+  // figure at that point (or applies a field); a tap places it centered.
+  type PaletteDrag = {
+    pointerId: number
+    sx: number
+    sy: number
+    active: boolean
+    canDrag: boolean
+    isField: boolean
+    field: FieldDragData | null
+    desc: FigureDragData | null
+    img: HTMLImageElement | null
+    ghost: HTMLElement | null
+    timer: ReturnType<typeof setTimeout> | null
+    onMove: (e: PointerEvent) => void
+    onUp: (e: PointerEvent) => void
+    onCancel: () => void
+  }
+  const dragRef = useRef<PaletteDrag | null>(null)
+
+  function boardSurface(): { surface: HTMLElement; svg: SVGSVGElement } | null {
+    const surface = document.querySelector('[data-board-surface]') as HTMLElement | null
+    const svg = surface?.querySelector('svg') as SVGSVGElement | null
+    return surface && svg ? { surface, svg } : null
+  }
+  function overBoard(b: { surface: HTMLElement } | null, x: number, y: number): boolean {
+    if (!b) return false
+    const r = b.surface.getBoundingClientRect()
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
+  }
+  function cleanupDrag() {
+    const d = dragRef.current
+    if (!d) return
+    if (d.timer) clearTimeout(d.timer)
+    d.ghost?.remove()
+    document.removeEventListener('pointermove', d.onMove)
+    document.removeEventListener('pointerup', d.onUp)
+    document.removeEventListener('pointercancel', d.onCancel)
+    document.removeEventListener('touchmove', preventTouchScroll)
+    dragRef.current = null
+  }
+  useEffect(() => cleanupDrag, [])
+
+  function activateDrag(d: PaletteDrag, x: number, y: number) {
+    if (d.active) return
+    d.active = true
+    if (d.timer) {
+      clearTimeout(d.timer)
+      d.timer = null
+    }
+    // A clean off-screen clone follows the pointer (no colored ancestor bleeding
+    // through the figure's transparent areas).
+    if (d.img) {
+      const r = d.img.getBoundingClientRect()
+      const g = d.img.cloneNode(true) as HTMLImageElement
+      g.className = ''
+      Object.assign(g.style, {
+        position: 'fixed',
+        left: `${x}px`,
+        top: `${y}px`,
+        width: `${r.width}px`,
+        height: `${r.height}px`,
+        maxWidth: 'none',
+        maxHeight: 'none',
+        objectFit: 'contain',
+        transform: 'translate(-50%, -50%)',
+        pointerEvents: 'none',
+        opacity: '0.85',
+        zIndex: '9999',
+        background: 'transparent',
+      })
+      document.body.appendChild(g)
+      d.ghost = g
+    }
+    // Stop the drawer/page scrolling while dragging on touch.
+    document.addEventListener('touchmove', preventTouchScroll, { passive: false })
   }
 
-  // Drag-to-drop: hand the descriptor to the board, which places a figure at the
-  // cursor or applies a field as the background.
-  function onDragStart(e: React.DragEvent, f: CatalogFigure) {
-    // Use the bare thumbnail as the drag image, so the ghost shows just the
-    // figure — without the button's hover border/background.
-    const img = e.currentTarget.querySelector('img')
-    if (img) {
-      const r = img.getBoundingClientRect()
-      e.dataTransfer.setDragImage(img, r.width / 2, r.height / 2)
-    }
-    const field = fieldDescriptor(f)
-    if (field) {
-      e.dataTransfer.setData(FIELD_DND_MIME, JSON.stringify(field))
-      e.dataTransfer.effectAllowed = 'copy'
+  function placeFrom(d: PaletteDrag, x: number, y: number, atPoint: boolean) {
+    const b = boardSurface()
+    if (d.isField) {
+      if (d.field && (!atPoint || overBoard(b, x, y))) setBackground({ fieldSvg: d.field.fieldSvg, scale: 1, position: [0, 0], figureScale: d.field.figureScale })
       return
     }
-    const d = descriptor(f)
-    if (!d) return
-    e.dataTransfer.setData(FIGURE_DND_MIME, JSON.stringify(d))
-    e.dataTransfer.effectAllowed = 'copy'
+    if (!d.desc) return
+    if (atPoint) {
+      if (!b || !overBoard(b, x, y)) return
+      const p = clientToBoard(b.svg, x, y)
+      createFigure(buildFigureElement(d.desc, clamp(p.x, 0, BOARD_WIDTH), clamp(p.y, 0, BOARD_HEIGHT)))
+    } else {
+      createFigure(buildFigureElement(d.desc, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
+    }
+  }
+
+  function onThumbPointerDown(e: React.PointerEvent, f: CatalogFigure) {
+    if (e.button !== 0) return // primary button / touch / pen only
+    cleanupDrag() // abandon any stale gesture
+    const field = fieldDescriptor(f)
+    const desc = descriptor(f)
+    const d: PaletteDrag = {
+      pointerId: e.pointerId,
+      sx: e.clientX,
+      sy: e.clientY,
+      active: false,
+      canDrag: !!field || !!desc,
+      isField: cat?.kind === 'field',
+      field,
+      desc,
+      img: e.currentTarget.querySelector('img'),
+      ghost: null,
+      timer: null,
+      onMove: () => {},
+      onUp: () => {},
+      onCancel: () => {},
+    }
+    dragRef.current = d
+    d.onMove = (ev) => {
+      if (ev.pointerId !== d.pointerId) return
+      if (d.active) {
+        if (d.ghost) {
+          d.ghost.style.left = `${ev.clientX}px`
+          d.ghost.style.top = `${ev.clientY}px`
+        }
+        return
+      }
+      if (!d.canDrag) return
+      const dist = Math.hypot(ev.clientX - d.sx, ev.clientY - d.sy)
+      if (ev.pointerType === 'touch') {
+        if (dist > TAP_SLOP) cleanupDrag() // moved before the hold fired → a scroll
+      } else if (dist > TAP_SLOP) {
+        activateDrag(d, ev.clientX, ev.clientY)
+      }
+    }
+    d.onUp = (ev) => {
+      if (ev.pointerId !== d.pointerId) return
+      const active = d.active
+      const dist = Math.hypot(ev.clientX - d.sx, ev.clientY - d.sy)
+      const x = ev.clientX
+      const y = ev.clientY
+      cleanupDrag()
+      if (active) placeFrom(d, x, y, true)
+      else if (dist <= TAP_SLOP) placeFrom(d, x, y, false) // a tap → centered / apply field
+    }
+    d.onCancel = () => cleanupDrag()
+    document.addEventListener('pointermove', d.onMove)
+    document.addEventListener('pointerup', d.onUp)
+    document.addEventListener('pointercancel', d.onCancel)
+    // Touch: a deliberate hold starts the drag (so a quick swipe still scrolls).
+    if (e.pointerType === 'touch' && d.canDrag) d.timer = setTimeout(() => activateDrag(d, e.clientX, e.clientY), TOUCH_HOLD)
   }
 
   return (
@@ -273,11 +401,9 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                           key={`${f.thumb}-${i}`}
                           type="button"
                           title={f.tool ? 'Text' : cat?.name}
-                          draggable={draggable(f)}
-                          onDragStart={(e) => onDragStart(e, f)}
-                          onClick={() => drop(f)}
+                          onPointerDown={(e) => onThumbPointerDown(e, f)}
                           className={cn(
-                            'flex aspect-square items-center justify-center rounded-md border border-transparent p-1 hover:border-primary hover:bg-primary/20',
+                            'flex aspect-square touch-manipulation items-center justify-center rounded-md border border-transparent p-1 hover:border-primary hover:bg-primary/20',
                             f.svg ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                           )}
                         >

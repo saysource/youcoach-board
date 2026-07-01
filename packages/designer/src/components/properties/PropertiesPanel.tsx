@@ -110,37 +110,47 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
   // It appears for a selection (to edit it) or a creation tool (future-element style).
   if (!p.editable) return null
   return (
-    <div className="pointer-events-auto absolute left-3 top-16 z-30 flex flex-col items-center gap-1 rounded-xl border border-border bg-card p-1.5 shadow-lg">
-      <SubjectHeader compact />
-      <span className="my-0.5 h-px w-6 bg-border" />
-      {p.allToken ? (
-        // Tokens carry a self-contained editor (type, colors, fill, text, opacity).
-        <TokenSettingsButton side="right" />
-      ) : p.allText ? (
-        // Text: color (stroke-style widget), background color (with opacity), and a
-        // settings popover (font size + alignment).
-        <>
-          <ColorButton kind="fill" label="Text color" value={p.values.textColor} onChange={p.setTextColor} side="right" />
-          <ColorButton kind="fill" label="Background" value={p.values.bgColor} onChange={p.setBgColor} side="right" />
-          <TextSettingsButton side="right" />
-        </>
-      ) : (
-        <>
-          {p.hasClosed && (
-            <ColorButton kind="fill" label="Background" value={p.values.fill} onChange={p.setFill} side="right" fillStyle={p.values.fillStyle} onFillStyleChange={p.setFillStyle} />
-          )}
-          <ColorButton kind="stroke" label="Border" value={p.values.stroke} onChange={p.setStroke} side="right" />
-          <SettingsButton side="right" />
-        </>
-      )}
-      {p.count > 0 && (
-        <>
-          <span className="my-0.5 h-px w-6 bg-border" />
-          <ActionsMenu side="right" />
-        </>
-      )}
-      {p.allToken && <TokenStyleButtons apply={p.applyTokenStyle} side="right" />}
-    </div>
+    <>
+      {/* <div className="w-[50px] opacity-50 pointer-events-auto absolute left-3 top-14 z-30 flex flex-col items-center gap-1 p-1.5"><SubjectHeader compact /></div> */}
+      <div className="pointer-events-auto absolute left-3 top-16 z-30 flex flex-col items-center gap-1 rounded-xl border border-border bg-card p-1.5 shadow-lg">
+        <SubjectHeader compact />
+        <span className="my-0.5 h-px w-6 bg-border" />
+        {p.allToken ? (
+          // Tokens carry a self-contained editor (type, colors, fill, text, opacity).
+          <TokenSettingsButton side="right" />
+        ) : p.allText ? (
+          // Text: color (stroke-style widget), background color (with opacity), and a
+          // settings popover (font size + alignment).
+          <>
+            <ColorButton kind="fill" label="Text color" value={p.values.textColor} onChange={p.setTextColor} side="right" />
+            <ColorButton kind="fill" label="Background" value={p.values.bgColor} onChange={p.setBgColor} side="right" />
+            <TextSettingsButton side="right" />
+          </>
+        ) : p.allMaterialColor ? (
+          // Material: a single custom color (yc-color-1), no opacity, + opacity settings.
+          <>
+            <ColorButton kind="fill" label="Color" value={p.values.materialColor} onChange={p.setMaterialColor} side="right" showOpacity={false} />
+            <SettingsButton side="right" />
+          </>
+        ) : (
+          <>
+            {p.hasClosed && (
+              <ColorButton kind="fill" label="Background" value={p.values.fill} onChange={p.setFill} side="right" fillStyle={p.values.fillStyle} onFillStyleChange={p.setFillStyle} />
+            )}
+            {/* Figures ignore stroke, so no Border color for them. */}
+            {!p.allFigure && <ColorButton kind="stroke" label="Border" value={p.values.stroke} onChange={p.setStroke} side="right" />}
+            <SettingsButton side="right" />
+          </>
+        )}
+        {p.count > 0 && (
+          <>
+            <span className="my-0.5 h-px w-6 bg-border" />
+            <ActionsMenu side="right" />
+          </>
+        )}
+        {p.allToken && <TokenStyleButtons apply={p.applyTokenStyle} side="right" />}
+      </div>
+    </>
   )
 }
 
@@ -181,6 +191,7 @@ function ColorButton({
   translucent,
   fillStyle,
   onFillStyleChange,
+  showOpacity,
 }: {
   kind: 'fill' | 'stroke'
   label: string
@@ -191,6 +202,8 @@ function ColorButton({
   translucent?: boolean
   fillStyle?: 'solid' | 'striped'
   onFillStyleChange?: (s: 'solid' | 'striped') => void
+  /** Hide the opacity slider (e.g. material colors have no opacity). */
+  showOpacity?: boolean
 }) {
   const swatchStyle = isTransparent(value)
     ? {}
@@ -218,7 +231,7 @@ function ColorButton({
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
-        <ColorPickerWidget value={value} onChange={onChange} fillStyle={fillStyle} onFillStyleChange={onFillStyleChange} />
+        <ColorPickerWidget value={value} onChange={onChange} fillStyle={fillStyle} onFillStyleChange={onFillStyleChange} showOpacity={showOpacity} />
       </PopoverContent>
     </Popover>
   )
@@ -686,7 +699,7 @@ export function MobileBar() {
     <div className="pointer-events-none absolute inset-x-2 bottom-16 z-30 flex items-center justify-between gap-2">
       <div className="pointer-events-auto flex items-center gap-1">
         {p.editable && p.hasClosed && <ColorButton kind="fill" label="Background" value={p.values.fill} onChange={p.setFill} side="top" small translucent />}
-        {p.editable && <ColorButton kind="stroke" label="Border" value={p.values.stroke} onChange={p.setStroke} side="top" small translucent />}
+        {p.editable && !p.allFigure && <ColorButton kind="stroke" label="Border" value={p.values.stroke} onChange={p.setStroke} side="top" small translucent />}
         {p.editable && <SettingsButton side="top" small translucent />}
       </div>
       <div className="pointer-events-auto flex items-center gap-1">
