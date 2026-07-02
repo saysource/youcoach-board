@@ -197,6 +197,11 @@ interface Marquee {
 //     line's endpoints are its two vertices) → reshape.
 // A faint alignment grid drawn in board coordinates, in the background layer
 // (under the elements). Toggled with the "G" shortcut.
+// Eraser: on-screen radius of the erase circle (px) and how many recent points
+// the trailing tail keeps.
+const ERASER_RADIUS_PX = 14
+const ERASER_TAIL = 18
+
 const GRID_STEP = 60 // board units → a 20×15 grid over the 1200×900 board
 function BoardGrid() {
   const lines: React.ReactNode[] = []
@@ -219,6 +224,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const setSelection = useEditorStore((s) => s.setSelection)
   const createFigure = useEditorStore((s) => s.createFigure)
   const deleteSelected = useEditorStore((s) => s.deleteSelected)
+  const removeElements = useEditorStore((s) => s.removeElements)
   const setBackground = useEditorStore((s) => s.setBackground)
   const beginTransaction = useEditorStore((s) => s.beginTransaction)
   const commitTransaction = useEditorStore((s) => s.commitTransaction)
@@ -393,7 +399,51 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   }, [polyDraft, createFigure, toolDefaults])
 
   const creating = isCreationTool(activeTool)
+  const eraserTool = activeTool === 'eraser'
   const selectedSet = new Set(selectedIds)
+
+  // Eraser: on drag, elements the moving circle touches dim to opacity-25 and are
+  // deleted on pointer-up. `pts` keeps a short trailing tail (deforms with the
+  // move); `ids` accumulates every touched element. The live gesture lives in a
+  // ref (so rapid synchronous pointer events read the latest, not a stale render);
+  // `erase` state exists only to drive the dim + trail rendering.
+  const eraseRef = useRef<{ pts: Point[]; ids: Set<string> } | null>(null)
+  const [erase, setErase] = useState<{ pts: Point[]; ids: Set<string> } | null>(null)
+  const syncErase = () => {
+    const g = eraseRef.current
+    setErase(g ? { pts: g.pts.slice(), ids: new Set(g.ids) } : null)
+  }
+  // Board-unit eraser radius from its fixed on-screen size.
+  const eraseRadius = () => ERASER_RADIUS_PX / (scale || 1)
+  // Ids of elements whose bounding box intersects the eraser circle at `p`.
+  function elementsUnder(p: Point, r: number): string[] {
+    const out: string[] = []
+    for (const el of doc.elements) {
+      const b = getElementBounds(el)
+      const cx = Math.max(b.x, Math.min(p.x, b.x + b.width))
+      const cy = Math.max(b.y, Math.min(p.y, b.y + b.height))
+      const dx = p.x - cx
+      const dy = p.y - cy
+      if (dx * dx + dy * dy <= r * r) out.push(el.id)
+    }
+    return out
+  }
+  // Sample the segment a→b so a fast drag doesn't skip elements between frames.
+  function eraseSegment(a: Point, b: Point, r: number): string[] {
+    const dist = Math.hypot(b.x - a.x, b.y - a.y)
+    const steps = Math.max(1, Math.ceil(dist / (r * 0.8)))
+    const set = new Set<string>()
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps
+      for (const id of elementsUnder({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, r)) set.add(id)
+    }
+    return [...set]
+  }
+  // Entering the eraser drops any selection, so its chrome (frame/handles) doesn't
+  // intercept the scrub — the board surface receives the erase gesture instead.
+  useEffect(() => {
+    if (eraserTool) setSelection([])
+  }, [eraserTool, setSelection])
 
   // Clamp a move delta so the selection's union bounding box always keeps at
   // least CANVAS_KEEP units overlapping the canvas — a figure can never be
@@ -626,6 +676,18 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
+
+    // Eraser: start a scrub — touched elements dim now, deleted on pointer-up.
+    if (eraserTool) {
+      eraseRef.current = { pts: [p], ids: new Set(elementsUnder(p, eraseRadius())) }
+      syncErase()
+      try {
+        containerRef.current?.setPointerCapture(e.pointerId)
+      } catch {
+        /* capture is best-effort; moves over the board still reach the handler */
+      }
+      return
+    }
 
     // Freehand: start capturing a stroke (points appended on move).
     if (activeTool === 'draw') {
@@ -929,6 +991,15 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
+    const g = eraseRef.current
+    if (g) {
+      const last = g.pts[g.pts.length - 1] ?? p
+      for (const id of eraseSegment(last, p, eraseRadius())) g.ids.add(id)
+      g.pts.push(p)
+      if (g.pts.length > ERASER_TAIL) g.pts = g.pts.slice(-ERASER_TAIL)
+      syncErase()
+      return
+    }
     if (bgPan) {
       setBackground({ position: [bgPan.origin[0] + (p.x - bgPan.start.x), bgPan.origin[1] + (p.y - bgPan.start.y)] })
     } else if (freeDraft) {
@@ -959,7 +1030,12 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     if (containerRef.current?.hasPointerCapture?.(e.pointerId)) {
       containerRef.current.releasePointerCapture(e.pointerId)
     }
-    if (bgPan) {
+    if (eraseRef.current) {
+      const ids = [...eraseRef.current.ids]
+      eraseRef.current = null
+      setErase(null)
+      if (ids.length) removeElements(ids)
+    } else if (bgPan) {
       setBgPan(null)
       commitTransaction()
     } else if (freeDraft) {
@@ -1142,11 +1218,18 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     ? { x: groupUnion.x - groupPad, y: groupUnion.y - groupPad, width: groupUnion.width + 2 * groupPad, height: groupUnion.height + 2 * groupPad }
     : null
 
+  // The eraser turns the pointer into a filled circle matching the erase radius.
+  const eraserD = ERASER_RADIUS_PX * 2 + 2
+  const eraserCursor = `url("data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${eraserD}' height='${eraserD}'><circle cx='${eraserD / 2}' cy='${eraserD / 2}' r='${ERASER_RADIUS_PX}' fill='#888888' fill-opacity='0.35' stroke='#555555' stroke-width='1.5'/></svg>`,
+  )}") ${eraserD / 2} ${eraserD / 2}, auto`
+
   return (
     <div
       ref={containerRef}
       data-board-surface
       className={cn('relative h-full w-full touch-none select-none', creating ? 'cursor-crosshair' : 'cursor-default')}
+      style={eraserTool ? { cursor: eraserCursor } : undefined}
       onPointerDown={onContainerPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -1304,12 +1387,28 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                 </g>
               )
             })()}
+            {/* Eraser trail: a round-capped stroke the width of the erase circle,
+                following the recent path so it "deforms" as the pointer moves. */}
+            {erase && erase.pts.length > 0 && (
+              <polyline
+                points={erase.pts.map((p) => `${p.x},${p.y}`).join(' ')}
+                fill="none"
+                stroke="currentColor"
+                strokeOpacity={0.25}
+                strokeWidth={ERASER_RADIUS_PX * 2}
+                vectorEffect="non-scaling-stroke"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                pointerEvents="none"
+              />
+            )}
           </>
         }
       >
-        <g style={{ pointerEvents: creating || backgroundMode ? 'none' : 'auto' }}>
+        <g style={{ pointerEvents: creating || backgroundMode || eraserTool ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
             const live = liveElement(el)
+            const erasing = erase?.ids.has(el.id)
             // Hide the token field being edited (the HTML input shows the live
             // value) ONLY in the rendered element — the selection chrome still
             // sees the real `showLabel`, so the frame doesn't shrink while editing.
@@ -1320,7 +1419,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                   : { ...live, text: '' }
                 : live
             return (
-              <g key={el.id} style={{ cursor: 'move' }} onPointerDown={(e) => onElementPointerDown(e, el)}>
+              <g key={el.id} style={{ cursor: 'move', opacity: erasing ? 0.25 : undefined }} onPointerDown={(e) => onElementPointerDown(e, el)}>
                 {render.type === 'figure' ? <FigureView element={render} /> : <ElementView element={render} viewScale={scale} />}
               </g>
             )

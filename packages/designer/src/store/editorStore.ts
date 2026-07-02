@@ -157,6 +157,8 @@ export interface EditorState {
    *  the tool is locked — switch back to the selection tool. */
   createFigure: (element: BoardElement) => void
   deleteSelected: () => void
+  /** Remove the given elements by id (one undoable op) — used by the eraser. */
+  removeElements: (ids: string[]) => void
   /** Apply a set of element attribute changes as one undoable operation — the
    *  workhorse for move (and later resize / restyle). */
   updateElements: (changes: ElementChange[]) => void
@@ -362,6 +364,19 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         }))
         push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'delete', ops })
         set({ selectedIds: [] })
+      },
+
+      removeElements: (ids) => {
+        const { doc } = get()
+        const idSet = new Set(ids)
+        const entries = doc.elements
+          .map((el, index) => ({ el, index }))
+          .filter(({ el }) => idSet.has(el.id))
+          .sort((a, b) => b.index - a.index) // highest index first (see deleteSelected)
+        if (entries.length === 0) return
+        const ops: Operation[] = entries.map(({ el, index }) => ({ kind: 'remove', element: el, index }))
+        push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'erase', ops })
+        set((s) => ({ selectedIds: s.selectedIds.filter((id) => !idSet.has(id)) }))
       },
 
       updateElements: (changes) => {
