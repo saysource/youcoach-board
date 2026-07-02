@@ -59,6 +59,21 @@ function zoomToward(vp: Viewport, factor: number, anchor?: { x: number; y: numbe
   return clampViewport(z, ax - fx * (BOARD_WIDTH / z), ay - fy * (BOARD_HEIGHT / z))
 }
 
+// Appearance fields carried by Copy/Paste style — everything EXCEPT geometry
+// (position, points, size, scale) and identity/content (figureId, text, label).
+// Applied only where both source and target have the field, so it's safe across
+// element types. Opacity travels via transform, handled separately.
+const STYLE_KEYS: (keyof ElementPatch)[] = [
+  'stroke', 'strokeWidth', 'strokeStyle', 'fill', 'fillStyle',
+  'colors', 'mirror',
+  'closed', 'curve', 'zigzag', 'waveLength', 'waveAmplitude', 'double', 'linesOffset', 'startTip', 'endTip',
+  'shape', 'tokenFill', 'color1', 'color2', 'textColor', 'showLabel',
+  'bgColor', 'fontSize', 'align', 'bold',
+]
+
+/** Alignment / distribution modes for a multi-selection. */
+export type AlignMode = 'left' | 'centerX' | 'right' | 'distributeX' | 'top' | 'centerY' | 'bottom' | 'distributeY'
+
 export interface EditorState {
   doc: BoardDoc
   activeTool: ToolId
@@ -104,8 +119,9 @@ export interface EditorState {
    *  the (overlay) library drawer after a figure is dropped. */
   figureAddedTick: number
 
-  /** Style copied via "Copy style", to be applied with "Paste style". */
-  styleClipboard: FigureStyle | null
+  /** Source element copied via "Copy style" — Paste style applies all of its
+   *  appearance (everything except geometry: position, points, size, scale). */
+  styleClipboard: BoardElement | null
 
   /** Elements copied via Copy/Cut (clones), pasted as offset copies. */
   clipboard: BoardElement[]
@@ -177,6 +193,8 @@ export interface EditorState {
   panBy: (dx: number, dy: number) => void
   /** Change the selected elements' z-order (one undoable reorder op). */
   arrangeSelected: (mode: 'front' | 'back' | 'forward' | 'backward') => void
+  /** Align or distribute the selection (needs ≥2 elements; distribute needs ≥3). */
+  alignSelected: (mode: AlignMode) => void
   /** Copy the (single) selected element's style; paste it onto the selection. */
   copyStyle: () => void
   pasteStyle: () => void
@@ -572,10 +590,49 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         push({ kind: 'reorder', order, prevOrder: ids })
       },
 
+      alignSelected: (mode) => {
+        const { doc, selectedIds } = get()
+        const els = doc.elements.filter((e) => selectedIds.includes(e.id))
+        if (els.length < 2) return
+        const items = els.map((e) => ({ e, b: getElementBounds(e) }))
+        const changes: ElementChange[] = []
+        const move = (e: BoardElement, dx: number, dy: number) => {
+          if (dx || dy) changes.push({ id: e.id, before: { transform: e.transform }, after: { transform: { ...e.transform, x: e.transform.x + dx, y: e.transform.y + dy } } })
+        }
+        const minX = Math.min(...items.map((i) => i.b.x))
+        const maxX = Math.max(...items.map((i) => i.b.x + i.b.width))
+        const minY = Math.min(...items.map((i) => i.b.y))
+        const maxY = Math.max(...items.map((i) => i.b.y + i.b.height))
+        const cx = (minX + maxX) / 2
+        const cy = (minY + maxY) / 2
+        if (mode === 'left') items.forEach(({ e, b }) => move(e, minX - b.x, 0))
+        else if (mode === 'right') items.forEach(({ e, b }) => move(e, maxX - (b.x + b.width), 0))
+        else if (mode === 'centerX') items.forEach(({ e, b }) => move(e, cx - (b.x + b.width / 2), 0))
+        else if (mode === 'top') items.forEach(({ e, b }) => move(e, 0, minY - b.y))
+        else if (mode === 'bottom') items.forEach(({ e, b }) => move(e, 0, maxY - (b.y + b.height)))
+        else if (mode === 'centerY') items.forEach(({ e, b }) => move(e, 0, cy - (b.y + b.height / 2)))
+        else if (mode === 'distributeX') {
+          if (items.length < 3) return
+          const s = items.slice().sort((a, b) => a.b.x + a.b.width / 2 - (b.b.x + b.b.width / 2))
+          const totalW = s.reduce((t, i) => t + i.b.width, 0)
+          const gap = (s[s.length - 1].b.x + s[s.length - 1].b.width - s[0].b.x - totalW) / (s.length - 1)
+          let cur = s[0].b.x
+          for (const i of s) { move(i.e, cur - i.b.x, 0); cur += i.b.width + gap }
+        } else if (mode === 'distributeY') {
+          if (items.length < 3) return
+          const s = items.slice().sort((a, b) => a.b.y + a.b.height / 2 - (b.b.y + b.b.height / 2))
+          const totalH = s.reduce((t, i) => t + i.b.height, 0)
+          const gap = (s[s.length - 1].b.y + s[s.length - 1].b.height - s[0].b.y - totalH) / (s.length - 1)
+          let cur = s[0].b.y
+          for (const i of s) { move(i.e, 0, cur - i.b.y); cur += i.b.height + gap }
+        }
+        if (changes.length) push({ kind: 'update', changes })
+      },
+
       copyStyle: () => {
         const { doc, selectedIds } = get()
         const el = doc.elements.find((e) => selectedIds.includes(e.id))
-        if (el) set({ styleClipboard: figureStyleOf(el) })
+        if (el) set({ styleClipboard: structuredClone(el) })
       },
 
       pasteStyle: () => {
@@ -583,15 +640,38 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         if (!styleClipboard) return
         const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
         if (sel.length === 0) return
-        const st = styleClipboard
-        push({
-          kind: 'update',
-          changes: sel.map((e) => ({
-            id: e.id,
-            before: { stroke: e.stroke, strokeWidth: e.strokeWidth, strokeStyle: e.strokeStyle, fill: e.fill, transform: e.transform },
-            after: { stroke: st.stroke, strokeWidth: st.strokeWidth, strokeStyle: st.strokeStyle, fill: st.fill, transform: { ...e.transform, opacity: st.opacity } },
-          })),
-        })
+        const src = styleClipboard as unknown as Record<string, unknown>
+        const changes: ElementChange[] = []
+        for (const el of sel) {
+          const target = el as unknown as Record<string, unknown>
+          const before: ElementPatch = {}
+          const after: ElementPatch = {}
+          for (const k of STYLE_KEYS) {
+            if (k in src && k in target) {
+              ;(before as Record<string, unknown>)[k] = target[k]
+              ;(after as Record<string, unknown>)[k] = src[k]
+            }
+          }
+          // Opacity rides on transform; the target keeps its own geometry.
+          before.transform = el.transform
+          after.transform = { ...el.transform, opacity: styleClipboard.transform.opacity }
+          // Text: re-fit the box if font size or bold came across (both widen it).
+          if (el.type === 'text' && ('fontSize' in after || 'bold' in after)) {
+            const fontSize = (after.fontSize as number | undefined) ?? el.fontSize
+            const bold = (after.bold as boolean | undefined) ?? el.bold
+            const { width, height } = measureTextBox(el.text, fontSize, bold)
+            before.x = el.x
+            after.x = el.x + (el.width - width) / 2
+            before.y = el.y
+            after.y = el.y + (el.height - height) / 2
+            before.width = el.width
+            after.width = width
+            before.height = el.height
+            after.height = height
+          }
+          changes.push({ id: el.id, before, after })
+        }
+        push({ kind: 'update', changes })
       },
 
       convertRectsToPolylines: () => {

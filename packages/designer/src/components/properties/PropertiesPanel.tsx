@@ -20,6 +20,14 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  AlignStartVertical,
+  AlignCenterVertical,
+  AlignEndVertical,
+  AlignHorizontalDistributeCenter,
+  AlignStartHorizontal,
+  AlignCenterHorizontal,
+  AlignEndHorizontal,
+  AlignVerticalDistributeCenter,
 } from 'lucide-react'
 import { type ArrowTip, type BoardElement, type TokenShape, type TokenFill, type TextAlign, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX, TEXT_MIN_FONT, TEXT_MAX_FONT } from '@youcoach-board/core'
 import { Button } from '../ui/button'
@@ -616,6 +624,8 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
   const { allFigure, flip, allClosablePoly, allRect, values, setClosed } = usePropertyEditing()
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected)
   const arrangeSelected = useEditorStore((s) => s.arrangeSelected)
+  const alignSelected = useEditorStore((s) => s.alignSelected)
+  const selCount = useEditorStore((s) => s.selectedIds.length)
   const convertRectsToPolylines = useEditorStore((s) => s.convertRectsToPolylines)
   const copyStyle = useEditorStore((s) => s.copyStyle)
   const pasteStyle = useEditorStore((s) => s.pasteStyle)
@@ -658,6 +668,37 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
               <ClosePathIcon /> Close path
             </DropdownMenuItem>
           ))}
+        {/* Alignment: only meaningful with a multi-selection (distribute ≥3). */}
+        {selCount >= 2 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Align</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => alignSelected('left')}>
+              <AlignStartVertical /> Align left
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => alignSelected('centerX')}>
+              <AlignCenterVertical /> Center horizontally
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => alignSelected('right')}>
+              <AlignEndVertical /> Align right
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={selCount < 3} onSelect={() => alignSelected('distributeX')}>
+              <AlignHorizontalDistributeCenter /> Distribute horizontally
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => alignSelected('top')}>
+              <AlignStartHorizontal /> Align top
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => alignSelected('centerY')}>
+              <AlignCenterHorizontal /> Center vertically
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => alignSelected('bottom')}>
+              <AlignEndHorizontal /> Align bottom
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={selCount < 3} onSelect={() => alignSelected('distributeY')}>
+              <AlignVerticalDistributeCenter /> Distribute vertically
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Arrange</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => arrangeSelected('front')}>
