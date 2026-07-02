@@ -14,7 +14,7 @@ import {
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
-import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline } from '../lib/draw'
+import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox } from '../lib/draw'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -507,7 +507,18 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         const { doc, selectedIds } = get()
         const texts = doc.elements.filter((e) => selectedIds.includes(e.id) && e.type === 'text') as Extract<BoardElement, { type: 'text' }>[]
         if (texts.length === 0) return
-        get().updateElements(texts.map((e) => ({ id: e.id, before: { bold: e.bold }, after: { bold: !e.bold } })))
+        // Bold is wider, so re-measure the box and re-center it (matching the panel).
+        get().updateElements(
+          texts.map((t) => {
+            const bold = !t.bold
+            const { width, height } = measureTextBox(t.text, t.fontSize, bold)
+            return {
+              id: t.id,
+              before: { bold: t.bold, x: t.x, y: t.y, width: t.width, height: t.height },
+              after: { bold, x: t.x + (t.width - width) / 2, y: t.y + (t.height - height) / 2, width, height },
+            }
+          }),
+        )
       },
 
       zoomIn: () => set((s) => ({ viewport: zoomToward(s.viewport, ZOOM_STEP) })),
