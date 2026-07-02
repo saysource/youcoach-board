@@ -57,6 +57,8 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       const key = e.key
       const lower = key.length === 1 ? key.toLowerCase() : key
       const s = storeApi.getState()
+      // ⌥ combos: on macOS `e.key` becomes a special glyph (⌥S → "ß"), so match
+      // the physical key via `e.code` (layout-independent, "KeyS").
 
       // ── ESC: background mode → creation tool → clear selection ──────────────
       if (key === 'Escape') {
@@ -102,9 +104,9 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
 
       // ── ⌥ (no ⌘): zoom to fit / selection, toggle snap ─────────────────────
       if (alt && !mod) {
-        if (key === '1') { e.preventDefault(); deps.zoom?.('fit'); return }
-        if (key === '2') { e.preventDefault(); deps.zoom?.('selection'); return }
-        if (lower === 's') { e.preventDefault(); s.toggleSnapToObjects(); return }
+        if (e.code === 'Digit1') { e.preventDefault(); deps.zoom?.('fit'); return }
+        if (e.code === 'Digit2') { e.preventDefault(); deps.zoom?.('selection'); return }
+        if (e.code === 'KeyS') { e.preventDefault(); s.toggleSnapToObjects(); return }
         return
       }
 
