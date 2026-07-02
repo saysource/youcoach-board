@@ -34,7 +34,7 @@ function FaceAvatar({ skin, hair, size = 60, active }: { skin: string; hair: str
   const pv = facePreview(skin, hair)
   return (
     <span
-      className={cn('flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted border border-border', active && 'ring-2 ring-primary ring-offset-1 ring-offset-popover')}
+      className={cn('flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted dark:bg-foreground/20 border border-border', active && 'ring-2 ring-primary ring-offset-1 ring-offset-popover')}
       style={{ width: size, height: size }}
     >
       {pv && <svg style={{ width: size * 0.82, height: size * 0.82 }} viewBox={pv.viewBox} preserveAspectRatio="xMidYMid meet" dangerouslySetInnerHTML={{ __html: pv.inner }} aria-hidden />}
@@ -151,7 +151,7 @@ function OpacityRow() {
 function KitFigure({ kit, size = 40 }: { kit: PlayerKit; size?: number }) {
   const pv = kitPreview(kit)
   return (
-    <span className="flex shrink-0 items-center justify-center overflow-hidden bg-muted border border-border rounded-full" style={{ width: size, height: size }}>
+    <span className="flex shrink-0 items-center justify-center overflow-hidden bg-muted dark:bg-foreground/20 border border-border rounded-full" style={{ width: size, height: size }}>
       {pv && <svg style={{ width: size * 0.9, height: size * 0.9 }} viewBox={pv.viewBox} preserveAspectRatio="xMidYMid meet" dangerouslySetInnerHTML={{ __html: pv.inner }} aria-hidden />}
     </span>
   )
