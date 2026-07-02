@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type } from 'lucide-react'
+import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -10,12 +10,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
 import { useAssets } from '../lib/assets'
 import { addBall as quickAddBall } from '../lib/quick-add'
-import { useEditorStoreApi } from '../store/context'
+import { fieldSystemConfig, availableSystems } from '../lib/formations'
+import { useEditorStore, useEditorStoreApi } from '../store/context'
 
 // Icon per catalog macro-group, for the More-tools menu.
 const GROUP_ICON: Record<string, ElementType> = { players: PlayersIcon, materials: TrainingIcon, fields: SoccerFieldIcon }
@@ -94,12 +98,14 @@ interface ToolbarProps {
   onOpenCategory: (catId: string) => void
   /** Enter background-edit mode (from the More-tools menu). */
   onEditBackground: () => void
+  /** Pick a game system to place (opens its direction/style dialog). */
+  onPickFormation: (code: string) => void
 }
 
 // Which toolbar dropdown is currently open (only one at a time).
 type ToolbarMenu = 'shapes' | 'lines' | 'more'
 
-export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground }: ToolbarProps) {
+export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onPickFormation }: ToolbarProps) {
   // The shape last picked/used, so the Shapes button shows it and re-opening the
   // menu re-activates it. Null until the first use (button shows the generic icon).
   const [lastShape, setLastShape] = useState<ShapeTool | null>(null)
@@ -140,7 +146,7 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
         </ToolButton>
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onEditBackground={onEditBackground} {...menuProps('more')} />
+      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onEditBackground={onEditBackground} onPickFormation={onPickFormation} {...menuProps('more')} />
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ToolButton label="Eraser" active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
         <Eraser />
@@ -263,17 +269,23 @@ function MoreToolsMenu({
   onToolChange,
   onOpenCategory,
   onEditBackground,
+  onPickFormation,
   open,
   onOpenChange,
 }: {
   onToolChange: (tool: ToolId) => void
   onOpenCategory: (catId: string) => void
   onEditBackground: () => void
+  onPickFormation: (code: string) => void
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const { catalog } = useAssets()
   const storeApi = useEditorStoreApi()
+  // Game systems are offered only on fields that define them (see FIELD_SYSTEMS).
+  const fieldSvg = useEditorStore((s) => s.doc.background.fieldSvg)
+  const systemsCfg = fieldSystemConfig(fieldSvg)
+  const systems = systemsCfg ? availableSystems(systemsCfg) : []
   // The ball = the first material with the "balls" action; flagged so animation
   // can special-case it later.
   const ball = catalog?.categories.materials?.figures.find((f) => f.svg && (f.actions ?? []).includes('material.balls'))
@@ -321,6 +333,21 @@ function MoreToolsMenu({
         <DropdownMenuItem onSelect={() => onToolChange('text')}>
           <Type /> Add Text
         </DropdownMenuItem>
+        {/* Game systems: only on fields that define them (soccer/futsal). */}
+        {systems.length > 0 && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Users /> Game systems
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {systems.map((code) => (
+                <DropdownMenuItem key={code} onSelect={() => onPickFormation(code)}>
+                  {code}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
         <DropdownMenuSeparator />
         {/* Enters background-edit mode (its own toolbar + fields-only drawer). */}
         <DropdownMenuItem onSelect={onEditBackground}>

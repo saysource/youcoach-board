@@ -1,6 +1,6 @@
 import { type ComponentProps } from 'react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
-import { Check } from 'lucide-react'
+import { Check, ChevronRight } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { usePortalContainer } from '../../lib/board-root'
 
@@ -8,6 +8,40 @@ export const DropdownMenu = DropdownMenuPrimitive.Root
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 export const DropdownMenuGroup = DropdownMenuPrimitive.Group
 export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
+export const DropdownMenuSub = DropdownMenuPrimitive.Sub
+
+export function DropdownMenuSubTrigger({ className, children, ...props }: ComponentProps<typeof DropdownMenuPrimitive.SubTrigger>) {
+  return (
+    <DropdownMenuPrimitive.SubTrigger
+      className={cn(
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none',
+        'focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent',
+        '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <ChevronRight className="ml-auto" />
+    </DropdownMenuPrimitive.SubTrigger>
+  )
+}
+
+export function DropdownMenuSubContent({ className, ...props }: ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  const container = usePortalContainer()
+  return (
+    <DropdownMenuPrimitive.Portal container={container ?? undefined}>
+      <DropdownMenuPrimitive.SubContent
+        className={cn(
+          'z-50 min-w-40 max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md',
+          'animate-in fade-in-0 zoom-in-95',
+          className,
+        )}
+        {...props}
+      />
+    </DropdownMenuPrimitive.Portal>
+  )
+}
 
 export function DropdownMenuContent({
   className,

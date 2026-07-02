@@ -169,6 +169,9 @@ export interface EditorState {
   /** Clone the selection in place (offset 0), select the clones, and return them
    *  — for ⌥-drag duplication. Tokens get the next team number. */
   duplicateInPlace: () => BoardElement[]
+  /** Add several elements at once (one undoable op) and select them — e.g. a whole
+   *  game-system formation of tokens. */
+  placeElements: (elements: BoardElement[]) => void
   /** Copy the selected elements (clones) to the clipboard. */
   copySelection: () => void
   /** Copy the selection then delete it. */
@@ -473,6 +476,14 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'duplicate', ops })
         set({ selectedIds: clones.map((c) => c.id) })
         return clones
+      },
+
+      placeElements: (elements) => {
+        if (elements.length === 0) return
+        const { doc } = get()
+        const ops: Operation[] = elements.map((element, i) => ({ kind: 'add', element, index: doc.elements.length + i }))
+        push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'formation', ops })
+        set({ selectedIds: elements.map((e) => e.id) })
       },
 
       copySelection: () => {

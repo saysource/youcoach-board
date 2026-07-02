@@ -22,6 +22,7 @@ import { ZoomBar } from './ZoomBar'
 import { UndoRedoBar } from './UndoRedoBar'
 import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
+import { GameSystemDialog } from './GameSystemDialog'
 import { PropertiesPanel, MobileBar } from './properties/PropertiesPanel'
 
 // Board area padding (px) and the space reserved on the left for the full
@@ -54,6 +55,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const [fullscreen, setFullscreen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
+  const [formation, setFormation] = useState<string | null>(null)
 
   // The library's selected category lives here (not in the drawer) so the
   // toolbar's More-tools menu can jump to a category and open the drawer.
@@ -279,6 +281,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 onToggleLock={toggleKeepTool}
                 onOpenCategory={openCategory}
                 onEditBackground={editBackground}
+                onPickFormation={setFormation}
               />
             )}
           </div>
@@ -328,6 +331,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           />
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+          <GameSystemDialog code={formation} fieldSvg={fieldSvg} onClose={() => setFormation(null)} />
         </BoardRootProvider>
       </TooltipPrimitive.Provider>
     </div>
