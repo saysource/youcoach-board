@@ -788,6 +788,7 @@ General
 ⌘ + C	⌘ + V	Copy / Paste
 ⌘ + X	Cut
 ⌘ + D	Duplicate
+⌘ + F	Flip figure
 ⌥ + drag	Duplicate
 ⌘ + click	Select multiple objects
 ⌘ + ⌥ + shift + ← → ↑ ↓	Select closest object in a direction

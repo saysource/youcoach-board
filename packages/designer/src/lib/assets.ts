@@ -86,12 +86,18 @@ export function figureIndex(catalog: Catalog | null): Map<string, FigureMeta> {
   return out
 }
 
+/** Players read too small at the legacy base size, so they drop at twice the size
+ *  of other figures. Applied in figureBaseSize so the drop size AND the size
+ *  inheritance reference stay consistent. */
+const PLAYER_SIZE_FACTOR = 2
+
 /** The default on-board size (board units) of a figure at the given field figure
  *  scale — the legacy sizing (longest side = boardWidth/10 · figureScale ·
  *  sizeFactor). A remembered "scale" is a multiplier on top of this. */
 export function figureBaseSize(meta: FigureMeta, figureScale: number): { w: number; h: number } {
   const longest = Math.max(meta.w, meta.h) || 1
-  const k = ((BOARD_WIDTH / 10) / longest) * figureScale * (meta.sizeFactor || 1)
+  const catFactor = meta.category.startsWith('players') ? PLAYER_SIZE_FACTOR : 1
+  const k = ((BOARD_WIDTH / 10) / longest) * figureScale * (meta.sizeFactor || 1) * catFactor
   return { w: meta.w * k, h: meta.h * k }
 }
 
