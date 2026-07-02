@@ -94,6 +94,7 @@ function Shape({ element, viewScale }: { element: BoardElement; viewScale?: numb
       f === 'vstripes' ? <rect x={0} y={0} width={TOKEN_VIEW} height={TOKEN_VIEW} fill={`url(#${patternId})`} />
       : f === 'hstripes' ? <rect x={0} y={0} width={TOKEN_VIEW} height={TOKEN_VIEW} fill={`url(#${patternId})`} />
       : f === 'checker' ? <rect x={0} y={0} width={TOKEN_VIEW} height={TOKEN_VIEW} fill={`url(#${patternId})`} />
+      : f === 'plaid' ? <rect x={0} y={0} width={TOKEN_VIEW} height={TOKEN_VIEW} fill={`url(#${patternId})`} />
       : f === 'vstripe' ? <rect x={TOKEN_VIEW / 2 - TOKEN_SINGLE_STRIPE / 2} y={0} width={TOKEN_SINGLE_STRIPE} height={TOKEN_VIEW} fill={element.color2} />
       : f === 'hstripe' ? <rect x={0} y={TOKEN_VIEW / 2 - TOKEN_SINGLE_STRIPE / 2} width={TOKEN_VIEW} height={TOKEN_SINGLE_STRIPE} fill={element.color2} />
       : null
@@ -110,6 +111,12 @@ function Shape({ element, viewScale }: { element: BoardElement; viewScale?: numb
         <pattern id={patternId} patternUnits="userSpaceOnUse" width={C * 2} height={C * 2}>
           <rect x={0} y={0} width={C} height={C} fill={element.color2} />
           <rect x={C} y={C} width={C} height={C} fill={element.color2} />
+        </pattern>
+      ) : f === 'plaid' ? (
+        // Vertical + horizontal stripes (a plaid grid), not a checkerboard.
+        <pattern id={patternId} patternUnits="userSpaceOnUse" width={P} height={P}>
+          <rect x={0} y={0} width={P / 2} height={P} fill={element.color2} />
+          <rect x={0} y={0} width={P} height={P / 2} fill={element.color2} />
         </pattern>
       ) : null
     // Caption sizing: fixed on-screen px when a viewScale is known, else board units.

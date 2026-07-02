@@ -45,6 +45,7 @@ export function ColorPickerWidget({
   onFillStyleChange,
   presets,
   showOpacity = true,
+  allowTransparent = true,
 }: {
   value: string | undefined
   onChange: (c: string) => void
@@ -55,6 +56,8 @@ export function ColorPickerWidget({
   presets?: string[]
   /** Hide the opacity slider and emit plain 6-digit hex (no alpha suffix). */
   showOpacity?: boolean
+  /** Hide the transparent swatch (channels that must carry a solid color). */
+  allowTransparent?: boolean
 }) {
   const storeApi = useEditorStoreApi()
   // Coalesce only the CONTINUOUS controls (opacity slider + the picker drag) into
@@ -93,7 +96,7 @@ export function ColorPickerWidget({
   })
   // A custom preset list (e.g. background) replaces both PREDEFINED and the
   // document-used colors; otherwise it's PREDEFINED followed by used colors.
-  const palette = presets ?? [...PREDEFINED, ...used]
+  const palette = (presets ?? [...PREDEFINED, ...used]).filter((c) => allowTransparent || !isTransparent(c))
   return (
     <div className="grid gap-2.5">
 

@@ -150,7 +150,7 @@ export interface FigureElement extends BaseElement {
  *  `text` is the (inline-editable) label drawn in `textColor`. Box geometry like
  *  rect/figure so move/resize/group reuse the same machinery. */
 export type TokenShape = 'token' | 'jersey'
-export type TokenFill = 'solid' | 'vstripes' | 'hstripes' | 'vstripe' | 'hstripe' | 'checker'
+export type TokenFill = 'solid' | 'vstripes' | 'hstripes' | 'vstripe' | 'hstripe' | 'checker' | 'plaid'
 
 export interface TokenElement extends BaseElement {
   type: 'token'
@@ -813,7 +813,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     const width = num(o.width)
     const height = num(o.height)
     if (width === null || height === null) return null
-    const fills: TokenFill[] = ['solid', 'vstripes', 'hstripes', 'vstripe', 'hstripe', 'checker']
+    const fills: TokenFill[] = ['solid', 'vstripes', 'hstripes', 'vstripe', 'hstripe', 'checker', 'plaid']
     return {
       ...base,
       type: 'token',

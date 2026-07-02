@@ -186,15 +186,17 @@ export function usePropertyEditing() {
   const allPlayer = els.length > 0 && els.every((e) => e.type === 'figure' && playerSet.has(e.figureId))
   const pc = firstFigure?.colors ?? {}
   const kitJersey = pc[JERSEY_SLOT] ?? '#ff0000'
-  const kitV = pc[VSTRIPE_SLOT]
-  const kitH = pc[HSTRIPE_SLOT]
-  const kitStyle: KitStyle =
-    kitV && kitH && kitV !== kitJersey && kitH !== kitJersey ? 'checker' : kitV && kitV !== kitJersey ? 'vstripes' : kitH && kitH !== kitJersey ? 'hstripes' : 'solid'
+  // A stripe slot is "active" only when it carries a real color — inactive stripes
+  // are transparent (older docs used the jersey color, so exclude that too).
+  const stripeOf = (c?: string) => (c && c !== 'transparent' && c !== 'none' && c !== kitJersey ? c : undefined)
+  const kitV = stripeOf(pc[VSTRIPE_SLOT])
+  const kitH = stripeOf(pc[HSTRIPE_SLOT])
+  const kitStyle: KitStyle = kitV && kitH ? 'checker' : kitV ? 'vstripes' : kitH ? 'hstripes' : 'solid'
   const playerKit: PlayerKit = {
     jersey: kitJersey,
     shorts: pc[SHORTS_SLOT] ?? '#1e1e1e',
     socks: pc[SOCKS_SLOT] ?? '#ff0000',
-    stripe: kitV && kitV !== kitJersey ? kitV : kitH && kitH !== kitJersey ? kitH : '#1e1e1e',
+    stripe: kitV ?? kitH ?? '#1e1e1e',
     style: kitStyle,
   }
 
@@ -318,7 +320,7 @@ export function usePropertyEditing() {
     setKit: (kit: PlayerKit) =>
       patch(figures, (e) => {
         const f = e as Extract<BoardElement, { type: 'figure' }>
-        const { v, h } = stripeFills(kit.style, kit.jersey, kit.stripe)
+        const { v, h } = stripeFills(kit.style, kit.stripe)
         return {
           before: { colors: f.colors },
           after: { colors: { ...f.colors, [JERSEY_SLOT]: kit.jersey, [SHORTS_SLOT]: kit.shorts, [SOCKS_SLOT]: kit.socks, [VSTRIPE_SLOT]: v, [HSTRIPE_SLOT]: h } },

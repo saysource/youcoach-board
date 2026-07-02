@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
-import { ElementView, IDENTITY_TRANSFORM } from '@youcoach-board/core'
+import { ElementView, IDENTITY_TRANSFORM, type TokenFill } from '@youcoach-board/core'
 import { Button } from '../ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
@@ -167,6 +167,10 @@ function KitSvg({ kit, className, style }: { kit: PlayerKit; className?: string;
 
 // A jersey-style icon: the token jersey shirt (white base, mid-gray stripes) with
 // the fill style matching the kit style (KitStyle === the token fill names).
+// The 4th style ('checker') is actually a plaid (v+h stripes) — render its icon
+// with the token's plaid fill, not a checkerboard.
+const iconFill = (style: KitStyle): TokenFill => (style === 'checker' ? 'plaid' : style)
+
 function KitStyleIcon({ style, size = 28 }: { style: KitStyle; size?: number }) {
   const el = {
     id: 'kit-style',
@@ -176,7 +180,7 @@ function KitStyleIcon({ style, size = 28 }: { style: KitStyle; size?: number }) 
     width: 100,
     height: 100,
     shape: 'jersey' as const,
-    tokenFill: style,
+    tokenFill: iconFill(style),
     color1: '#ffffff',
     color2: '#888888',
     textColor: '#111111',
@@ -210,7 +214,7 @@ function KitColorButton({ color, label, onChange, open, onOpenChange }: { color:
           while the widget and its nested picker stay clickable. */}
       {open && <Backdrop onClose={() => onOpenChange(false)} className="z-45" />}
       <PopoverContent side="right" align="start" className="w-56">
-        <ColorPickerWidget value={color} onChange={onChange} showOpacity={false} />
+        <ColorPickerWidget value={color} onChange={onChange} showOpacity={false} allowTransparent={false} />
       </PopoverContent>
     </Popover>
   )
@@ -221,9 +225,20 @@ const KIT_STYLES: KitStyle[] = ['solid', 'vstripes', 'hstripes', 'checker']
 // The kit editor: big preview | controls (style + colors) | recent-kits grid.
 function KitEditor() {
   const p = usePropertyEditing()
-  const kit = p.values.kit ?? EMPTY_KIT
+  const derived = p.values.kit ?? EMPTY_KIT
   const history = useEditorStore((s) => s.kitHistory)
-  const set = (patch: Partial<PlayerKit>) => p.setKit({ ...kit, ...patch })
+  // Remember the stripe color across style changes: Solid clears the stripe slots,
+  // so keep the last color here to propose it when a striped style is picked again.
+  const [stripeColor, setStripeColor] = useState(derived.stripe)
+  const kit = { ...derived, stripe: derived.style === 'solid' ? stripeColor : derived.stripe }
+  const set = (patch: Partial<PlayerKit>) => {
+    if (patch.stripe) setStripeColor(patch.stripe)
+    p.setKit({ ...kit, ...patch })
+  }
+  const loadKit = (k: PlayerKit) => {
+    setStripeColor(k.stripe)
+    p.setKit(k)
+  }
   // Only one color picker open at a time.
   const [openColor, setOpenColor] = useState<'jersey' | 'stripe' | 'shorts' | 'socks' | null>(null)
   const colorProps = (which: 'jersey' | 'stripe' | 'shorts' | 'socks') => ({
@@ -271,7 +286,7 @@ function KitEditor() {
         {Array.from({ length: KIT_HISTORY_SIZE }).map((_, i) => {
           const k = history[i]
           return (
-            <button key={i} type="button" aria-label="Recent kit" disabled={!k} onClick={() => k && p.setKit(k)} className="flex items-center justify-center rounded-md disabled:cursor-default">
+            <button key={i} type="button" aria-label="Recent kit" disabled={!k} onClick={() => k && loadKit(k)} className="flex items-center justify-center rounded-md disabled:cursor-default">
               <KitSvg kit={k ?? EMPTY_KIT} style={{ height: 114, width: 'auto', opacity: k ? 1 : 0.2 }} />
             </button>
           )

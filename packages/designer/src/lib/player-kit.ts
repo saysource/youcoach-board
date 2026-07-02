@@ -81,12 +81,14 @@ export function facePreview(skin: string, hair: string): SvgPreview | null {
   return { viewBox: faceTpl.getAttribute('viewBox') ?? '0 0 65 81', inner: c.innerHTML }
 }
 
-/** Resolve the v/h stripe fills for a style (relative to the jersey color). */
-export function stripeFills(style: KitStyle, jersey: string, stripe: string): { v: string; h: string } {
-  return {
-    v: style === 'vstripes' || style === 'checker' ? stripe : jersey,
-    h: style === 'hstripes' || style === 'checker' ? stripe : jersey,
-  }
+/** Resolve the v/h stripe fills for a style. The stripe shapes overlay the jersey
+ *  (v_stripe drawn last, on top), so the *inactive* stripe must be transparent —
+ *  a jersey-colored v_stripe would otherwise cut through horizontal stripes. The
+ *  4th style is v+h stripes (a plaid), not a checkerboard. */
+export function stripeFills(style: KitStyle, stripe: string): { v: string; h: string } {
+  const v = style === 'vstripes' || style === 'checker'
+  const h = style === 'hstripes' || style === 'checker'
+  return { v: v ? stripe : 'transparent', h: h ? stripe : 'transparent' }
 }
 
 /** Recolor the kit preview (body as a neutral silhouette, kit parts colored). */
@@ -101,7 +103,7 @@ export function kitPreview(kit: { jersey: string; shorts: string; socks: string;
   set('.base_tshirt', kit.jersey)
   set('.shorts', kit.shorts)
   set('.socks', kit.socks)
-  const { v, h } = stripeFills(kit.style, kit.jersey, kit.stripe)
+  const { v, h } = stripeFills(kit.style, kit.stripe)
   set('.v_stripe', v)
   set('.h_stripe', h)
   return { viewBox: kitTpl.getAttribute('viewBox') ?? '0 0 100 100', inner: c.innerHTML }
