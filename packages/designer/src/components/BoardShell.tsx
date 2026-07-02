@@ -12,7 +12,8 @@ import { cn } from '../lib/cn'
 import { useAssets, figureColorInfo, figureIndex, figureBaseSize, fieldFigureScale } from '../lib/assets'
 import { playerSvgs, PLAYER_SLOTS } from '../lib/player-kit'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
-import { isCreationTool } from '../store/editorStore'
+import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
+import { addBall } from '../lib/quick-add'
 import { Toolbar } from './Toolbar'
 import { MainMenu } from './MainMenu'
 import { TopRightControls } from './TopRightControls'
@@ -187,37 +188,19 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const boardPaddingRight = overlayOpen ? Math.max(BOARD_RIGHT_PAD, width + leftPad - 2 * targetRight + fieldW) : BOARD_RIGHT_PAD
   const reserveRight = drawerOpen && drawerPinned
 
-  // Keyboard: undo/redo, delete selection, escape to deselect / drop the tool.
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null
-      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
-      const mod = e.metaKey || e.ctrlKey
-      const { undo, redo, deleteSelected, setSelection, setActiveTool, activeTool } = store.getState()
-
-      // ESC leaves background-edit mode before any other Escape behavior.
-      if (e.key === 'Escape' && bgEditing) {
-        e.preventDefault()
-        finishBackground()
-        return
-      }
-      if (mod && e.key.toLowerCase() === 'z') {
-        e.preventDefault()
-        if (e.shiftKey) redo()
-        else undo()
-      } else if (mod && e.key.toLowerCase() === 'y') {
-        e.preventDefault()
-        redo()
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        deleteSelected()
-      } else if (e.key === 'Escape') {
-        if (isCreationTool(activeTool)) setActiveTool('select')
-        else setSelection([])
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [store, bgEditing])
+  // Global keyboard shortcuts (see useDesignerHotkeys for the full map). Drawer
+  // opens and ball quick-add are wired to the shell's callbacks; grid/zoom/help
+  // are added by later phases.
+  const playersCat = catalog?.groups.find((g) => g.id === 'players')?.categories[0] ?? null
+  const materialsCat = catalog?.groups.find((g) => g.id === 'materials')?.categories[0] ?? null
+  useDesignerHotkeys({
+    storeApi: store,
+    bgEditing,
+    finishBackground,
+    openPlayers: () => playersCat && openCategory(playersCat),
+    openMaterials: () => materialsCat && openCategory(materialsCat),
+    addBall: () => addBall(catalog, store),
+  })
 
   return (
     <div

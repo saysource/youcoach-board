@@ -1,6 +1,5 @@
 import { type ElementType, useState } from 'react'
 import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type } from 'lucide-react'
-import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -14,8 +13,9 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
-import { useAssets, buildFigureElement, figureBaseSize } from '../lib/assets'
-import { useEditorStore } from '../store/context'
+import { useAssets } from '../lib/assets'
+import { addBall as quickAddBall } from '../lib/quick-add'
+import { useEditorStoreApi } from '../store/context'
 
 // Icon per catalog macro-group, for the More-tools menu.
 const GROUP_ICON: Record<string, ElementType> = { players: PlayersIcon, materials: TrainingIcon, fields: SoccerFieldIcon }
@@ -273,19 +273,13 @@ function MoreToolsMenu({
   onOpenChange: (open: boolean) => void
 }) {
   const { catalog } = useAssets()
-  const createFigure = useEditorStore((s) => s.createFigure)
-  const figureScale = useEditorStore((s) => s.doc.background.figureScale)
+  const storeApi = useEditorStoreApi()
   // The ball = the first material with the "balls" action; flagged so animation
   // can special-case it later.
   const ball = catalog?.categories.materials?.figures.find((f) => f.svg && (f.actions ?? []).includes('material.balls'))
 
   function addBall() {
-    if (!catalog || !ball?.svg) return
-    const colors = { ...(catalog.defaults.materials ?? {}) }
-    // Size it like a drawer drop: the field's figureScale + the ball's sizeFactor
-    // (which keeps it small), not its raw catalog pixels.
-    const base = figureBaseSize({ w: ball.w, h: ball.h, sizeFactor: ball.sizeFactor ?? 1, category: 'materials' }, figureScale)
-    createFigure(buildFigureElement({ figureId: ball.svg, w: Math.round(base.w), h: Math.round(base.h), mirror: false, colors, ball: true }, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
+    quickAddBall(catalog, storeApi)
   }
 
   return (
