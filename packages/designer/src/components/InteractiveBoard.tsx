@@ -593,14 +593,41 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     return snap ? { x: raw.x + snap.dx, y: raw.y + snap.dy } : raw
   }
 
+  // The resized element's notable points (rotation- and type-aware: ellipse radius
+  // extremes, else corners) + its AABB, for a given handle pointer.
+  function resizedNotable(el: BoardElement, g: Gesture, pointer: Point): { pts: SnapMark[]; box: Box } {
+    const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, pointer, MIN_SIZE, {
+      fromCenter: g.alt,
+      proportional: g.snap || el.type === 'figure' || el.type === 'token',
+    })
+    const c = localCorners(box)
+    const nw = elementToBoard(c.nw, box, transform)
+    const ne = elementToBoard(c.ne, box, transform)
+    const se = elementToBoard(c.se, box, transform)
+    const sw = elementToBoard(c.sw, box, transform)
+    const center = { x: (nw.x + se.x) / 2, y: (nw.y + se.y) / 2 }
+    const mid = (a: SnapMark, b: SnapMark): SnapMark => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
+    const pts = el.type === 'ellipse' ? [mid(nw, ne), mid(ne, se), mid(se, sw), mid(sw, nw), center] : [nw, ne, se, sw, center]
+    const xs = [nw.x, ne.x, se.x, sw.x]
+    const ys = [nw.y, ne.y, se.y, sw.y]
+    return { pts, box: { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) } }
+  }
+
   // The resize handle's board point (= the dragged corner, opposite one anchored),
-  // snapped to other elements' notable points so the resized edges align. Same
-  // point feeds the live preview and the commit. Returns the guides to draw too.
+  // snapped so the resized element's notable points on the moving edges align to
+  // other elements. Same point feeds the live preview and the commit; also returns
+  // the guides to draw.
   function resizePointer(el: BoardElement, g: Gesture): { pointer: Point; guides: SnapLine[] } {
     const base = clampToCanvas(resizeCurrent(el, g))
     if (!snapToObjects) return { pointer: base, guides: [] }
+    const { pts, box } = resizedNotable(el, g, base)
+    // Notable points on the moving edges (the two edges meeting at the handle).
+    const edgeX = g.handle.includes('e') ? box.x + box.width : g.handle.includes('w') ? box.x : null
+    const edgeY = g.handle.includes('s') ? box.y + box.height : g.handle.includes('n') ? box.y : null
+    const xPts = edgeX != null ? pts.filter((p) => Math.abs(p.x - edgeX) < 0.5) : []
+    const yPts = edgeY != null ? pts.filter((p) => Math.abs(p.y - edgeY) < 0.5) : []
     const targetPts = doc.elements.filter((e) => e.id !== g.id).flatMap((e) => notablePoints(e))
-    const { dx, dy, guides } = snapResize(base, targetPts, SNAP_PX / (scale || 1))
+    const { dx, dy, guides } = snapResize(xPts, yPts, targetPts, SNAP_PX / (scale || 1))
     return { pointer: clampToCanvas({ x: base.x + dx, y: base.y + dy }), guides }
   }
 

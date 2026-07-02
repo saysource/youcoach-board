@@ -182,18 +182,21 @@ export function computeSnap(moving: SnapElement, targets: SnapElement[], thresho
   return { dx, dy, guides, gaps }
 }
 
-// Snap a single dragged point (a resize handle / corner) to the nearest target
-// notable point on each axis, returning the offset to apply and the guide lines
-// through the snapped point. Alignment only — resizing has no equidistance.
-export function snapResize(corner: SnapMark, targetPts: SnapMark[], threshold: number): { dx: number; dy: number; guides: SnapLine[] } {
+// Snap a resize to other elements' notable points. `xPts` are the moving element's
+// notable points lying on the moving vertical edge (their x snaps → the offset to
+// apply to the handle's x); `yPts` are those on the moving horizontal edge. Using
+// the element's own notable points means an ellipse snaps by its radius extremes
+// (edge midpoints), a rectangle by its corners. Alignment only — no equidistance.
+export function snapResize(xPts: SnapMark[], yPts: SnapMark[], targetPts: SnapMark[], threshold: number): { dx: number; dy: number; guides: SnapLine[] } {
   if (targetPts.length === 0 || threshold <= 0) return { dx: 0, dy: 0, guides: [] }
-  const ox = alignOffset([corner], targetPts, 'x', threshold)
-  const oy = alignOffset([corner], targetPts, 'y', threshold)
-  const snapped: SnapMark = { x: corner.x + (ox ?? 0), y: corner.y + (oy ?? 0) }
+  const ox = alignOffset(xPts, targetPts, 'x', threshold)
+  const oy = alignOffset(yPts, targetPts, 'y', threshold)
+  const dx = ox ?? 0
+  const dy = oy ?? 0
   const guides: SnapLine[] = []
-  if (ox != null) guides.push(...alignGuides([snapped], targetPts, 'x'))
-  if (oy != null) guides.push(...alignGuides([snapped], targetPts, 'y'))
-  return { dx: ox ?? 0, dy: oy ?? 0, guides }
+  if (ox != null) guides.push(...alignGuides(shiftPts(xPts, dx, dy), targetPts, 'x'))
+  if (oy != null) guides.push(...alignGuides(shiftPts(yPts, dx, dy), targetPts, 'y'))
+  return { dx, dy, guides }
 }
 
 // Choose the nearer of an alignment offset and a gap hit for one axis.
