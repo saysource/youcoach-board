@@ -57,7 +57,7 @@ import { computeResize, rotationFor, boardToElement, elementToBoard, localCorner
 import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
 import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
-import { computeSnap, type SnapResult } from '../lib/snapping'
+import { computeSnap, type SnapResult, type SnapElement, type SnapMark } from '../lib/snapping'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -540,10 +540,26 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   }
 
   // ── Snap to objects (Excalidraw-style alignment) ──────────────────────────
+  // An element's notable snap points (rotation-aware): the four corners + centre
+  // for boxes, or the four axis-extremes (side midpoints) + centre for ellipses.
+  function notablePoints(el: BoardElement): SnapMark[] {
+    const [nw, ne, se, sw] = boardCorners(el)
+    const center = { x: (nw.x + se.x) / 2, y: (nw.y + se.y) / 2 }
+    const mid = (a: SnapMark, b: SnapMark): SnapMark => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
+    if (el.type === 'ellipse') return [mid(nw, ne), mid(ne, se), mid(se, sw), mid(sw, nw), center]
+    return [nw, ne, se, sw, center]
+  }
+  // Notable points of an axis-aligned box (used for a multi-selection's bbox).
+  function boxPoints(b: Box): SnapMark[] {
+    const cx = b.x + b.width / 2
+    const cy = b.y + b.height / 2
+    return [{ x: b.x, y: b.y }, { x: b.x + b.width, y: b.y }, { x: b.x + b.width, y: b.y + b.height }, { x: b.x, y: b.y + b.height }, { x: cx, y: cy }]
+  }
+
   // Snap offset + guides for the current move, or null when snapping is off /
-  // the move hasn't engaged / there's nothing to snap. All boxes are rotation-
-  // aware AABBs (unionBounds spans the elements' rotated corners), so a tilted
-  // element snaps by the box it actually occupies on screen.
+  // the move hasn't engaged / there's nothing to snap. Boxes (for equidistance)
+  // are rotation-aware AABBs; alignment uses each element's notable points. A
+  // single element snaps by its own points; a multi-selection by its bbox's.
   function moveSnap(m: MoveState): SnapResult | null {
     if (!snapToObjects || !m.engaged) return null
     const originEls = m.ids
@@ -556,11 +572,16 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     if (!u) return null
     const raw = clampMoveDelta(m.current.x - m.start.x, m.current.y - m.start.y)
     const movingBox: Box = { x: u.x + raw.x, y: u.y + raw.y, width: u.width, height: u.height }
+    const movingPts = (originEls.length === 1 ? notablePoints(originEls[0]) : boxPoints(u)).map((p) => ({ x: p.x + raw.x, y: p.y + raw.y }))
+    const moving: SnapElement = { box: movingBox, points: movingPts }
     const targets = doc.elements
       .filter((e) => !m.ids.includes(e.id))
-      .map((e) => unionBounds([e]))
-      .filter((b): b is Box => b !== null)
-    return computeSnap(movingBox, targets, SNAP_PX / (scale || 1))
+      .map((e): SnapElement | null => {
+        const b = unionBounds([e])
+        return b ? { box: b, points: notablePoints(e) } : null
+      })
+      .filter((t): t is SnapElement => t !== null)
+    return computeSnap(moving, targets, SNAP_PX / (scale || 1))
   }
 
   // The move delta actually applied: clamped to the canvas, then nudged by the

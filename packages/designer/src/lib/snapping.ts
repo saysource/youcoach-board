@@ -1,18 +1,27 @@
-// Excalidraw-style "snap to objects": when moving a selection, its bounding box
-// magnetically snaps to other elements. Two independent kinds per axis:
-//   • alignment — an edge/centre lines up with another element's edge/centre
-//     (drawn as a line with a small × on each notable point);
+// Excalidraw-style "snap to objects": when moving a selection, it magnetically
+// snaps to other elements. Two independent kinds per axis:
+//   • alignment — a notable point (corner / centre / ellipse axis-extreme) lines
+//     up with another element's notable point (drawn as a line with a small × on
+//     each point that triggered it);
 //   • equidistance — the box centres between two elements so the gaps on both
 //     sides are equal (drawn as two equal segments, each with a ‖ tick).
 // The X and Y axes snap independently; per axis the nearer of the two wins. Pure
-// geometry (board units): the caller supplies AABBs and the on-screen threshold in
-// board units, applies the returned offset to its move delta, and draws the guides.
+// geometry (board units): the caller supplies each element's notable points +
+// AABB and the on-screen threshold in board units, applies the returned offset to
+// its move delta, and draws the guides.
 
 import type { Box } from '@youcoach-board/core'
 
 export interface SnapMark {
   x: number
   y: number
+}
+
+/** An element as the snapper sees it: its notable points (for alignment) and its
+ *  axis-aligned bounding box (for equidistance). */
+export interface SnapElement {
+  points: SnapMark[]
+  box: Box
 }
 
 export interface SnapLine {
@@ -48,46 +57,22 @@ const EMPTY: SnapResult = { dx: 0, dy: 0, guides: [], gaps: [] }
 // A hair of tolerance absorbs FP drift when testing coincidence.
 const COINCIDE = 0.5
 
-// The three notable coordinates of a box on each axis: [start edge, center, end].
-function xAnchors(b: Box): number[] {
-  return [b.x, b.x + b.width / 2, b.x + b.width]
-}
-function yAnchors(b: Box): number[] {
-  return [b.y, b.y + b.height / 2, b.y + b.height]
-}
-
-// Smallest offset (target − moving) that lines any moving anchor up with any
-// target anchor within `threshold`; null when nothing is close enough.
-function alignOffset(moving: number[], targets: Box[], anchorsOf: (b: Box) => number[], threshold: number): number | null {
+// Smallest offset (target − moving) lining any moving point up with any target
+// point on the given axis, within `threshold`; null when nothing is close enough.
+function alignOffset(moving: SnapMark[], targets: SnapMark[], axis: 'x' | 'y', threshold: number): number | null {
   let best: number | null = null
   let bestAbs = threshold + 1
   for (const m of moving) {
     for (const t of targets) {
-      for (const a of anchorsOf(t)) {
-        const diff = a - m
-        const abs = Math.abs(diff)
-        if (abs <= threshold && abs < bestAbs) {
-          bestAbs = abs
-          best = diff
-        }
+      const diff = t[axis] - m[axis]
+      const abs = Math.abs(diff)
+      if (abs <= threshold && abs < bestAbs) {
+        bestAbs = abs
+        best = diff
       }
     }
   }
   return best
-}
-
-// The notable point(s) where a vertical line at x=`mx` meets box `b`: its centre
-// (a single point — the line then stops at the centre) if that's what aligned,
-// otherwise the two corners on the meeting edge.
-function marksOnVertical(b: Box, mx: number): SnapMark[] {
-  const cx = b.x + b.width / 2
-  if (Math.abs(cx - mx) < COINCIDE) return [{ x: mx, y: b.y + b.height / 2 }]
-  return [{ x: mx, y: b.y }, { x: mx, y: b.y + b.height }]
-}
-function marksOnHorizontal(b: Box, my: number): SnapMark[] {
-  const cy = b.y + b.height / 2
-  if (Math.abs(cy - my) < COINCIDE) return [{ x: b.x + b.width / 2, y: my }]
-  return [{ x: b.x, y: my }, { x: b.x + b.width, y: my }]
 }
 
 // Axis accessors so the gap logic is written once for both orientations.
@@ -141,51 +126,58 @@ function gapSegments(snapped: Box, hit: GapHit, ax: Axis, axis: 'x' | 'y'): GapS
   return [seg(ax.hi(hit.before), ax.lo(snapped)), seg(ax.hi(snapped), ax.lo(hit.after))]
 }
 
-// Compute the snap offset + guides for `moving` (the selection AABB at its pre-snap
-// position) against the other elements' AABBs `targets`. Per axis, alignment and
+// Alignment guides along one axis: one line per snapped-point coordinate that
+// coincides with a target point, threading every point (moving + target) on it.
+function alignGuides(movingPts: SnapMark[], targetPts: SnapMark[], axis: 'x' | 'y'): SnapLine[] {
+  const cross: 'x' | 'y' = axis === 'x' ? 'y' : 'x'
+  const out: SnapLine[] = []
+  const done = new Set<number>()
+  for (const mp of movingPts) {
+    const key = Math.round(mp[axis] * 100)
+    if (done.has(key)) continue
+    const tp = targetPts.filter((p) => Math.abs(p[axis] - mp[axis]) < COINCIDE)
+    if (tp.length === 0) continue
+    done.add(key)
+    const marks = [...movingPts.filter((p) => Math.abs(p[axis] - mp[axis]) < COINCIDE), ...tp]
+    const c = marks.map((p) => p[cross])
+    const lo = Math.min(...c)
+    const hi = Math.max(...c)
+    out.push(axis === 'x' ? { x1: mp.x, y1: lo, x2: mp.x, y2: hi, marks } : { x1: lo, y1: mp.y, x2: hi, y2: mp.y, marks })
+  }
+  return out
+}
+
+const shiftPts = (pts: SnapMark[], dx: number, dy: number): SnapMark[] => pts.map((p) => ({ x: p.x + dx, y: p.y + dy }))
+
+// Compute the snap offset + guides for the `moving` element (at its pre-snap
+// position) against the other elements `targets`. Per axis, alignment and
 // equidistance compete; the nearer offset wins.
-export function computeSnap(moving: Box, targets: Box[], threshold: number): SnapResult {
+export function computeSnap(moving: SnapElement, targets: SnapElement[], threshold: number): SnapResult {
   if (targets.length === 0 || threshold <= 0) return EMPTY
 
-  const alignX = alignOffset(xAnchors(moving), targets, xAnchors, threshold)
-  const alignY = alignOffset(yAnchors(moving), targets, yAnchors, threshold)
-  const gapX = centerGap(moving, targets, threshold, X_AXIS)
-  const gapY = centerGap(moving, targets, threshold, Y_AXIS)
+  const targetPts = targets.flatMap((t) => t.points)
+  const targetBoxes = targets.map((t) => t.box)
+  const alignX = alignOffset(moving.points, targetPts, 'x', threshold)
+  const alignY = alignOffset(moving.points, targetPts, 'y', threshold)
+  const gapX = centerGap(moving.box, targetBoxes, threshold, X_AXIS)
+  const gapY = centerGap(moving.box, targetBoxes, threshold, Y_AXIS)
 
-  // Per axis, pick alignment or gap by the smaller magnitude.
   const pickX = pickAxis(alignX, gapX)
   const pickY = pickAxis(alignY, gapY)
   if (!pickX && !pickY) return EMPTY
 
   const dx = pickX?.offset ?? 0
   const dy = pickY?.offset ?? 0
-  const snapped: Box = { x: moving.x + dx, y: moving.y + dy, width: moving.width, height: moving.height }
+  const snappedPts = shiftPts(moving.points, dx, dy)
+  const snappedBox: Box = { x: moving.box.x + dx, y: moving.box.y + dy, width: moving.box.width, height: moving.box.height }
   const guides: SnapLine[] = []
   const gaps: GapSegment[] = []
 
-  if (pickX?.kind === 'align') {
-    for (const mx of xAnchors(snapped)) {
-      const aligned = targets.filter((t) => xAnchors(t).some((a) => Math.abs(a - mx) < COINCIDE))
-      if (aligned.length === 0) continue
-      const marks = [snapped, ...aligned].flatMap((b) => marksOnVertical(b, mx))
-      const ys = marks.map((m) => m.y)
-      guides.push({ x1: mx, y1: Math.min(...ys), x2: mx, y2: Math.max(...ys), marks })
-    }
-  } else if (pickX?.kind === 'gap' && gapX) {
-    gaps.push(...gapSegments(snapped, gapX, X_AXIS, 'x'))
-  }
+  if (pickX?.kind === 'align') guides.push(...alignGuides(snappedPts, targetPts, 'x'))
+  else if (pickX?.kind === 'gap' && gapX) gaps.push(...gapSegments(snappedBox, gapX, X_AXIS, 'x'))
 
-  if (pickY?.kind === 'align') {
-    for (const my of yAnchors(snapped)) {
-      const aligned = targets.filter((t) => yAnchors(t).some((a) => Math.abs(a - my) < COINCIDE))
-      if (aligned.length === 0) continue
-      const marks = [snapped, ...aligned].flatMap((b) => marksOnHorizontal(b, my))
-      const xs = marks.map((m) => m.x)
-      guides.push({ x1: Math.min(...xs), y1: my, x2: Math.max(...xs), y2: my, marks })
-    }
-  } else if (pickY?.kind === 'gap' && gapY) {
-    gaps.push(...gapSegments(snapped, gapY, Y_AXIS, 'y'))
-  }
+  if (pickY?.kind === 'align') guides.push(...alignGuides(snappedPts, targetPts, 'y'))
+  else if (pickY?.kind === 'gap' && gapY) gaps.push(...gapSegments(snappedBox, gapY, Y_AXIS, 'y'))
 
   return { dx, dy, guides, gaps }
 }
