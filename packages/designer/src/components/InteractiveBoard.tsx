@@ -223,6 +223,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const beginTransaction = useEditorStore((s) => s.beginTransaction)
   const commitTransaction = useEditorStore((s) => s.commitTransaction)
   const updateElements = useEditorStore((s) => s.updateElements)
+  const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
   const panBy = useEditorStore((s) => s.panBy)
@@ -583,14 +584,27 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const selectedEls = doc.elements.filter((e) => selectedSet.has(e.id))
   const liveSelected = selectedEls.map(liveElement)
 
-  function startMove(ids: string[], from: Point, pointerId: number) {
-    const origins: Record<string, ElementTransform> = {}
-    for (const id of ids) {
-      const el = doc.elements.find((e) => e.id === id)
-      if (el) origins[id] = el.transform
-    }
+  function startMove(ids: string[], from: Point, pointerId: number, presetOrigins?: Record<string, ElementTransform>) {
+    // ⌥-drag duplicates first: the clones aren't in `doc` yet this render, so their
+    // origins are passed in explicitly.
+    const origins: Record<string, ElementTransform> = presetOrigins ?? {}
+    if (!presetOrigins)
+      for (const id of ids) {
+        const el = doc.elements.find((e) => e.id === id)
+        if (el) origins[id] = el.transform
+      }
     setMove({ ids, start: from, current: from, origins, engaged: false })
     containerRef.current?.setPointerCapture(pointerId)
+  }
+
+  // ⌥-drag: duplicate the current selection in place and drag the clones instead.
+  function startAltDuplicateMove(from: Point, pointerId: number): boolean {
+    const clones = duplicateInPlace()
+    if (clones.length === 0) return false
+    const origins: Record<string, ElementTransform> = {}
+    for (const c of clones) origins[c.id] = c.transform
+    startMove(clones.map((c) => c.id), from, pointerId, origins)
+    return true
   }
 
   // Finish the in-progress polyline. `closed` joins last→first (needs ≥3
@@ -720,7 +734,12 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     }
     const ids = [...next]
     setSelection(ids)
-    if (willMove && ids.length) startMove(ids, clientToBoard(svg, e.clientX, e.clientY), e.pointerId)
+    if (willMove && ids.length) {
+      const from = clientToBoard(svg, e.clientX, e.clientY)
+      // ⌥-drag duplicates the selection and drags the copies (originals stay put).
+      if (e.altKey) startAltDuplicateMove(from, e.pointerId)
+      else startMove(ids, from, e.pointerId)
+    }
     // Touch long-press on a token → inline edit (fires only if the finger stays
     // put; any drag/up clears the timer). Double-click is the pointer path.
     cancelLongPress()
@@ -888,7 +907,9 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
-    startMove(selectedIds, clientToBoard(svg, e.clientX, e.clientY), e.pointerId)
+    const from = clientToBoard(svg, e.clientX, e.clientY)
+    if (e.altKey) startAltDuplicateMove(from, e.pointerId)
+    else startMove(selectedIds, from, e.pointerId)
   }
 
   // Grab the background move handle: pan the field SVG by dragging it.

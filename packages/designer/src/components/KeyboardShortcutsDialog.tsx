@@ -33,6 +33,7 @@ const TOOLS: Section = {
     { label: 'Players drawer', combos: [['P']] },
     { label: 'Materials drawer', combos: [['M']] },
     { label: 'Add ball', combos: [['B']] },
+    { label: 'Keep tool active', combos: [['Q']] },
   ],
 }
 
@@ -45,6 +46,7 @@ const EDITOR: Section = {
     { label: 'Copy', combos: [[MOD, 'C']] },
     { label: 'Paste', combos: [[MOD, 'V']] },
     { label: 'Duplicate', combos: [[MOD, 'D']] },
+    { label: 'Duplicate (drag)', combos: [[ALT, 'drag']] },
     { label: 'Delete', combos: [['Delete']] },
     { label: 'Select all', combos: [[MOD, 'A']] },
     { label: 'Flip figure', combos: [[MOD, 'F']] },

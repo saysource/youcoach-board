@@ -14,7 +14,7 @@ import {
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
-import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox } from '../lib/draw'
+import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox, nextTokenText } from '../lib/draw'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -166,6 +166,9 @@ export interface EditorState {
   resetBackground: () => void
   /** Clone the selected elements (offset) as one undoable op; select the clones. */
   duplicateSelected: () => void
+  /** Clone the selection in place (offset 0), select the clones, and return them
+   *  — for ⌥-drag duplication. Tokens get the next team number. */
+  duplicateInPlace: () => BoardElement[]
   /** Copy the selected elements (clones) to the clipboard. */
   copySelection: () => void
   /** Copy the selection then delete it. */
@@ -453,6 +456,23 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         const ops: Operation[] = clones.map((element, i) => ({ kind: 'add', element, index: doc.elements.length + i }))
         push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'duplicate', ops })
         set({ selectedIds: clones.map((c) => c.id) })
+      },
+
+      duplicateInPlace: () => {
+        const { doc, selectedIds } = get()
+        const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
+        if (sel.length === 0) return []
+        const clones = sel.map((e) => {
+          const c = structuredClone(e) as BoardElement
+          c.id = crypto.randomUUID()
+          // A duplicated token joins its team with the next number (like a new one).
+          if (c.type === 'token') c.text = nextTokenText(doc.elements, { color1: c.color1, color2: c.color2, textColor: c.textColor, tokenFill: c.tokenFill }, c.text)
+          return c
+        })
+        const ops: Operation[] = clones.map((element, i) => ({ kind: 'add', element, index: doc.elements.length + i }))
+        push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'duplicate', ops })
+        set({ selectedIds: clones.map((c) => c.id) })
+        return clones
       },
 
       copySelection: () => {

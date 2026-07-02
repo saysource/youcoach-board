@@ -120,6 +120,7 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
         return
       }
 
+      if (lower === 'q') { s.toggleKeepTool(); return }
       if (lower === 'g' && deps.toggleGrid) { e.preventDefault(); deps.toggleGrid(); return }
       if (lower === 'b') { deps.addBall(); return }
       if (lower === 'p') { deps.openPlayers(); return }
