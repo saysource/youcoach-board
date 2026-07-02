@@ -35,6 +35,10 @@ export const FORMATIONS: Record<string, FieldPoint[]> = {
 
 export type FieldOrientation = 'horizontal' | 'vertical'
 export type FormationDir = 'forward' | 'reverse'
+export type FieldKind = 'soccer' | 'futsal'
+/** How much of the pitch the formation spans: its natural own-half shape, or
+ *  stretched across the whole pitch. */
+export type Spread = 'half' | 'whole'
 
 export interface FieldSystemConfig {
   orientation: FieldOrientation
@@ -42,15 +46,17 @@ export interface FieldSystemConfig {
   rect: { x: number; y: number; w: number; h: number }
   /** Players per team (incl. goalkeeper). */
   teamSize: number
+  /** Which field artwork the preview uses. */
+  field: FieldKind
 }
 
 // Game systems are defined at field level: which fields support them + their
 // playable area, orientation and team size. Extendable later to per-field custom
 // setups (rondos, N-vs-M situations, …).
 export const FIELD_SYSTEMS: Record<string, FieldSystemConfig> = {
-  'images/optimized/fields/11/49.svg': { orientation: 'horizontal', rect: { x: 33, y: 90, w: 1120, h: 719 }, teamSize: 11 },
-  'images/optimized/fields/11/19.svg': { orientation: 'vertical', rect: { x: 327, y: 27, w: 546, h: 851 }, teamSize: 11 },
-  'images/optimized/fields/futsal/1.svg': { orientation: 'vertical', rect: { x: 409, y: 85, w: 376, h: 732 }, teamSize: 5 },
+  'images/optimized/fields/11/49.svg': { orientation: 'horizontal', rect: { x: 33, y: 90, w: 1120, h: 719 }, teamSize: 11, field: 'soccer' },
+  'images/optimized/fields/11/19.svg': { orientation: 'vertical', rect: { x: 327, y: 27, w: 546, h: 851 }, teamSize: 11, field: 'soccer' },
+  'images/optimized/fields/futsal/1.svg': { orientation: 'vertical', rect: { x: 409, y: 85, w: 376, h: 732 }, teamSize: 5, field: 'futsal' },
 }
 
 export function fieldSystemConfig(fieldSvg: string | null | undefined): FieldSystemConfig | null {
@@ -69,25 +75,38 @@ export function directionOptions(orientation: FieldOrientation): { id: Formation
     : [{ id: 'forward', label: 'Bottom → top' }, { id: 'reverse', label: 'Top → bottom' }]
 }
 
-/** Board-coordinate centers for a formation on a field, in the chosen direction.
- *  Vertical fields map the formation directly; horizontal fields rotate it 90°
- *  (own goal on the left for "forward"). "reverse" is a 180° rotation. */
-export function formationCenters(code: string, cfg: FieldSystemConfig, dir: FormationDir): { x: number; y: number }[] {
-  const pts = FORMATIONS[code] ?? []
+// Margin (in field units) kept beyond the deepest player when stretching to the
+// whole pitch, so the forwards don't sit on the far goal line.
+const WHOLE_FAR_MARGIN = 90
+
+/** Stretch a formation to span the whole pitch (keeping the GK at the own goal),
+ *  or leave its natural own-half shape. */
+function spreadPoints(pts: FieldPoint[], spread: Spread): FieldPoint[] {
+  if (spread === 'half' || pts.length === 0) return pts
+  const ys = pts.map((p) => p[1])
+  const own = Math.max(...ys) // own goal (largest y)
+  const front = Math.min(...ys) // most advanced player
+  const k = (own - WHOLE_FAR_MARGIN) / Math.max(1, own - front)
+  return pts.map(([x, y]) => [x, own - (own - y) * k])
+}
+
+/** Formation points in the canonical vertical 800×1200 space, with direction and
+ *  spread applied (reverse = 180° rotation). Shared by the board placement and
+ *  the dialog's field preview so they always match. */
+export function formationFieldPoints(code: string, dir: FormationDir, spread: Spread): FieldPoint[] {
+  const pts = spreadPoints(FORMATIONS[code] ?? [], spread)
+  return pts.map(([fx, fy]) => (dir === 'forward' ? [fx, fy] : [FIELD_W - fx, FIELD_H - fy]))
+}
+
+/** Board-coordinate centers for a formation on a field. Vertical fields map the
+ *  canonical field directly; horizontal fields rotate it 90° clockwise. */
+export function formationCenters(code: string, cfg: FieldSystemConfig, dir: FormationDir, spread: Spread): { x: number; y: number }[] {
   const { rect, orientation } = cfg
-  return pts.map(([fx, fy]) => {
-    const u = fx / FIELD_W // 0..1 across the field width (left→right)
-    const v = fy / FIELD_H // 0..1 along its length (≈1 at the own goal)
-    let x: number
-    let y: number
-    if (orientation === 'vertical') {
-      x = rect.x + (dir === 'forward' ? u : 1 - u) * rect.w
-      y = rect.y + (dir === 'forward' ? v : 1 - v) * rect.h
-    } else {
-      // Length → board X, width → board Y.
-      x = rect.x + (dir === 'forward' ? 1 - v : v) * rect.w
-      y = rect.y + (dir === 'forward' ? u : 1 - u) * rect.h
-    }
-    return { x, y }
+  return formationFieldPoints(code, dir, spread).map(([fx, fy]) => {
+    const u = fx / FIELD_W // 0..1 across the field width
+    const v = fy / FIELD_H // 0..1 along its length
+    return orientation === 'vertical'
+      ? { x: rect.x + u * rect.w, y: rect.y + v * rect.h }
+      : { x: rect.x + (1 - v) * rect.w, y: rect.y + u * rect.h } // 90° CW
   })
 }
