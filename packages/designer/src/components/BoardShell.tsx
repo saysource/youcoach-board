@@ -53,6 +53,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const [drawerPinned, setDrawerPinned] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [showGrid, setShowGrid] = useState(false)
 
   // The library's selected category lives here (not in the drawer) so the
   // toolbar's More-tools menu can jump to a category and open the drawer.
@@ -203,6 +204,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     openMaterials: () => materialsCat && openCategory(materialsCat),
     addBall: () => addBall(catalog, store),
     showHelp: () => setShortcutsOpen(true),
+    toggleGrid: () => setShowGrid((v) => !v),
   })
 
   return (
@@ -234,7 +236,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} />
+            <InteractiveBoard backgroundMode={backgroundMode} showGrid={showGrid} />
           </div>
 
           {/* Top-left menu */}

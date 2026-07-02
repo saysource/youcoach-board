@@ -195,7 +195,21 @@ interface Marquee {
 //   - drag a corner handle → resize (anchored at the opposite corner, even when
 //     rotated); drag the top circle → rotate; drag a polyline vertex (a straight
 //     line's endpoints are its two vertices) → reshape.
-export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: boolean }) {
+// A faint alignment grid drawn in board coordinates, in the background layer
+// (under the elements). Toggled with the "G" shortcut.
+const GRID_STEP = 60 // board units → a 20×15 grid over the 1200×900 board
+function BoardGrid() {
+  const lines: React.ReactNode[] = []
+  for (let x = GRID_STEP; x < BOARD_WIDTH; x += GRID_STEP) lines.push(<line key={`v${x}`} x1={x} y1={0} x2={x} y2={BOARD_HEIGHT} />)
+  for (let y = GRID_STEP; y < BOARD_HEIGHT; y += GRID_STEP) lines.push(<line key={`h${y}`} x1={0} y1={y} x2={BOARD_WIDTH} y2={y} />)
+  return (
+    <g stroke="currentColor" strokeOpacity={0.14} strokeWidth={1} pointerEvents="none">
+      {lines}
+    </g>
+  )
+}
+
+export function InteractiveBoard({ backgroundMode = false, showGrid = false }: { backgroundMode?: boolean; showGrid?: boolean }) {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -1052,7 +1066,12 @@ export function InteractiveBoard({ backgroundMode = false }: { backgroundMode?: 
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
-        background={<BackgroundView doc={doc} />}
+        background={
+          <>
+            <BackgroundView doc={doc} />
+            {showGrid && <BoardGrid />}
+          </>
+        }
         overlay={
           <>
             {/* Group body grab area: pressing anywhere inside the group frame
