@@ -107,8 +107,9 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
       const cached = materialColors[f.actions[0]]
       if (cached) colors = { ...colors, [f.colors[0]]: cached }
     }
-    // Players inherit the last player's skin/kit slots.
-    if (categoryId === 'players' && Object.keys(playerColors).length) {
+    // Players (any category bound to the players colors) inherit the last
+    // player's skin/kit slots.
+    if (cat.colors === 'players' && Object.keys(playerColors).length) {
       colors = { ...colors, ...playerColors }
     }
     // Inherit the size (as a scale over the default): first this exact figure's

@@ -109,9 +109,14 @@ export function kitPreview(kit: { jersey: string; shorts: string; socks: string;
   return { viewBox: kitTpl.getAttribute('viewBox') ?? '0 0 100 100', inner: c.innerHTML }
 }
 
-/** The set of SVG paths that are player figures (players category only). */
+/** The set of SVG paths that are player figures — every category bound to the
+ *  `players` color defaults (male/female players, goalkeepers, children, coaches,
+ *  … — not just the "players" category), so all of them get the skin/kit editor. */
 export function playerSvgs(catalog: Catalog | null): Set<string> {
   const out = new Set<string>()
-  for (const f of catalog?.categories.players?.figures ?? []) if (f.svg) out.add(f.svg)
+  for (const cat of Object.values(catalog?.categories ?? {})) {
+    if (cat.colors !== 'players') continue
+    for (const f of cat.figures) if (f.svg) out.add(f.svg)
+  }
   return out
 }
