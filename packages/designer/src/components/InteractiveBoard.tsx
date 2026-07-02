@@ -197,39 +197,29 @@ interface Marquee {
 //     line's endpoints are its two vertices) → reshape.
 // A faint alignment grid drawn in board coordinates, in the background layer
 // (under the elements). Toggled with the "G" shortcut.
-// Eraser: on-screen radius of the erase circle (px) — a 13px dot. The comet tail
-// keeps points from the last TAIL_MS, so it stretches with speed and retracts when
-// the pointer slows/stops; capped so the array stays bounded on very fast drags.
+// Eraser: on-screen radius of the erase circle (px) — a 13px dot. The tail is a
+// spring: a lagging point that chases the pointer with an exponential ease. TAIL_TAU
+// is the time constant (seconds) — the lag (hence tail length) is roughly pointer
+// speed × TAU, so faster movement stretches it and it collapses once the pointer
+// stops. Time-based (not per-frame) so it looks the same at 60 or 144 Hz.
 const ERASER_RADIUS_PX = 6.5
-const ERASER_TAIL_MS = 110
-const ERASER_TAIL_MAX = 64
+const ERASER_TAIL_TAU = 0.07
 
-interface TailPt {
-  x: number
-  y: number
-  t: number
-}
-
-// A tapering "comet" ribbon following the recent points: full width (2r) at the
-// head, tapering to a point at the tail. Returns an SVG path `d` (board units).
-function eraserTailPath(pts: TailPt[], r: number): string {
-  if (pts.length < 2) return ''
-  const n = pts.length
-  const left: string[] = []
-  const right: string[] = []
-  for (let i = 0; i < n; i++) {
-    const a = pts[Math.max(0, i - 1)]
-    const b = pts[Math.min(n - 1, i + 1)]
-    let dx = b.x - a.x
-    let dy = b.y - a.y
-    const len = Math.hypot(dx, dy) || 1
-    dx /= len
-    dy /= len
-    const h = r * (i / (n - 1)) // 0 at the tail → r at the head
-    left.push(`${pts[i].x - dy * h},${pts[i].y + dx * h}`)
-    right.push(`${pts[i].x + dy * h},${pts[i].y - dx * h}`)
-  }
-  return `M ${left.join(' L ')} L ${right.reverse().join(' L ')} Z`
+// A solid "comet" teardrop from the pointer (head, a circle of radius r) back to
+// the lagging `tail` point: two straight sides from the circle's sideways extremes
+// to the tail tip. Returns an SVG path `d` (board units), or '' when at rest.
+function eraserTailPath(head: Point, tail: Point, r: number): string {
+  const dx = head.x - tail.x
+  const dy = head.y - tail.y
+  const len = Math.hypot(dx, dy)
+  if (len < 0.4) return ''
+  const nx = -dy / len // unit normal to the head→tail direction
+  const ny = dx / len
+  const lx = head.x + nx * r
+  const ly = head.y + ny * r
+  const rx = head.x - nx * r
+  const ry = head.y - ny * r
+  return `M ${lx},${ly} L ${tail.x},${tail.y} L ${rx},${ry} Z`
 }
 
 const GRID_STEP = 60 // board units → a 20×15 grid over the 1200×900 board
@@ -433,34 +423,39 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const selectedSet = new Set(selectedIds)
 
   // Eraser: on drag, elements the moving circle touches dim to opacity-25 and are
-  // deleted on pointer-up. `pts` are timestamped so the comet tail (the recent
-  // TAIL_MS of movement) stretches with speed and retracts when idle; `ids`
-  // accumulates every touched element. The live gesture lives in a ref (so rapid
-  // synchronous pointer events read the latest, not a stale render); `erase` state
-  // only drives the dim + tail rendering; `erasing` gates the retract loop.
-  const eraseRef = useRef<{ pts: TailPt[]; ids: Set<string> } | null>(null)
-  const [erase, setErase] = useState<{ pts: TailPt[]; ids: Set<string> } | null>(null)
+  // deleted on pointer-up. `ids` accumulates every touched element. The tail is a
+  // spring: `head` is the live pointer, `tail` chases it each frame, always lagging
+  // (never anticipating). A fast flick leaves `tail` far behind → a long streak;
+  // once the pointer stops, `tail` eases in until it sits fully under the circle.
+  // The live gesture lives in a ref (so rapid synchronous pointer events read the
+  // latest, not a stale render); `erasing` gates the spring loop.
+  const eraseRef = useRef<{ head: Point; tail: Point; ids: Set<string> } | null>(null)
+  const [erase, setErase] = useState<{ head: Point; tail: Point; ids: Set<string> } | null>(null)
   const [erasing, setErasing] = useState(false)
   const syncErase = () => {
     const g = eraseRef.current
-    setErase(g ? { pts: g.pts.slice(), ids: new Set(g.ids) } : null)
+    setErase(g ? { head: { ...g.head }, tail: { ...g.tail }, ids: new Set(g.ids) } : null)
   }
-  // Drop tail points older than the window (keeping the head), so the tail shrinks
-  // as the pointer slows — the source of the elastic, speed-dependent length.
-  const pruneTail = (now: number) => {
-    const g = eraseRef.current
-    if (!g) return
-    const cutoff = now - ERASER_TAIL_MS
-    const pts = g.pts.filter((pt, i) => pt.t >= cutoff || i === g.pts.length - 1)
-    if (pts.length !== g.pts.length) g.pts = pts
-  }
-  // Animate the tail's retraction while erasing (no pointer events fire when idle).
+  // Advance the spring: the tail eases toward the head every frame. No pointer
+  // events fire while the pointer is held still, so this loop is what retracts the
+  // tail to rest under the circle once movement stops.
   useEffect(() => {
     if (!erasing) return
     let raf = 0
-    const tick = () => {
-      pruneTail(performance.now())
-      syncErase()
+    let last = 0
+    const tick = (now: number) => {
+      const g = eraseRef.current
+      if (g) {
+        const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016
+        const k = 1 - Math.exp(-dt / ERASER_TAIL_TAU) // frame-rate-independent ease
+        g.tail = {
+          x: g.tail.x + (g.head.x - g.tail.x) * k,
+          y: g.tail.y + (g.head.y - g.tail.y) * k,
+        }
+        if (Math.hypot(g.head.x - g.tail.x, g.head.y - g.tail.y) < 0.4) g.tail = { ...g.head }
+        syncErase()
+      }
+      last = now
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -732,7 +727,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
 
     // Eraser: start a scrub — touched elements dim now, deleted on pointer-up.
     if (eraserTool) {
-      eraseRef.current = { pts: [{ ...p, t: e.timeStamp }], ids: new Set(elementsUnder(p, eraseRadius())) }
+      eraseRef.current = { head: { ...p }, tail: { ...p }, ids: new Set(elementsUnder(p, eraseRadius())) }
       setErasing(true)
       syncErase()
       try {
@@ -1047,11 +1042,8 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const p = clientToBoard(svg, e.clientX, e.clientY)
     const g = eraseRef.current
     if (g) {
-      const last = g.pts[g.pts.length - 1] ?? p
-      for (const id of eraseSegment(last, p, eraseRadius())) g.ids.add(id)
-      g.pts.push({ ...p, t: e.timeStamp })
-      pruneTail(e.timeStamp)
-      if (g.pts.length > ERASER_TAIL_MAX) g.pts = g.pts.slice(-ERASER_TAIL_MAX)
+      for (const id of eraseSegment(g.head, p, eraseRadius())) g.ids.add(id)
+      g.head = { ...p } // the tail springs toward it in the RAF loop
       syncErase()
       return
     }
@@ -1443,19 +1435,16 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                 </g>
               )
             })()}
-            {/* Eraser trail: a "comet" — a hollow circle at the pointer with a
-                tapering ribbon behind it. The ribbon follows the recent points and
-                retracts when idle (RAF-pruned by time), so faster movement leaves a
-                longer, more stretched streak. */}
-            {erase && erase.pts.length > 0 && (() => {
+            {/* Eraser: a solid white pointer circle (black stroke) trailing an
+                opaque grey "comet" that lags behind via a spring — long on a fast
+                flick, collapsing under the circle once the pointer stops. */}
+            {erase && (() => {
               const r = ERASER_RADIUS_PX / (scale || 1)
-              const head = erase.pts[erase.pts.length - 1]
+              const tail = eraserTailPath(erase.head, erase.tail, r)
               return (
                 <g pointerEvents="none">
-                  {erase.pts.length > 1 && (
-                    <path d={eraserTailPath(erase.pts, r)} fill="currentColor" fillOpacity={0.18} />
-                  )}
-                  <circle cx={head.x} cy={head.y} r={r} fill="none" stroke="currentColor" strokeOpacity={0.6} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+                  {tail && <path d={tail} fill="#9ca3af" />}
+                  <circle cx={erase.head.x} cy={erase.head.y} r={r} fill="#ffffff" stroke="#000000" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
                 </g>
               )
             })()}
