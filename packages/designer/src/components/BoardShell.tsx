@@ -21,6 +21,7 @@ import { LibraryDrawer } from './LibraryDrawer'
 import { ZoomBar } from './ZoomBar'
 import { UndoRedoBar } from './UndoRedoBar'
 import { InteractiveBoard } from './InteractiveBoard'
+import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
 import { PropertiesPanel, MobileBar } from './properties/PropertiesPanel'
 
 // Board area padding (px) and the space reserved on the left for the full
@@ -51,6 +52,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerPinned, setDrawerPinned] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   // The library's selected category lives here (not in the drawer) so the
   // toolbar's More-tools menu can jump to a category and open the drawer.
@@ -200,6 +202,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     openPlayers: () => playersCat && openCategory(playersCat),
     openMaterials: () => materialsCat && openCategory(materialsCat),
     addBall: () => addBall(catalog, store),
+    showHelp: () => setShortcutsOpen(true),
   })
 
   return (
@@ -236,7 +239,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
 
           {/* Top-left menu */}
           <div className="absolute left-3 top-3 z-30">
-            <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} />
+            <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} />
           </div>
 
           {/* Main toolbar — top-center, or bottom-center in mobile mode. In
@@ -303,6 +306,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             onCategoryChange={setLibraryCatId}
             fieldsOnly={bgEditing}
           />
+
+          <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
         </BoardRootProvider>
       </TooltipPrimitive.Provider>
     </div>

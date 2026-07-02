@@ -32,9 +32,11 @@ interface MainMenuProps {
   /** Whether to show the theme switch. Phase 1: always true; later driven by
    *  embed config (a host may pin the theme and hide the control). */
   showThemeControl?: boolean
+  /** Open the keyboard-shortcuts help dialog. */
+  onShowShortcuts?: () => void
 }
 
-export function MainMenu({ theme, onThemeChange, showThemeControl = true }: MainMenuProps) {
+export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts }: MainMenuProps) {
   return (
     <DropdownMenu>
       <Tooltip>
@@ -71,8 +73,9 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true }: Main
           <Search /> Find on canvas
           <DropdownMenuShortcut>⌘F</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <CircleHelp /> Help
+        <DropdownMenuItem onSelect={() => onShowShortcuts?.()}>
+          <CircleHelp /> Keyboard Shortcuts
+          <DropdownMenuShortcut>?</DropdownMenuShortcut>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
