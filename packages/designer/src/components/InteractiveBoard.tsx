@@ -73,12 +73,6 @@ const BG_MOVE_HANDLE_PX = 72 // on-screen size of the background pan handle (ico
 const BG_MOVE_PATH =
   'M18.648,18.648L18.648,6.688L15.815,6.688L22.504,0L29.192,6.688L26.36,6.688L26.36,18.648L38.319,18.648L38.319,15.815L45.008,22.504L38.319,29.192L38.319,26.36L26.36,26.36L26.36,38.319L29.192,38.319L22.504,45.008L15.815,38.319L18.648,38.319L18.648,26.36L6.688,26.36L6.688,29.192L0,22.504L6.688,15.815L6.688,18.648L18.648,18.648Z'
 
-interface SnapGuide {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-}
 
 interface Draft {
   type: DraftType
@@ -697,7 +691,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   // Resolve a polyline/line vertex drag → the new LOCAL point. With shift held,
   // the dragged vertex angle-snaps (15° steps, incl. horizontal/vertical)
   // relative to its adjacent vertex — the same snapping as line creation.
-  function resolvePointDrag(g: Gesture): { lp: Point; guides: SnapGuide[] } {
+  function resolvePointDrag(g: Gesture): { lp: Point; guides: SnapLine[] } {
     const el = doc.elements.find((e) => e.id === g.id)
     const i = Number(g.handle.slice('point-'.length))
     let board = g.current
@@ -708,7 +702,21 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       board = snapLineEnd(neighbor, board)
     }
     board = clampToCanvas(board)
-    return { lp: boardToElement(board, g.box0, g.t0), guides: [] }
+    // Object snapping: magnet the dragged vertex to other elements' notable points
+    // AND to this shape's OTHER vertices (which count as notable points too).
+    let guides: SnapLine[] = []
+    if (snapToObjects && el) {
+      const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id).flatMap((e) => notablePoints(e))
+      if (el.type === 'polyline') {
+        el.points.forEach((pt, idx) => {
+          if (idx !== i) targetPts.push(elementToBoard({ x: pt[0], y: pt[1] }, g.box0, g.t0))
+        })
+      }
+      const snap = snapResize([board], [board], targetPts, SNAP_PX / (scale || 1))
+      board = clampToCanvas({ x: board.x + snap.dx, y: board.y + snap.dy })
+      guides = snap.guides
+    }
+    return { lp: boardToElement(board, g.box0, g.t0), guides }
   }
 
   // Resize pointer for a token's bottom handles: those sit a caption-band below
@@ -1365,16 +1373,16 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       })
       .join(' ')
   }
-  const snapGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
-  // Object-snap guides (alignment lines + equal-distance gaps) shown while dragging
-  // or resizing.
+  // Object-snap guides (alignment lines + equal-distance gaps) shown while dragging,
+  // resizing, or dragging a polyline vertex.
   const objectSnap = move ? moveSnap(move) : null
   const resizeGuides = ((): SnapLine[] => {
     if (!gesture || gesture.kind !== 'resize') return []
     const el = doc.elements.find((e) => e.id === gesture.id)
     return el ? resizePointer(el, gesture).guides : []
   })()
-  const alignGuides = [...(objectSnap?.guides ?? []), ...resizeGuides]
+  const pointGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
+  const alignGuides = [...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides]
   const gapGuides = objectSnap?.gaps ?? []
 
   // Group frame box (padded for display) for a multi-selection — the interactive
@@ -1474,29 +1482,13 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                 pointerEvents="none"
               />
             )}
-            {/* Alignment guides while shift-snapping a polyline vertex. */}
-            {snapGuides.map((gd, i) => (
-              <line
-                key={`snap-${i}`}
-                x1={gd.x1}
-                y1={gd.y1}
-                x2={gd.x2}
-                y2={gd.y2}
-                stroke="var(--color-fuchsia-200)"
-                strokeWidth={1}
-                strokeDasharray="3 3"
-                vectorEffect="non-scaling-stroke"
-                shapeRendering="crispEdges"
-                pointerEvents="none"
-              />
-            ))}
             {/* Object-snap alignment guides (red) while dragging a selection: a
                 line through the aligned coordinate plus a small × on each notable
                 point that triggered it. */}
             {alignGuides.map((g, i) => {
               const m = 3.5 / scale // half-length of the × marks (fixed on-screen)
               return (
-                <g key={`align-${i}`} stroke="#fa5252" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none">
+                <g key={`align-${i}`} stroke="#ff00fb" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none">
                   <line x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} shapeRendering="crispEdges" />
                   {g.marks.map((pt, j) => (
                     <g key={j}>
@@ -1514,7 +1506,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
               const mx = (g.x1 + g.x2) / 2
               const my = (g.y1 + g.y2) / 2
               return (
-                <g key={`gap-${i}`} stroke="#fa5252" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none">
+                <g key={`gap-${i}`} stroke="#ff00fb" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none">
                   <line x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} shapeRendering="crispEdges" />
                   {g.axis === 'x' ? (
                     <>
