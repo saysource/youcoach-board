@@ -21,7 +21,9 @@ export function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 min-w-56 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md',
+          // Cap to the space Radix reports and scroll when taller (small screens),
+          // so a long menu is never clipped.
+          'z-50 min-w-56 max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md',
           'animate-in fade-in-0 zoom-in-95',
           className,
         )}
