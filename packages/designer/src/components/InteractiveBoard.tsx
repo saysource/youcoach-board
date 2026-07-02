@@ -1460,7 +1460,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
               if (!tail) return null
               const head = erase.pts[erase.pts.length - 1]
               return (
-                <g pointerEvents="none" fill="#000000" opacity={0.5}>
+                <g pointerEvents="none" fill="#000000" opacity={0.3}>
                   <path d={tail} />
                   <circle cx={head.x} cy={head.y} r={rHead} />
                 </g>
