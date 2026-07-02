@@ -65,7 +65,7 @@ function zoomToward(vp: Viewport, factor: number, anchor?: { x: number; y: numbe
 // element types. Opacity travels via transform, handled separately.
 const STYLE_KEYS: (keyof ElementPatch)[] = [
   'stroke', 'strokeWidth', 'strokeStyle', 'fill', 'fillStyle',
-  'colors', 'mirror',
+  'colors', // NOT `mirror` — flip is orientation, not style
   'closed', 'curve', 'zigzag', 'waveLength', 'waveAmplitude', 'double', 'linesOffset', 'startTip', 'endTip',
   'shape', 'tokenFill', 'color1', 'color2', 'textColor', 'showLabel',
   'bgColor', 'fontSize', 'align', 'bold',
