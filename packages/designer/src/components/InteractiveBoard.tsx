@@ -1316,8 +1316,10 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       .join(' ')
   }
   const snapGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
-  // Object-snap alignment guides shown while dragging a selection.
-  const alignGuides = move ? moveSnap(move)?.guides ?? [] : []
+  // Object-snap guides (alignment lines + equal-distance gaps) shown while dragging.
+  const objectSnap = move ? moveSnap(move) : null
+  const alignGuides = objectSnap?.guides ?? []
+  const gapGuides = objectSnap?.gaps ?? []
 
   // Group frame box (padded for display) for a multi-selection — the interactive
   // group resize/rotate chrome is drawn on it.
@@ -1446,6 +1448,29 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                       <line x1={pt.x - m} y1={pt.y + m} x2={pt.x + m} y2={pt.y - m} />
                     </g>
                   ))}
+                </g>
+              )
+            })}
+            {/* Equal-distance gap segments (red) with a ‖ tick at each midpoint. */}
+            {gapGuides.map((g, i) => {
+              const t = 3 / scale // half-length of the ‖ ticks
+              const s = 1.5 / scale // half-gap between the two parallel ticks
+              const mx = (g.x1 + g.x2) / 2
+              const my = (g.y1 + g.y2) / 2
+              return (
+                <g key={`gap-${i}`} stroke="#fa5252" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none">
+                  <line x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} shapeRendering="crispEdges" />
+                  {g.axis === 'x' ? (
+                    <>
+                      <line x1={mx - s} y1={my - t} x2={mx - s} y2={my + t} />
+                      <line x1={mx + s} y1={my - t} x2={mx + s} y2={my + t} />
+                    </>
+                  ) : (
+                    <>
+                      <line x1={mx - t} y1={my - s} x2={mx + t} y2={my - s} />
+                      <line x1={mx - t} y1={my + s} x2={mx + t} y2={my + s} />
+                    </>
+                  )}
                 </g>
               )
             })}
