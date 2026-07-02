@@ -10,6 +10,9 @@ import {
   Sun,
   Moon,
   Monitor,
+  SlidersHorizontal,
+  Magnet,
+  Check,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from './ui/button'
@@ -20,10 +23,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/cn'
+import { useEditorStore } from '../store/context'
 import type { ThemeSetting } from '../lib/use-theme'
 
 interface MainMenuProps {
@@ -37,6 +44,8 @@ interface MainMenuProps {
 }
 
 export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts }: MainMenuProps) {
+  const snapToObjects = useEditorStore((s) => s.snapToObjects)
+  const toggleSnapToObjects = useEditorStore((s) => s.toggleSnapToObjects)
   return (
     <DropdownMenu>
       <Tooltip>
@@ -77,6 +86,18 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
           <CircleHelp /> Keyboard Shortcuts
           <DropdownMenuShortcut>?</DropdownMenuShortcut>
         </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <SlidersHorizontal /> Preferences
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toggleSnapToObjects() }}>
+              <Magnet /> Snap to objects
+              {snapToObjects && <Check className="size-4" />}
+              <DropdownMenuShortcut>⌥S</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
 
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled>

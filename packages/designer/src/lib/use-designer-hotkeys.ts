@@ -100,10 +100,11 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
         }
       }
 
-      // ── ⌥ (no ⌘): zoom to fit / selection ──────────────────────────────────
+      // ── ⌥ (no ⌘): zoom to fit / selection, toggle snap ─────────────────────
       if (alt && !mod) {
         if (key === '1') { e.preventDefault(); deps.zoom?.('fit'); return }
         if (key === '2') { e.preventDefault(); deps.zoom?.('selection'); return }
+        if (lower === 's') { e.preventDefault(); s.toggleSnapToObjects(); return }
         return
       }
 

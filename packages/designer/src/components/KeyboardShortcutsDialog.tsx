@@ -76,6 +76,7 @@ const VIEW: Section = {
     { label: 'Zoom to cursor', combos: [[MOD, 'wheel']] },
     { label: 'Pan the canvas', combos: [['Space', 'drag']] },
     { label: 'Toggle grid', combos: [['G']] },
+    { label: 'Snap to objects', combos: [[ALT, 'S']] },
     { label: 'Keyboard shortcuts', combos: [['?']] },
   ],
 }

@@ -109,6 +109,9 @@ export interface EditorState {
   /** When true, a creation tool stays active after creating (the lock toggle);
    *  otherwise the editor falls back to the selection tool, per the spec. */
   keepToolActive: boolean
+  /** When true, dragging a selection snaps its bounding box to other elements'
+   *  edges/centers and draws alignment guides. Toggled with ⌥S or the menu. */
+  snapToObjects: boolean
 
   /** Style for the next element to be created — editable in the properties panel
    *  before anything is selected (so the user can pre-set stroke/fill/… ), and
@@ -137,6 +140,7 @@ export interface EditorState {
 
   setActiveTool: (tool: ToolId) => void
   toggleKeepTool: () => void
+  toggleSnapToObjects: () => void
   /** Merge changes into the next-element style defaults. */
   setToolDefaults: (patch: Partial<FigureStyle>) => void
   /** Merge changes into the next-token defaults (style/text/label). */
@@ -269,6 +273,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       playerColors: {},
       kitHistory: [],
       keepToolActive: false,
+      snapToObjects: false,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
       styleClipboard: null,
@@ -285,6 +290,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         })),
 
       toggleKeepTool: () => set((s) => ({ keepToolActive: !s.keepToolActive })),
+
+      toggleSnapToObjects: () => set((s) => ({ snapToObjects: !s.snapToObjects })),
 
       setToolDefaults: (patch) => set((s) => ({ toolDefaults: { ...s.toolDefaults, ...patch } })),
 

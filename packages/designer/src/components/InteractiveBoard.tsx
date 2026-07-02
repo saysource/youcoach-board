@@ -57,6 +57,7 @@ import { computeResize, rotationFor, boardToElement, elementToBoard, localCorner
 import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
 import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
+import { computeSnap, type SnapResult } from '../lib/snapping'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -66,6 +67,7 @@ const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-ca
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
 const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
 const MOVE_THRESHOLD_PX = 4 // on-screen drag distance before a move engages
+const SNAP_PX = 6 // on-screen distance within which a move snaps to another object
 const BG_MOVE_HANDLE_PX = 72 // on-screen size of the background pan handle (icon viewBox 46×46)
 // 4-way move arrows (assets/move_background.svg), centered in a 46×46 viewBox.
 const BG_MOVE_PATH =
@@ -265,6 +267,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
+  const snapToObjects = useEditorStore((s) => s.snapToObjects)
   const panBy = useEditorStore((s) => s.panBy)
   const zoomBy = useEditorStore((s) => s.zoomBy)
   const viewBox = `${viewport.panX} ${viewport.panY} ${BOARD_WIDTH / viewport.zoom} ${BOARD_HEIGHT / viewport.zoom}`
@@ -536,6 +539,48 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     }
   }
 
+  // ── Snap to objects (Excalidraw-style alignment) ──────────────────────────
+  // Union AABB of the moved elements at their ORIGIN transforms (the box that
+  // gets snapped — a multi-selection snaps as one, not per contained object).
+  function moveOriginUnion(m: MoveState): Box | null {
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const id of m.ids) {
+      const el = doc.elements.find((e) => e.id === id)
+      const o = m.origins[id]
+      if (!el || !o) continue
+      const b = getElementBounds({ ...el, transform: o } as BoardElement)
+      minX = Math.min(minX, b.x)
+      minY = Math.min(minY, b.y)
+      maxX = Math.max(maxX, b.x + b.width)
+      maxY = Math.max(maxY, b.y + b.height)
+    }
+    return Number.isFinite(minX) ? { x: minX, y: minY, width: maxX - minX, height: maxY - minY } : null
+  }
+
+  // Snap offset + guides for the current move, or null when snapping is off /
+  // the move hasn't engaged / there's nothing to snap.
+  function moveSnap(m: MoveState): SnapResult | null {
+    if (!snapToObjects || !m.engaged) return null
+    const u = moveOriginUnion(m)
+    if (!u) return null
+    const raw = clampMoveDelta(m.current.x - m.start.x, m.current.y - m.start.y)
+    const movingBox: Box = { x: u.x + raw.x, y: u.y + raw.y, width: u.width, height: u.height }
+    const targets = doc.elements.filter((e) => !m.ids.includes(e.id)).map((e) => getElementBounds(e))
+    return computeSnap(movingBox, targets, SNAP_PX / (scale || 1))
+  }
+
+  // The move delta actually applied: clamped to the canvas, then nudged by the
+  // snap offset. Used by both the live preview and the pointer-up commit so they
+  // always agree.
+  function moveDelta(m: MoveState): Point {
+    const raw = clampMoveDelta(m.current.x - m.start.x, m.current.y - m.start.y)
+    const snap = moveSnap(m)
+    return snap ? { x: raw.x + snap.dx, y: raw.y + snap.dy } : raw
+  }
+
   // Keep a board-space point within the canvas (used for polyline vertex drags).
   function clampToCanvas(p: Point): Point {
     return { x: Math.min(Math.max(p.x, 0), doc.width), y: Math.min(Math.max(p.y, 0), doc.height) }
@@ -652,7 +697,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     if (move && move.origins[el.id]) {
       if (!move.engaged) return el // not dragged far enough yet — stay put
       const o = move.origins[el.id]
-      const d = clampMoveDelta(move.current.x - move.start.x, move.current.y - move.start.y)
+      const d = moveDelta(move)
       return { ...el, transform: { ...o, x: o.x + d.x, y: o.y + d.y } }
     }
     if (gesture && gesture.id === el.id) {
@@ -1139,8 +1184,8 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       setGesture(null)
       commitGesture(g)
     } else if (move) {
-      // Use the SAME clamped delta the preview showed, so the commit matches.
-      const d = clampMoveDelta(move.current.x - move.start.x, move.current.y - move.start.y)
+      // Use the SAME clamped+snapped delta the preview showed, so the commit matches.
+      const d = moveDelta(move)
       const { ids, origins, engaged } = move
       setMove(null)
       if (engaged) {
@@ -1271,6 +1316,8 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       .join(' ')
   }
   const snapGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
+  // Object-snap alignment guides shown while dragging a selection.
+  const alignGuides = move ? moveSnap(move)?.guides ?? [] : []
 
   // Group frame box (padded for display) for a multi-selection — the interactive
   // group resize/rotate chrome is drawn on it.
@@ -1380,6 +1427,21 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                 stroke="var(--color-fuchsia-200)"
                 strokeWidth={1}
                 strokeDasharray="3 3"
+                vectorEffect="non-scaling-stroke"
+                shapeRendering="crispEdges"
+                pointerEvents="none"
+              />
+            ))}
+            {/* Object-snap alignment guides (red) while dragging a selection. */}
+            {alignGuides.map((g, i) => (
+              <line
+                key={`align-${i}`}
+                x1={g.x1}
+                y1={g.y1}
+                x2={g.x2}
+                y2={g.y2}
+                stroke="#fa5252"
+                strokeWidth={1}
                 vectorEffect="non-scaling-stroke"
                 shapeRendering="crispEdges"
                 pointerEvents="none"
