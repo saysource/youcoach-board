@@ -182,6 +182,20 @@ export function computeSnap(moving: SnapElement, targets: SnapElement[], thresho
   return { dx, dy, guides, gaps }
 }
 
+// Snap a single dragged point (a resize handle / corner) to the nearest target
+// notable point on each axis, returning the offset to apply and the guide lines
+// through the snapped point. Alignment only — resizing has no equidistance.
+export function snapResize(corner: SnapMark, targetPts: SnapMark[], threshold: number): { dx: number; dy: number; guides: SnapLine[] } {
+  if (targetPts.length === 0 || threshold <= 0) return { dx: 0, dy: 0, guides: [] }
+  const ox = alignOffset([corner], targetPts, 'x', threshold)
+  const oy = alignOffset([corner], targetPts, 'y', threshold)
+  const snapped: SnapMark = { x: corner.x + (ox ?? 0), y: corner.y + (oy ?? 0) }
+  const guides: SnapLine[] = []
+  if (ox != null) guides.push(...alignGuides([snapped], targetPts, 'x'))
+  if (oy != null) guides.push(...alignGuides([snapped], targetPts, 'y'))
+  return { dx: ox ?? 0, dy: oy ?? 0, guides }
+}
+
 // Choose the nearer of an alignment offset and a gap hit for one axis.
 function pickAxis(align: number | null, gap: GapHit | null): { offset: number; kind: 'align' | 'gap' } | null {
   if (align != null && (!gap || Math.abs(align) <= Math.abs(gap.offset))) return { offset: align, kind: 'align' }

@@ -57,7 +57,7 @@ import { computeResize, rotationFor, boardToElement, elementToBoard, localCorner
 import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from './SelectionHandles'
 import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
-import { computeSnap, type SnapResult, type SnapElement, type SnapMark } from '../lib/snapping'
+import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMark, type SnapLine } from '../lib/snapping'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -593,6 +593,17 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     return snap ? { x: raw.x + snap.dx, y: raw.y + snap.dy } : raw
   }
 
+  // The resize handle's board point (= the dragged corner, opposite one anchored),
+  // snapped to other elements' notable points so the resized edges align. Same
+  // point feeds the live preview and the commit. Returns the guides to draw too.
+  function resizePointer(el: BoardElement, g: Gesture): { pointer: Point; guides: SnapLine[] } {
+    const base = clampToCanvas(resizeCurrent(el, g))
+    if (!snapToObjects) return { pointer: base, guides: [] }
+    const targetPts = doc.elements.filter((e) => e.id !== g.id).flatMap((e) => notablePoints(e))
+    const { dx, dy, guides } = snapResize(base, targetPts, SNAP_PX / (scale || 1))
+    return { pointer: clampToCanvas({ x: base.x + dx, y: base.y + dy }), guides }
+  }
+
   // Keep a board-space point within the canvas (used for polyline vertex drags).
   function clampToCanvas(p: Point): Point {
     return { x: Math.min(Math.max(p.x, 0), doc.width), y: Math.min(Math.max(p.y, 0), doc.height) }
@@ -717,7 +728,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
         return { ...el, transform: { ...gesture.t0, rotate: rotationFor(gesture.box0, gesture.t0, gesture.current, gesture.snap) } }
       }
       if (gesture.kind === 'resize') {
-        const { box, transform } = computeResize(gesture.box0, gesture.t0, gesture.handle as CornerId, clampToCanvas(resizeCurrent(el, gesture)), MIN_SIZE, {
+        const { box, transform } = computeResize(gesture.box0, gesture.t0, gesture.handle as CornerId, resizePointer(el, gesture).pointer, MIN_SIZE, {
           fromCenter: gesture.alt,
           // Figures + tokens keep their aspect ratio, so the frame always matches it.
           proportional: gesture.snap || el.type === 'figure' || el.type === 'token',
@@ -1253,7 +1264,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     if (g.kind === 'rotate') {
       updateElements([{ id: g.id, before: { transform: g.t0 }, after: { transform: { ...g.t0, rotate: rotationFor(g.box0, g.t0, g.current, g.snap) } } }])
     } else if (g.kind === 'resize') {
-      const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, clampToCanvas(resizeCurrent(el, g)), MIN_SIZE, {
+      const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, resizePointer(el, g).pointer, MIN_SIZE, {
         fromCenter: g.alt,
         // Figures + tokens keep their aspect ratio, so the frame always matches it.
         proportional: g.snap || el.type === 'figure' || el.type === 'token',
@@ -1328,9 +1339,15 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       .join(' ')
   }
   const snapGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
-  // Object-snap guides (alignment lines + equal-distance gaps) shown while dragging.
+  // Object-snap guides (alignment lines + equal-distance gaps) shown while dragging
+  // or resizing.
   const objectSnap = move ? moveSnap(move) : null
-  const alignGuides = objectSnap?.guides ?? []
+  const resizeGuides = ((): SnapLine[] => {
+    if (!gesture || gesture.kind !== 'resize') return []
+    const el = doc.elements.find((e) => e.id === gesture.id)
+    return el ? resizePointer(el, gesture).guides : []
+  })()
+  const alignGuides = [...(objectSnap?.guides ?? []), ...resizeGuides]
   const gapGuides = objectSnap?.gaps ?? []
 
   // Group frame box (padded for display) for a multi-selection — the interactive
