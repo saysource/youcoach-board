@@ -23,9 +23,9 @@ const keepOpenOnNested = (e: { detail: { originalEvent: Event }; preventDefault:
 // A fully-transparent full-viewport layer under the open editor: any click on it
 // closes the editor and is swallowed (so it never reaches the canvas and blurs the
 // selection). Portaled next to the popovers so it sits above the board.
-function Backdrop({ onClose }: { onClose: () => void }) {
+function Backdrop({ onClose, className = 'z-40' }: { onClose: () => void; className?: string }) {
   const container = usePortalContainer()
-  const node = <div data-player-backdrop className="fixed inset-0 z-40" onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onClose() }} />
+  const node = <div data-player-backdrop className={cn('fixed inset-0', className)} onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onClose() }} />
   return container ? createPortal(node, container) : node
 }
 
@@ -205,7 +205,11 @@ function KitColorButton({ color, label, onChange, open, onOpenChange }: { color:
       <PopoverTrigger asChild>
         <button type="button" aria-label={label} className="size-6 shrink-0 rounded-md border border-border/70" style={{ background: color }} />
       </PopoverTrigger>
-      <PopoverContent side="right" align="start" className="w-56" onInteractOutside={keepOpenOnNested}>
+      {/* Sits above the editor backdrop (z-40) but below the popover content
+          (z-50): an outside click closes just this picker (not the whole editor),
+          while the widget and its nested picker stay clickable. */}
+      {open && <Backdrop onClose={() => onOpenChange(false)} className="z-45" />}
+      <PopoverContent side="right" align="start" className="w-56">
         <ColorPickerWidget value={color} onChange={onChange} showOpacity={false} />
       </PopoverContent>
     </Popover>
