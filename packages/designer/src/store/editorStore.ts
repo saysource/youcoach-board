@@ -156,6 +156,8 @@ export interface EditorState {
   resizeSelected: (factor: number) => void
   /** Horizontally mirror the selected figures (toggle their `mirror` flag). */
   flipSelected: () => void
+  /** Toggle bold on the selected text elements (⌘B). */
+  toggleTextBold: () => void
   /** Zoom the view in / out (about center), reset to 100%, or frame the selection. */
   zoomIn: () => void
   zoomOut: () => void
@@ -489,6 +491,13 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         get().updateElements(
           figs.map((e) => ({ id: e.id, before: { mirror: e.mirror }, after: { mirror: !e.mirror } })),
         )
+      },
+
+      toggleTextBold: () => {
+        const { doc, selectedIds } = get()
+        const texts = doc.elements.filter((e) => selectedIds.includes(e.id) && e.type === 'text') as Extract<BoardElement, { type: 'text' }>[]
+        if (texts.length === 0) return
+        get().updateElements(texts.map((e) => ({ id: e.id, before: { bold: e.bold }, after: { bold: !e.bold } })))
       },
 
       zoomIn: () => set((s) => ({ viewport: zoomAround(s.viewport, ZOOM_STEP) })),

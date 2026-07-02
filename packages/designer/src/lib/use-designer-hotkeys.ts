@@ -94,6 +94,7 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
           case 'v': e.preventDefault(); s.paste(); return
           case 'd': e.preventDefault(); s.duplicateSelected(); return
           case 'f': e.preventDefault(); s.flipSelected(); return
+          case 'b': e.preventDefault(); s.toggleTextBold(); return
           default: return
         }
       }

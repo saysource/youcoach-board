@@ -57,6 +57,7 @@ const EDITOR: Section = {
     { label: 'Resize larger', combos: [[MOD, ALT, SHIFT, '+']] },
     { label: 'Resize smaller', combos: [[MOD, ALT, SHIFT, '−']] },
     { label: 'Move / nudge', combos: [['←', '→', '↑', '↓']] },
+    { label: 'Bold text', combos: [[MOD, 'B']] },
     { label: 'Deselect / cancel', combos: [['Esc']] },
   ],
 }
