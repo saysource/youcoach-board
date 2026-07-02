@@ -203,23 +203,25 @@ interface Marquee {
 // speed × TAU, so faster movement stretches it and it collapses once the pointer
 // stops. Time-based (not per-frame) so it looks the same at 60 or 144 Hz.
 const ERASER_RADIUS_PX = 6.5
-const ERASER_TAIL_TAU = 0.07
+const ERASER_TAIL_TAU = 0.22
+const ERASER_HEAD_R = ERASER_RADIUS_PX * 1.5 // tail-head dot, a little bigger than the pointer
 
-// A solid "comet" teardrop from the pointer (head, a circle of radius r) back to
-// the lagging `tail` point: two straight sides from the circle's sideways extremes
-// to the tail tip. Returns an SVG path `d` (board units), or '' when at rest.
+// A solid "comet" teardrop: a rounded dot (radius r) sits at the lagging `tail`
+// point and tapers to a thin point at the pointer (`head`). Two straight sides run
+// from the dot's sideways extremes to the pointer. Returns an SVG path `d` (board
+// units), or '' when at rest (dot has sprung back under the pointer).
 function eraserTailPath(head: Point, tail: Point, r: number): string {
-  const dx = head.x - tail.x
-  const dy = head.y - tail.y
+  const dx = tail.x - head.x
+  const dy = tail.y - head.y
   const len = Math.hypot(dx, dy)
   if (len < 0.4) return ''
   const nx = -dy / len // unit normal to the head→tail direction
   const ny = dx / len
-  const lx = head.x + nx * r
-  const ly = head.y + ny * r
-  const rx = head.x - nx * r
-  const ry = head.y - ny * r
-  return `M ${lx},${ly} L ${tail.x},${tail.y} L ${rx},${ry} Z`
+  const lx = tail.x + nx * r
+  const ly = tail.y + ny * r
+  const rx = tail.x - nx * r
+  const ry = tail.y - ny * r
+  return `M ${lx},${ly} L ${head.x},${head.y} L ${rx},${ry} Z`
 }
 
 const GRID_STEP = 60 // board units → a 20×15 grid over the 1200×900 board
@@ -1269,7 +1271,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   // The eraser turns the pointer into a filled circle matching the erase radius.
   const eraserD = ERASER_RADIUS_PX * 2 + 2
   const eraserCursor = `url("data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='${eraserD}' height='${eraserD}'><circle cx='${eraserD / 2}' cy='${eraserD / 2}' r='${ERASER_RADIUS_PX}' fill='#888888' fill-opacity='0.35' stroke='#555555' stroke-width='1.5'/></svg>`,
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${eraserD}' height='${eraserD}'><circle cx='${eraserD / 2}' cy='${eraserD / 2}' r='${ERASER_RADIUS_PX}' fill='#ffffff' stroke='#000000' stroke-width='1.5'/></svg>`,
   )}") ${eraserD / 2} ${eraserD / 2}, auto`
 
   return (
@@ -1435,16 +1437,18 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                 </g>
               )
             })()}
-            {/* Eraser: a solid white pointer circle (black stroke) trailing an
-                opaque grey "comet" that lags behind via a spring — long on a fast
-                flick, collapsing under the circle once the pointer stops. */}
+            {/* Eraser tail: an opaque grey "comet" that lags the pointer via a
+                spring — a rounded head dot (a little bigger than the pointer circle)
+                tapering to a point behind it. Long on a fast flick, gone once the
+                pointer stops. The pointer circle itself is the CSS cursor. */}
             {erase && (() => {
-              const r = ERASER_RADIUS_PX / (scale || 1)
-              const tail = eraserTailPath(erase.head, erase.tail, r)
+              const rHead = ERASER_HEAD_R / (scale || 1)
+              const tail = eraserTailPath(erase.head, erase.tail, rHead)
+              if (!tail) return null
               return (
-                <g pointerEvents="none">
-                  {tail && <path d={tail} fill="#9ca3af" />}
-                  <circle cx={erase.head.x} cy={erase.head.y} r={r} fill="#ffffff" stroke="#000000" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+                <g pointerEvents="none" fill="#9ca3af">
+                  <path d={tail} />
+                  <circle cx={erase.tail.x} cy={erase.tail.y} r={rHead} />
                 </g>
               )
             })()}
