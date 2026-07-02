@@ -8,6 +8,9 @@ import {
   type ElementPatch,
   applyOperation,
   invertOperation,
+  getElementBounds,
+  BOARD_WIDTH,
+  BOARD_HEIGHT,
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
@@ -20,6 +23,32 @@ import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
  *  InteractiveBoard); see toolElementType for the drag-create mapping. */
 export function isCreationTool(tool: ToolId): boolean {
   return isShapeTool(tool) || isLineTool(tool) || tool === 'draw' || tool === 'token' || tool === 'text'
+}
+
+// ── Viewport (zoom/pan) ──────────────────────────────────────────────────────
+// View transform expressed as the SVG viewBox: zoom ≥ 1 (1 = whole board fills),
+// pan in board units, clamped so the view never leaves the board.
+export interface Viewport {
+  zoom: number
+  panX: number
+  panY: number
+}
+const MIN_ZOOM = 1
+const MAX_ZOOM = 8
+const ZOOM_STEP = 1.25
+const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+function clampViewport(zoom: number, panX: number, panY: number): Viewport {
+  const z = clampNum(zoom, MIN_ZOOM, MAX_ZOOM)
+  const w = BOARD_WIDTH / z
+  const h = BOARD_HEIGHT / z
+  return { zoom: z, panX: clampNum(panX, 0, BOARD_WIDTH - w), panY: clampNum(panY, 0, BOARD_HEIGHT - h) }
+}
+// Zoom keeping the current view center fixed.
+function zoomAround(vp: Viewport, factor: number): Viewport {
+  const cx = vp.panX + BOARD_WIDTH / vp.zoom / 2
+  const cy = vp.panY + BOARD_HEIGHT / vp.zoom / 2
+  const z = clampNum(vp.zoom * factor, MIN_ZOOM, MAX_ZOOM)
+  return clampViewport(z, cx - BOARD_WIDTH / z / 2, cy - BOARD_HEIGHT / z / 2)
 }
 
 export interface EditorState {
@@ -73,6 +102,9 @@ export interface EditorState {
   /** Elements copied via Copy/Cut (clones), pasted as offset copies. */
   clipboard: BoardElement[]
 
+  /** View transform (zoom/pan). Not part of the document. */
+  viewport: Viewport
+
   // Undo/redo: a flat operation stack + a pointer to the last applied operation
   // (VA's model). Everything before/at `pointer` is "done"; everything after is
   // the redo branch, truncated on the next push.
@@ -124,6 +156,13 @@ export interface EditorState {
   resizeSelected: (factor: number) => void
   /** Horizontally mirror the selected figures (toggle their `mirror` flag). */
   flipSelected: () => void
+  /** Zoom the view in / out (about center), reset to 100%, or frame the selection. */
+  zoomIn: () => void
+  zoomOut: () => void
+  zoomReset: () => void
+  zoomToSelection: () => void
+  /** Pan the view by (dx, dy) board units (clamped to the board). */
+  panBy: (dx: number, dy: number) => void
   /** Change the selected elements' z-order (one undoable reorder op). */
   arrangeSelected: (mode: 'front' | 'back' | 'forward' | 'backward') => void
   /** Copy the (single) selected element's style; paste it onto the selection. */
@@ -196,6 +235,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       figureAddedTick: 0,
       styleClipboard: null,
       clipboard: [],
+      viewport: { zoom: 1, panX: 0, panY: 0 },
       stack: [],
       pointer: -1,
 
@@ -449,6 +489,33 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         get().updateElements(
           figs.map((e) => ({ id: e.id, before: { mirror: e.mirror }, after: { mirror: !e.mirror } })),
         )
+      },
+
+      zoomIn: () => set((s) => ({ viewport: zoomAround(s.viewport, ZOOM_STEP) })),
+      zoomOut: () => set((s) => ({ viewport: zoomAround(s.viewport, 1 / ZOOM_STEP) })),
+      zoomReset: () => set({ viewport: { zoom: 1, panX: 0, panY: 0 } }),
+      panBy: (dx, dy) => set((s) => ({ viewport: clampViewport(s.viewport.zoom, s.viewport.panX + dx, s.viewport.panY + dy) })),
+
+      zoomToSelection: () => {
+        const { doc, selectedIds } = get()
+        const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
+        if (sel.length === 0) {
+          set({ viewport: { zoom: 1, panX: 0, panY: 0 } })
+          return
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const e of sel) {
+          const b = getElementBounds(e)
+          minX = Math.min(minX, b.x)
+          minY = Math.min(minY, b.y)
+          maxX = Math.max(maxX, b.x + b.width)
+          maxY = Math.max(maxY, b.y + b.height)
+        }
+        const pad = 1.3 // leave breathing room around the selection
+        const bw = Math.max(1, maxX - minX) * pad
+        const bh = Math.max(1, maxY - minY) * pad
+        const z = clampNum(Math.min(BOARD_WIDTH / bw, BOARD_HEIGHT / bh), MIN_ZOOM, MAX_ZOOM)
+        set({ viewport: clampViewport(z, (minX + maxX) / 2 - BOARD_WIDTH / z / 2, (minY + maxY) / 2 - BOARD_HEIGHT / z / 2) })
       },
 
       arrangeSelected: (mode) => {

@@ -108,12 +108,14 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       // ── Plain keys (no ⌘/⌥) ────────────────────────────────────────────────
       if (key === 'Delete' || key === 'Backspace') { s.deleteSelected(); return }
 
-      // Arrow keys: nudge the selection (⇧ = coarse). No selection → let it be.
+      // Arrow keys: nudge the selection (⇧ = coarse); with nothing selected, pan.
       if (key.startsWith('Arrow')) {
         const step = shift ? 10 : 1
-        const dx = key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0
-        const dy = key === 'ArrowUp' ? -step : key === 'ArrowDown' ? step : 0
-        if (s.selectedIds.length) { e.preventDefault(); s.nudgeSelected(dx, dy) }
+        const ux = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : 0
+        const uy = key === 'ArrowUp' ? -1 : key === 'ArrowDown' ? 1 : 0
+        e.preventDefault()
+        if (s.selectedIds.length) s.nudgeSelected(ux * step, uy * step)
+        else s.panBy(ux * 40, uy * 40)
         return
       }
 

@@ -224,6 +224,9 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const commitTransaction = useEditorStore((s) => s.commitTransaction)
   const updateElements = useEditorStore((s) => s.updateElements)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
+  const viewport = useEditorStore((s) => s.viewport)
+  const panBy = useEditorStore((s) => s.panBy)
+  const viewBox = `${viewport.panX} ${viewport.panY} ${BOARD_WIDTH / viewport.zoom} ${BOARD_HEIGHT / viewport.zoom}`
 
   const svgRef = useRef<SVGSVGElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -277,7 +280,53 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const ro = new ResizeObserver(update)
     ro.observe(svg)
     return () => ro.disconnect()
+    // Re-measure when the viewBox (zoom/pan) changes, not just on resize.
+  }, [viewBox])
+
+  // Space-bar (or the Hand tool) turns the board into a pan surface: a drag
+  // overlay translates the viewport. Space is tracked globally; released on blur.
+  const [spaceHeld, setSpaceHeld] = useState(false)
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return
+      e.preventDefault()
+      setSpaceHeld(true)
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpaceHeld(false)
+    }
+    const blur = () => setSpaceHeld(false)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', blur)
+    }
   }, [])
+  const panActive = spaceHeld || activeTool === 'hand'
+  const panLast = useRef<{ x: number; y: number } | null>(null)
+  function panDown(e: React.PointerEvent) {
+    panLast.current = { x: e.clientX, y: e.clientY }
+    try {
+      ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    } catch {
+      /* capture is best-effort; the full-board overlay still receives moves */
+    }
+  }
+  function panMove(e: React.PointerEvent) {
+    if (!panLast.current) return
+    const dx = e.clientX - panLast.current.x
+    const dy = e.clientY - panLast.current.y
+    panLast.current = { x: e.clientX, y: e.clientY }
+    if (scale) panBy(-dx / scale, -dy / scale) // drag follows the content
+  }
+  function panEnd() {
+    panLast.current = null
+  }
 
   // The element currently being inline-edited (if it's a text element) — recompute
   // its editor overlay box whenever its geometry (grows as you type) or the zoom
@@ -1066,6 +1115,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
+        viewBox={viewBox}
         background={
           <>
             <BackgroundView doc={doc} />
@@ -1238,6 +1288,17 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
           })}
         </g>
       </BoardCanvas>
+      {/* Pan surface: covers the board while Space is held or the Hand tool is
+          active, so a drag translates the viewport instead of hitting elements. */}
+      {panActive && (
+        <div
+          className="absolute inset-0 z-10 cursor-grab touch-none active:cursor-grabbing"
+          onPointerDown={panDown}
+          onPointerMove={panMove}
+          onPointerUp={panEnd}
+          onPointerCancel={panEnd}
+        />
+      )}
       {editing && editPos && (
         <input
           autoFocus

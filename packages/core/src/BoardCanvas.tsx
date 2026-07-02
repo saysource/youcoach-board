@@ -32,6 +32,12 @@ export interface BoardCanvasProps {
    * drawn (used by the viewer/exporter until they provide their own).
    */
   background?: ReactNode
+  /**
+   * Override the SVG viewBox (`minX minY width height`) for zoom/pan. Defaults to
+   * the full board `0 0 BOARD_WIDTH BOARD_HEIGHT`. Coordinate conversion via
+   * getScreenCTM stays correct automatically.
+   */
+  viewBox?: string
 }
 
 // The single shared 2D render primitive — the SVG board layer that the viewer,
@@ -52,7 +58,7 @@ export interface BoardCanvasProps {
 //
 // Kept export-safe: no <foreignObject>, no external references, self-contained
 // styles — so a serialize → rasterize pass reproduces it faithfully.
-export function BoardCanvas({ doc, className, svgRef, children, overlay, background }: BoardCanvasProps) {
+export function BoardCanvas({ doc, className, svgRef, children, overlay, background, viewBox }: BoardCanvasProps) {
   const label = doc.title.trim() || 'Untitled board'
   // Unique per instance so multiple embedded boards don't share a clip id.
   const clipId = `ycb-canvas-clip-${useId()}`
@@ -60,7 +66,7 @@ export function BoardCanvas({ doc, className, svgRef, children, overlay, backgro
     <svg
       ref={svgRef}
       className={className}
-      viewBox={`0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`}
+      viewBox={viewBox ?? `0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`}
       role="img"
       aria-label={label}
       style={{ width: '100%', height: '100%', display: 'block' }}

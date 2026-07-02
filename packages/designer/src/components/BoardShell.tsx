@@ -205,6 +205,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     addBall: () => addBall(catalog, store),
     showHelp: () => setShortcutsOpen(true),
     toggleGrid: () => setShowGrid((v) => !v),
+    zoom: (kind) => {
+      const s = store.getState()
+      if (kind === 'in') s.zoomIn()
+      else if (kind === 'out') s.zoomOut()
+      else if (kind === 'reset' || kind === 'fit') s.zoomReset()
+      else s.zoomToSelection()
+    },
   })
 
   return (
