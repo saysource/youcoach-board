@@ -99,12 +99,19 @@ export function figureBaseSize(meta: FigureMeta, figureScale: number): { w: numb
 
 /** The `scale` a field declares in the catalog (→ the figures-scale for figures
  *  placed on it). The single source of truth for per-field sizing; undefined for
- *  a field not in the catalog (e.g. a custom upload). */
+ *  a field not in the catalog (e.g. a custom upload).
+ *
+ *  A field svg can appear in several field categories (e.g. fields_all duplicates
+ *  fields_11). Search in GROUP order — the same order the drawer resolves fields
+ *  in — so we read the copy the UI actually uses (else editing one duplicate has
+ *  no effect). */
 export function fieldFigureScale(catalog: Catalog | null, fieldSvg: string | null | undefined): number | undefined {
   if (!catalog || !fieldSvg) return undefined
-  for (const cat of Object.values(catalog.categories)) {
-    if (cat.kind !== 'field') continue
-    for (const f of cat.figures) if (f.svg === fieldSvg) return f.scale ?? 1
+  const ordered: string[] = []
+  for (const g of catalog.groups ?? []) for (const id of g.categories) if (catalog.categories[id]?.kind === 'field') ordered.push(id)
+  for (const id of Object.keys(catalog.categories)) if (catalog.categories[id]?.kind === 'field' && !ordered.includes(id)) ordered.push(id)
+  for (const id of ordered) {
+    for (const f of catalog.categories[id].figures) if (f.svg === fieldSvg) return f.scale ?? 1
   }
   return undefined
 }
