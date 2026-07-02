@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { AssetsContext, makeResolver, type AssetsConfig, type Catalog } from './assets'
+import { AssetsContext, makeResolver, expandAggregateCategories, type AssetsConfig, type Catalog } from './assets'
 
 // Provides asset resolution + the loaded catalog. The catalog is fetched once
 // per config (keyed on its resolution inputs, so an inline config object doesn't
@@ -20,7 +20,8 @@ export function AssetsProvider({ config, children }: { config?: AssetsConfig; ch
         return r.json()
       })
       .then((c: Catalog) => {
-        if (!cancelled) setState((s) => (s.key === key ? { ...s, catalog: c } : s))
+        const expanded = expandAggregateCategories(c)
+        if (!cancelled) setState((s) => (s.key === key ? { ...s, catalog: expanded } : s))
       })
       .catch((e: unknown) => {
         if (!cancelled) setState((s) => (s.key === key ? { ...s, error: e instanceof Error ? e.message : String(e) } : s))

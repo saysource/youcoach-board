@@ -50,6 +50,10 @@ export interface CatalogCategory {
   kind: 'figure' | 'field'
   colors?: 'players' | 'materials'
   facets?: { action?: FacetValue[]; facing?: FacetValue[] }
+  /** A virtual category: its `figures` are filled at load time by aggregating all
+   *  other same-kind categories (deduped by svg), so fields aren't duplicated in
+   *  the catalog. Authored with an empty `figures`. */
+  aggregate?: boolean
   figures: CatalogFigure[]
 }
 export interface Catalog {
@@ -58,6 +62,30 @@ export interface Catalog {
   defaults: Record<string, Record<string, string>>
   groups: { id: string; name: string; categories: string[] }[]
   categories: Record<string, CatalogCategory>
+}
+
+/** Fill each `aggregate` category's figures from every other same-kind category
+ *  (deduped by svg, in category order) so e.g. "All Fields" needn't duplicate the
+ *  per-type fields — there's one authored copy of each field, one scale to edit.
+ *  Mutates and returns the freshly-parsed catalog. */
+export function expandAggregateCategories(catalog: Catalog): Catalog {
+  const cats = Object.values(catalog.categories)
+  for (const cat of cats) {
+    if (!cat.aggregate) continue
+    const seen = new Set<string>()
+    const figures: CatalogFigure[] = []
+    for (const src of cats) {
+      if (src === cat || src.aggregate || src.kind !== cat.kind) continue
+      for (const f of src.figures) {
+        const key = f.svg ?? f.thumb
+        if (seen.has(key)) continue
+        seen.add(key)
+        figures.push(f)
+      }
+    }
+    cat.figures = figures
+  }
+  return catalog
 }
 
 /** For a recolorable figure SVG path, the recolor slots it exposes and its
