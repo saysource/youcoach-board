@@ -691,6 +691,23 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   // Resolve a polyline/line vertex drag → the new LOCAL point. With shift held,
   // the dragged vertex angle-snaps (15° steps, incl. horizontal/vertical)
   // relative to its adjacent vertex — the same snapping as line creation.
+  // Object-snap a dragged polyline vertex (board space): magnet it to other
+  // elements' notable points AND to this shape's other vertices (which count as
+  // notable points). `excludeIdx` is the vertex being moved (skip it as a target);
+  // pass -1 when inserting a brand-new vertex (all existing vertices are targets).
+  function snapVertexBoard(g: Gesture, board: Point, excludeIdx: number): { board: Point; guides: SnapLine[] } {
+    const el = doc.elements.find((e) => e.id === g.id)
+    if (!snapToObjects || !el) return { board, guides: [] }
+    const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id).flatMap((e) => notablePoints(e))
+    if (el.type === 'polyline') {
+      el.points.forEach((pt, idx) => {
+        if (idx !== excludeIdx) targetPts.push(elementToBoard({ x: pt[0], y: pt[1] }, g.box0, g.t0))
+      })
+    }
+    const snap = snapResize([board], [board], targetPts, SNAP_PX / (scale || 1))
+    return { board: clampToCanvas({ x: board.x + snap.dx, y: board.y + snap.dy }), guides: snap.guides }
+  }
+
   function resolvePointDrag(g: Gesture): { lp: Point; guides: SnapLine[] } {
     const el = doc.elements.find((e) => e.id === g.id)
     const i = Number(g.handle.slice('point-'.length))
@@ -701,22 +718,14 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       const neighbor = elementToBoard({ x: el.points[ni][0], y: el.points[ni][1] }, g.box0, g.t0)
       board = snapLineEnd(neighbor, board)
     }
-    board = clampToCanvas(board)
-    // Object snapping: magnet the dragged vertex to other elements' notable points
-    // AND to this shape's OTHER vertices (which count as notable points too).
-    let guides: SnapLine[] = []
-    if (snapToObjects && el) {
-      const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id).flatMap((e) => notablePoints(e))
-      if (el.type === 'polyline') {
-        el.points.forEach((pt, idx) => {
-          if (idx !== i) targetPts.push(elementToBoard({ x: pt[0], y: pt[1] }, g.box0, g.t0))
-        })
-      }
-      const snap = snapResize([board], [board], targetPts, SNAP_PX / (scale || 1))
-      board = clampToCanvas({ x: board.x + snap.dx, y: board.y + snap.dy })
-      guides = snap.guides
-    }
-    return { lp: boardToElement(board, g.box0, g.t0), guides }
+    const snapped = snapVertexBoard(g, clampToCanvas(board), i)
+    return { lp: boardToElement(snapped.board, g.box0, g.t0), guides: snapped.guides }
+  }
+
+  // Same object-snap for a NEW vertex inserted by dragging a mid-segment anchor.
+  function resolveAnchorDrag(g: Gesture): { lp: Point; guides: SnapLine[] } {
+    const snapped = snapVertexBoard(g, clampToCanvas(g.current), -1)
+    return { lp: boardToElement(snapped.board, g.box0, g.t0), guides: snapped.guides }
   }
 
   // Resize pointer for a token's bottom handles: those sit a caption-band below
@@ -784,7 +793,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
         // Insert a vertex on segment `seg` (between vertex seg and seg+1) and drag
         // it — splits a straight segment / adds a curve point on a curved one.
         const seg = Number(gesture.handle.slice('anchor-'.length))
-        const lp = boardToElement(clampToCanvas(gesture.current), gesture.box0, gesture.t0)
+        const { lp } = resolveAnchorDrag(gesture)
         const points = [...el.points]
         points.splice(seg + 1, 0, [lp.x, lp.y])
         return { ...el, points }
@@ -1334,7 +1343,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       updateElements([{ id: g.id, before: { points: el.points }, after: { points: after } }])
     } else if (g.kind === 'anchor' && el.type === 'polyline') {
       const seg = Number(g.handle.slice('anchor-'.length))
-      const lp = boardToElement(clampToCanvas(g.current), g.box0, g.t0)
+      const { lp } = resolveAnchorDrag(g)
       const after = [...el.points]
       after.splice(seg + 1, 0, [lp.x, lp.y])
       updateElements([{ id: g.id, before: { points: el.points }, after: { points: after } }])
@@ -1381,7 +1390,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const el = doc.elements.find((e) => e.id === gesture.id)
     return el ? resizePointer(el, gesture).guides : []
   })()
-  const pointGuides = gesture && gesture.kind === 'point' ? resolvePointDrag(gesture).guides : []
+  const pointGuides = gesture?.kind === 'point' ? resolvePointDrag(gesture).guides : gesture?.kind === 'anchor' ? resolveAnchorDrag(gesture).guides : []
   const alignGuides = [...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides]
   const gapGuides = objectSnap?.gaps ?? []
 
