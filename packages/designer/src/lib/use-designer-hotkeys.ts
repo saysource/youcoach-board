@@ -16,6 +16,7 @@ const TOOL_KEYS: Record<string, ToolId> = {
   l: 'line', '6': 'line',
   d: 'draw', '7': 'draw',
   t: 'text', '8': 'text',
+  k: 'token',
   e: 'eraser', '0': 'eraser',
 }
 

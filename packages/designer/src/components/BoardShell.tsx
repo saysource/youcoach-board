@@ -60,9 +60,20 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const { catalog } = useAssets()
   const [libraryCatId, setLibraryCatId] = useState<string | null>(null)
   if (catalog && libraryCatId === null) setLibraryCatId(catalog.groups[0]?.categories[0] ?? null)
+  // Remember the last sub-category chosen per group, so re-opening a group (e.g.
+  // Players) returns to the user's last pick (Female, Children, …) not the first.
+  const [lastCatByGroup, setLastCatByGroup] = useState<Record<string, string>>({})
+  const groupOf = (catId: string | null) => (catId ? (catalog?.groups.find((g) => g.categories.includes(catId))?.id ?? null) : null)
   function openCategory(catId: string) {
-    setLibraryCatId(catId)
+    const g = groupOf(catId)
+    setLibraryCatId((g && lastCatByGroup[g]) || catId)
     setDrawerOpen(true)
+  }
+  // Drawer category picks update the current category AND the group's memory.
+  function selectCategory(catId: string) {
+    setLibraryCatId(catId)
+    const g = groupOf(catId)
+    if (g) setLastCatByGroup((prev) => (prev[g] === catId ? prev : { ...prev, [g]: catId }))
   }
 
   // Editor store: subscribe to what the chrome needs; actions via the api handle.
@@ -312,7 +323,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             fullscreen={fullscreen}
             onToggleFullscreen={() => setFullscreen((v) => !v)}
             categoryId={libraryCatId}
-            onCategoryChange={setLibraryCatId}
+            onCategoryChange={selectCategory}
             fieldsOnly={bgEditing}
           />
 

@@ -29,6 +29,7 @@ const TOOLS: Section = {
     { label: 'Line', combos: [['L'], ['6']] },
     { label: 'Pen (draw)', combos: [['D'], ['7']] },
     { label: 'Text', combos: [['T'], ['8']] },
+    { label: 'Token', combos: [['K']] },
     { label: 'Eraser', combos: [['E'], ['0']] },
     { label: 'Players drawer', combos: [['P']] },
     { label: 'Materials drawer', combos: [['M']] },
