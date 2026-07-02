@@ -540,35 +540,26 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   }
 
   // ── Snap to objects (Excalidraw-style alignment) ──────────────────────────
-  // Union AABB of the moved elements at their ORIGIN transforms (the box that
-  // gets snapped — a multi-selection snaps as one, not per contained object).
-  function moveOriginUnion(m: MoveState): Box | null {
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    for (const id of m.ids) {
-      const el = doc.elements.find((e) => e.id === id)
-      const o = m.origins[id]
-      if (!el || !o) continue
-      const b = getElementBounds({ ...el, transform: o } as BoardElement)
-      minX = Math.min(minX, b.x)
-      minY = Math.min(minY, b.y)
-      maxX = Math.max(maxX, b.x + b.width)
-      maxY = Math.max(maxY, b.y + b.height)
-    }
-    return Number.isFinite(minX) ? { x: minX, y: minY, width: maxX - minX, height: maxY - minY } : null
-  }
-
   // Snap offset + guides for the current move, or null when snapping is off /
-  // the move hasn't engaged / there's nothing to snap.
+  // the move hasn't engaged / there's nothing to snap. All boxes are rotation-
+  // aware AABBs (unionBounds spans the elements' rotated corners), so a tilted
+  // element snaps by the box it actually occupies on screen.
   function moveSnap(m: MoveState): SnapResult | null {
     if (!snapToObjects || !m.engaged) return null
-    const u = moveOriginUnion(m)
+    const originEls = m.ids
+      .map((id) => {
+        const el = doc.elements.find((e) => e.id === id)
+        return el && m.origins[id] ? ({ ...el, transform: m.origins[id] } as BoardElement) : null
+      })
+      .filter((e): e is BoardElement => e !== null)
+    const u = unionBounds(originEls)
     if (!u) return null
     const raw = clampMoveDelta(m.current.x - m.start.x, m.current.y - m.start.y)
     const movingBox: Box = { x: u.x + raw.x, y: u.y + raw.y, width: u.width, height: u.height }
-    const targets = doc.elements.filter((e) => !m.ids.includes(e.id)).map((e) => getElementBounds(e))
+    const targets = doc.elements
+      .filter((e) => !m.ids.includes(e.id))
+      .map((e) => unionBounds([e]))
+      .filter((b): b is Box => b !== null)
     return computeSnap(movingBox, targets, SNAP_PX / (scale || 1))
   }
 
