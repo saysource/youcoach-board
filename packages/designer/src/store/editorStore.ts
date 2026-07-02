@@ -70,6 +70,9 @@ export interface EditorState {
   /** Style copied via "Copy style", to be applied with "Paste style". */
   styleClipboard: FigureStyle | null
 
+  /** Elements copied via Copy/Cut (clones), pasted as offset copies. */
+  clipboard: BoardElement[]
+
   // Undo/redo: a flat operation stack + a pointer to the last applied operation
   // (VA's model). Everything before/at `pointer` is "done"; everything after is
   // the redo branch, truncated on the next push.
@@ -107,6 +110,20 @@ export interface EditorState {
   resetBackground: () => void
   /** Clone the selected elements (offset) as one undoable op; select the clones. */
   duplicateSelected: () => void
+  /** Copy the selected elements (clones) to the clipboard. */
+  copySelection: () => void
+  /** Copy the selection then delete it. */
+  cutSelection: () => void
+  /** Paste the clipboard as offset clones (new ids), and select them. */
+  paste: () => void
+  /** Select every element on the board. */
+  selectAll: () => void
+  /** Move the selected elements by (dx, dy) board units (one undoable op). */
+  nudgeSelected: (dx: number, dy: number) => void
+  /** Scale the selected elements by a factor about their own centers. */
+  resizeSelected: (factor: number) => void
+  /** Horizontally mirror the selected figures (toggle their `mirror` flag). */
+  flipSelected: () => void
   /** Change the selected elements' z-order (one undoable reorder op). */
   arrangeSelected: (mode: 'front' | 'back' | 'forward' | 'backward') => void
   /** Copy the (single) selected element's style; paste it onto the selection. */
@@ -178,6 +195,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
       styleClipboard: null,
+      clipboard: [],
       stack: [],
       pointer: -1,
 
@@ -365,6 +383,72 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         const ops: Operation[] = clones.map((element, i) => ({ kind: 'add', element, index: doc.elements.length + i }))
         push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'duplicate', ops })
         set({ selectedIds: clones.map((c) => c.id) })
+      },
+
+      copySelection: () => {
+        const { doc, selectedIds } = get()
+        const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
+        if (sel.length) set({ clipboard: sel.map((e) => structuredClone(e) as BoardElement) })
+      },
+
+      cutSelection: () => {
+        get().copySelection()
+        get().deleteSelected()
+      },
+
+      paste: () => {
+        const { doc, clipboard } = get()
+        if (clipboard.length === 0) return
+        const OFFSET = 16
+        const clones = clipboard.map((e) => {
+          const c = structuredClone(e) as BoardElement
+          c.id = crypto.randomUUID()
+          c.transform = { ...c.transform, x: c.transform.x + OFFSET, y: c.transform.y + OFFSET }
+          return c
+        })
+        const ops: Operation[] = clones.map((element, i) => ({ kind: 'add', element, index: doc.elements.length + i }))
+        push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'paste', ops })
+        // Advance the clipboard so a repeated paste cascades instead of stacking.
+        set({ selectedIds: clones.map((c) => c.id), clipboard: clones.map((c) => structuredClone(c) as BoardElement) })
+      },
+
+      selectAll: () => {
+        const { doc } = get()
+        get().setSelection(doc.elements.map((e) => e.id))
+      },
+
+      nudgeSelected: (dx, dy) => {
+        const { doc, selectedIds } = get()
+        const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
+        if (sel.length === 0) return
+        get().updateElements(
+          sel.map((e) => ({
+            id: e.id,
+            before: { transform: e.transform },
+            after: { transform: { ...e.transform, x: e.transform.x + dx, y: e.transform.y + dy } },
+          })),
+        )
+      },
+
+      resizeSelected: (factor) => {
+        const { doc, selectedIds } = get()
+        const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
+        if (sel.length === 0) return
+        get().updateElements(
+          sel.map((e) => {
+            const scale = Math.min(10, Math.max(0.1, e.transform.scale * factor))
+            return { id: e.id, before: { transform: e.transform }, after: { transform: { ...e.transform, scale } } }
+          }),
+        )
+      },
+
+      flipSelected: () => {
+        const { doc, selectedIds } = get()
+        const figs = doc.elements.filter((e) => selectedIds.includes(e.id) && e.type === 'figure') as Extract<BoardElement, { type: 'figure' }>[]
+        if (figs.length === 0) return
+        get().updateElements(
+          figs.map((e) => ({ id: e.id, before: { mirror: e.mirror }, after: { mirror: !e.mirror } })),
+        )
       },
 
       arrangeSelected: (mode) => {
