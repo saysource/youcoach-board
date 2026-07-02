@@ -18,6 +18,13 @@ const preventTouchScroll = (e: TouchEvent) => e.preventDefault()
 
 const FACING_ORDER = ['left', 'up', 'down', 'right']
 const FACING_ICON: Record<string, LucideIcon> = { left: ArrowLeft, up: ArrowUp, down: ArrowDown, right: ArrowRight }
+// What each facing arrow means, shown as a tooltip (the arrows alone are unclear).
+const FACING_DESC: Record<string, string> = {
+  left: 'Players facing left',
+  up: 'Players facing upward',
+  down: 'Players facing downward',
+  right: 'Players facing right',
+}
 
 interface LibraryDrawerProps {
   open: boolean
@@ -393,17 +400,22 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                 <div className="flex items-center gap-1 border-b border-border p-2">
                   {facings.map((f) => {
                     const Icon = FACING_ICON[f.id] ?? ArrowRight
+                    const desc = FACING_DESC[f.id] ?? f.label
                     return (
-                      <button
-                        key={f.id}
-                        type="button"
-                        aria-pressed={facing === f.id}
-                        title={f.label}
-                        onClick={() => setFacing(f.id)}
-                        className={cn('flex h-8 flex-1 items-center justify-center rounded-md border border-border hover:bg-accent [&_svg]:size-4', facing === f.id && 'bg-primary/15')}
-                      >
-                        <Icon />
-                      </button>
+                      <Tooltip key={f.id}>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            aria-pressed={facing === f.id}
+                            aria-label={desc}
+                            onClick={() => setFacing(f.id)}
+                            className={cn('flex h-8 flex-1 items-center justify-center rounded-md border border-border hover:bg-accent [&_svg]:size-4', facing === f.id && 'bg-primary/15')}
+                          >
+                            <Icon />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{desc}</TooltipContent>
+                      </Tooltip>
                     )
                   })}
                 </div>
