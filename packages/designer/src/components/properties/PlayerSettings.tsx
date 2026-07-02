@@ -157,12 +157,17 @@ function KitFigure({ kit, size = 40 }: { kit: PlayerKit; size?: number }) {
   )
 }
 
-// A bare recolored kit.svg (no chip/border) — used for the editor preview and the
-// recent-kit presets, which just fit their box.
+// A bare recolored kit.svg — used for the editor preview and the recent-kit
+// presets. Wrapped in a faint tint on dark themes so the (often dark) figure
+// doesn't vanish against the dark popover; invisible in light mode.
 function KitSvg({ kit, className, style }: { kit: PlayerKit; className?: string; style?: React.CSSProperties }) {
   const pv = kitPreview(kit)
   if (!pv) return null
-  return <svg className={className} style={style} viewBox={pv.viewBox} preserveAspectRatio="xMidYMid meet" dangerouslySetInnerHTML={{ __html: pv.inner }} aria-hidden />
+  return (
+    <span className={cn('inline-flex items-center justify-center rounded-md bg-transparent dark:bg-foreground/20', className)}>
+      <svg style={style} viewBox={pv.viewBox} preserveAspectRatio="xMidYMid meet" dangerouslySetInnerHTML={{ __html: pv.inner }} aria-hidden />
+    </span>
+  )
 }
 
 // A jersey-style icon: the token jersey shirt (white base, mid-gray stripes) with
