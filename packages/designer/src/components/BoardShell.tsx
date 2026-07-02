@@ -9,7 +9,7 @@ import { useTheme, type ThemeSetting } from '../lib/use-theme'
 import { useElementSize } from '../lib/use-element-size'
 import type { Breakpoint } from '../lib/use-breakpoint'
 import { cn } from '../lib/cn'
-import { useAssets, figureColorInfo, figureIndex, figureBaseSize } from '../lib/assets'
+import { useAssets, figureColorInfo, figureIndex, figureBaseSize, fieldFigureScale } from '../lib/assets'
 import { playerSvgs, PLAYER_SLOTS } from '../lib/player-kit'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { isCreationTool } from '../store/editorStore'
@@ -98,6 +98,15 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const elements = useEditorStore((s) => s.doc.elements)
   const figureScale = useEditorStore((s) => s.doc.background.figureScale)
+  // The field's catalog `scale` is the source of truth for figureScale: sync it
+  // whenever the field is a catalog field (covers the default field set on load,
+  // which otherwise kept a hard-coded default and ignored the catalog value).
+  const fieldSvg = useEditorStore((s) => s.doc.background.fieldSvg)
+  const setBackground = useEditorStore((s) => s.setBackground)
+  useEffect(() => {
+    const s = fieldFigureScale(catalog, fieldSvg)
+    if (s !== undefined && s !== figureScale) setBackground({ figureScale: s })
+  }, [catalog, fieldSvg, figureScale, setBackground])
   const rememberMaterialColor = useEditorStore((s) => s.rememberMaterialColor)
   const rememberFigureScale = useEditorStore((s) => s.rememberFigureScale)
   const rememberPlayerColors = useEditorStore((s) => s.rememberPlayerColors)

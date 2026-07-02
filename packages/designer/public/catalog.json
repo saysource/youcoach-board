@@ -17925,7 +17925,7 @@
           "thumb": "images/optimized/fields/11/49_mini.png",
           "w": 1200,
           "h": 897,
-          "scale": 0.3,
+          "scale": 0.6,
           "actions": [
             "fields.topview"
           ]

@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
-import { useAssets, buildFigureElement } from '../lib/assets'
+import { useAssets, buildFigureElement, figureBaseSize } from '../lib/assets'
 import { useEditorStore } from '../store/context'
 
 // Icon per catalog macro-group, for the More-tools menu.
@@ -274,6 +274,7 @@ function MoreToolsMenu({
 }) {
   const { catalog } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
+  const figureScale = useEditorStore((s) => s.doc.background.figureScale)
   // The ball = the first material with the "balls" action; flagged so animation
   // can special-case it later.
   const ball = catalog?.categories.materials?.figures.find((f) => f.svg && (f.actions ?? []).includes('material.balls'))
@@ -281,7 +282,10 @@ function MoreToolsMenu({
   function addBall() {
     if (!catalog || !ball?.svg) return
     const colors = { ...(catalog.defaults.materials ?? {}) }
-    createFigure(buildFigureElement({ figureId: ball.svg, w: ball.w, h: ball.h, mirror: false, colors, ball: true }, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
+    // Size it like a drawer drop: the field's figureScale + the ball's sizeFactor
+    // (which keeps it small), not its raw catalog pixels.
+    const base = figureBaseSize({ w: ball.w, h: ball.h, sizeFactor: ball.sizeFactor ?? 1, category: 'materials' }, figureScale)
+    createFigure(buildFigureElement({ figureId: ball.svg, w: Math.round(base.w), h: Math.round(base.h), mirror: false, colors, ball: true }, BOARD_WIDTH / 2, BOARD_HEIGHT / 2))
   }
 
   return (

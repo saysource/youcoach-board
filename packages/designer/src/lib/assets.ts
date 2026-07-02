@@ -97,6 +97,18 @@ export function figureBaseSize(meta: FigureMeta, figureScale: number): { w: numb
   return { w: meta.w * k, h: meta.h * k }
 }
 
+/** The `scale` a field declares in the catalog (→ the figures-scale for figures
+ *  placed on it). The single source of truth for per-field sizing; undefined for
+ *  a field not in the catalog (e.g. a custom upload). */
+export function fieldFigureScale(catalog: Catalog | null, fieldSvg: string | null | undefined): number | undefined {
+  if (!catalog || !fieldSvg) return undefined
+  for (const cat of Object.values(catalog.categories)) {
+    if (cat.kind !== 'field') continue
+    for (const f of cat.figures) if (f.svg === fieldSvg) return f.scale ?? 1
+  }
+  return undefined
+}
+
 /** Build the asset-path → URL resolver from the host config. */
 export function makeResolver(cfg?: AssetsConfig): (path: string) => string {
   if (cfg?.resolve) return cfg.resolve
