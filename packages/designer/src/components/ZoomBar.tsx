@@ -14,7 +14,7 @@ export function ZoomBar() {
     <div className="pointer-events-auto flex items-center rounded-lg border border-border bg-card shadow-md">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" aria-label="Zoom out" onClick={zoomOut} disabled={zoom <= 1}>
+          <Button size="icon-sm" aria-label="Zoom out" onClick={zoomOut} disabled={zoom <= 0.5}>
             <Minus />
           </Button>
         </TooltipTrigger>

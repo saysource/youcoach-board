@@ -226,6 +226,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
   const panBy = useEditorStore((s) => s.panBy)
+  const zoomBy = useEditorStore((s) => s.zoomBy)
   const viewBox = `${viewport.panX} ${viewport.panY} ${BOARD_WIDTH / viewport.zoom} ${BOARD_HEIGHT / viewport.zoom}`
 
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -310,6 +311,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const panActive = spaceHeld || activeTool === 'hand'
   const panLast = useRef<{ x: number; y: number } | null>(null)
   function panDown(e: React.PointerEvent) {
+    e.stopPropagation() // pan swallows the gesture: no marquee/selection/create
     panLast.current = { x: e.clientX, y: e.clientY }
     try {
       ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
@@ -319,6 +321,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   }
   function panMove(e: React.PointerEvent) {
     if (!panLast.current) return
+    e.stopPropagation()
     const dx = e.clientX - panLast.current.x
     const dy = e.clientY - panLast.current.y
     panLast.current = { x: e.clientX, y: e.clientY }
@@ -327,6 +330,21 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   function panEnd() {
     panLast.current = null
   }
+
+  // ⌘/Ctrl + wheel (and trackpad pinch, which sends ctrlKey) zooms toward the
+  // cursor. Registered non-passively so the page doesn't scroll/zoom instead.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+      const p = clientToBoard(svg, e.clientX, e.clientY)
+      zoomBy(Math.exp(-e.deltaY * 0.0015), { x: p.x, y: p.y })
+    }
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    return () => svg.removeEventListener('wheel', onWheel)
+  }, [zoomBy])
 
   // The element currently being inline-edited (if it's a text element) — recompute
   // its editor overlay box whenever its geometry (grows as you type) or the zoom

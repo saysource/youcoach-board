@@ -70,6 +70,8 @@ const VIEW: Section = {
     { label: 'Zoom to 100%', combos: [[MOD, '0']] },
     { label: 'Zoom to fit', combos: [[ALT, '1']] },
     { label: 'Zoom to selection', combos: [[ALT, '2']] },
+    { label: 'Zoom to cursor', combos: [[MOD, 'wheel']] },
+    { label: 'Pan the canvas', combos: [['Space', 'drag']] },
     { label: 'Toggle grid', combos: [['G']] },
     { label: 'Keyboard shortcuts', combos: [['?']] },
   ],

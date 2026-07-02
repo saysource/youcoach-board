@@ -33,22 +33,30 @@ export interface Viewport {
   panX: number
   panY: number
 }
-const MIN_ZOOM = 1
+const MIN_ZOOM = 0.5
 const MAX_ZOOM = 8
 const ZOOM_STEP = 1.25
 const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+// Clamp one axis of the pan: when the view is larger than the board (zoom < 1)
+// center it (letterbox); otherwise keep it within the board edges.
+function clampAxis(v: number, size: number, board: number): number {
+  return size >= board ? (board - size) / 2 : clampNum(v, 0, board - size)
+}
 function clampViewport(zoom: number, panX: number, panY: number): Viewport {
   const z = clampNum(zoom, MIN_ZOOM, MAX_ZOOM)
-  const w = BOARD_WIDTH / z
-  const h = BOARD_HEIGHT / z
-  return { zoom: z, panX: clampNum(panX, 0, BOARD_WIDTH - w), panY: clampNum(panY, 0, BOARD_HEIGHT - h) }
+  return { zoom: z, panX: clampAxis(panX, BOARD_WIDTH / z, BOARD_WIDTH), panY: clampAxis(panY, BOARD_HEIGHT / z, BOARD_HEIGHT) }
 }
-// Zoom keeping the current view center fixed.
-function zoomAround(vp: Viewport, factor: number): Viewport {
-  const cx = vp.panX + BOARD_WIDTH / vp.zoom / 2
-  const cy = vp.panY + BOARD_HEIGHT / vp.zoom / 2
+// Zoom by a factor, keeping the anchor board-point fixed on screen (defaults to
+// the current view center).
+function zoomToward(vp: Viewport, factor: number, anchor?: { x: number; y: number }): Viewport {
   const z = clampNum(vp.zoom * factor, MIN_ZOOM, MAX_ZOOM)
-  return clampViewport(z, cx - BOARD_WIDTH / z / 2, cy - BOARD_HEIGHT / z / 2)
+  const curW = BOARD_WIDTH / vp.zoom
+  const curH = BOARD_HEIGHT / vp.zoom
+  const ax = anchor?.x ?? vp.panX + curW / 2
+  const ay = anchor?.y ?? vp.panY + curH / 2
+  const fx = (ax - vp.panX) / curW
+  const fy = (ay - vp.panY) / curH
+  return clampViewport(z, ax - fx * (BOARD_WIDTH / z), ay - fy * (BOARD_HEIGHT / z))
 }
 
 export interface EditorState {
@@ -163,6 +171,8 @@ export interface EditorState {
   zoomOut: () => void
   zoomReset: () => void
   zoomToSelection: () => void
+  /** Zoom by a factor, keeping the anchor board-point fixed (for ⌘+wheel). */
+  zoomBy: (factor: number, anchor?: { x: number; y: number }) => void
   /** Pan the view by (dx, dy) board units (clamped to the board). */
   panBy: (dx: number, dy: number) => void
   /** Change the selected elements' z-order (one undoable reorder op). */
@@ -500,8 +510,9 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         get().updateElements(texts.map((e) => ({ id: e.id, before: { bold: e.bold }, after: { bold: !e.bold } })))
       },
 
-      zoomIn: () => set((s) => ({ viewport: zoomAround(s.viewport, ZOOM_STEP) })),
-      zoomOut: () => set((s) => ({ viewport: zoomAround(s.viewport, 1 / ZOOM_STEP) })),
+      zoomIn: () => set((s) => ({ viewport: zoomToward(s.viewport, ZOOM_STEP) })),
+      zoomOut: () => set((s) => ({ viewport: zoomToward(s.viewport, 1 / ZOOM_STEP) })),
+      zoomBy: (factor, anchor) => set((s) => ({ viewport: zoomToward(s.viewport, factor, anchor) })),
       zoomReset: () => set({ viewport: { zoom: 1, panX: 0, panY: 0 } }),
       panBy: (dx, dy) => set((s) => ({ viewport: clampViewport(s.viewport.zoom, s.viewport.panX + dx, s.viewport.panY + dy) })),
 
