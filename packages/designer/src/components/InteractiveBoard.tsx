@@ -1432,21 +1432,23 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                 pointerEvents="none"
               />
             ))}
-            {/* Object-snap alignment guides (red) while dragging a selection. */}
-            {alignGuides.map((g, i) => (
-              <line
-                key={`align-${i}`}
-                x1={g.x1}
-                y1={g.y1}
-                x2={g.x2}
-                y2={g.y2}
-                stroke="#fa5252"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
-                shapeRendering="crispEdges"
-                pointerEvents="none"
-              />
-            ))}
+            {/* Object-snap alignment guides (red) while dragging a selection: a
+                line through the aligned coordinate plus a small × on each notable
+                point that triggered it. */}
+            {alignGuides.map((g, i) => {
+              const m = 3.5 / scale // half-length of the × marks (fixed on-screen)
+              return (
+                <g key={`align-${i}`} stroke="#fa5252" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none">
+                  <line x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} shapeRendering="crispEdges" />
+                  {g.marks.map((pt, j) => (
+                    <g key={j}>
+                      <line x1={pt.x - m} y1={pt.y - m} x2={pt.x + m} y2={pt.y + m} />
+                      <line x1={pt.x - m} y1={pt.y + m} x2={pt.x + m} y2={pt.y - m} />
+                    </g>
+                  ))}
+                </g>
+              )
+            })}
             {freeDraft && freeDraft.length >= 1 && (
               <ElementView element={applyFigureStyle(makeDraw('draw-draft', freeDraft), toolDefaults)} />
             )}

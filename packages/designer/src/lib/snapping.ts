@@ -6,11 +6,18 @@
 
 import type { Box } from '@youcoach-board/core'
 
+export interface SnapMark {
+  x: number
+  y: number
+}
+
 export interface SnapLine {
   x1: number
   y1: number
   x2: number
   y2: number
+  /** The notable points that triggered this line (draw a small × on each). */
+  marks: SnapMark[]
 }
 
 export interface SnapResult {
@@ -55,6 +62,21 @@ function bestOffset(moving: number[], targets: Box[], anchorsOf: (b: Box) => num
 // should be threaded by the guide line. A hair of tolerance absorbs FP drift.
 const COINCIDE = 0.5
 
+// The notable point(s) where a vertical line at x=`mx` meets box `b`: its centre
+// (a single point — the line then stops at the centre) if that's what aligned,
+// otherwise the two corners on the meeting edge.
+function marksOnVertical(b: Box, mx: number): SnapMark[] {
+  const cx = b.x + b.width / 2
+  if (Math.abs(cx - mx) < COINCIDE) return [{ x: mx, y: b.y + b.height / 2 }]
+  return [{ x: mx, y: b.y }, { x: mx, y: b.y + b.height }]
+}
+// The notable point(s) where a horizontal line at y=`my` meets box `b`.
+function marksOnHorizontal(b: Box, my: number): SnapMark[] {
+  const cy = b.y + b.height / 2
+  if (Math.abs(cy - my) < COINCIDE) return [{ x: b.x + b.width / 2, y: my }]
+  return [{ x: b.x, y: my }, { x: b.x + b.width, y: my }]
+}
+
 // Compute the snap offset + guide lines for `moving` (the selection AABB at its
 // pre-snap position) against the other elements' AABBs `targets`.
 export function computeSnap(moving: Box, targets: Box[], threshold: number): SnapResult {
@@ -70,18 +92,15 @@ export function computeSnap(moving: Box, targets: Box[], threshold: number): Sna
   const guides: SnapLine[] = []
 
   // Vertical guide(s): for each snapped x-anchor that now coincides with a target
-  // anchor, span the line across every box sharing it (the moving box included).
+  // anchor, thread a line through the notable points of every box sharing it (the
+  // moving box included) — stopping at centres, spanning corners on edges.
   if (ox != null) {
     for (const mx of xAnchors(snapped)) {
       const aligned = targets.filter((t) => xAnchors(t).some((a) => Math.abs(a - mx) < COINCIDE))
       if (aligned.length === 0) continue
-      let top = snapped.y
-      let bottom = snapped.y + snapped.height
-      for (const t of aligned) {
-        top = Math.min(top, t.y)
-        bottom = Math.max(bottom, t.y + t.height)
-      }
-      guides.push({ x1: mx, y1: top, x2: mx, y2: bottom })
+      const marks = [snapped, ...aligned].flatMap((b) => marksOnVertical(b, mx))
+      const ys = marks.map((m) => m.y)
+      guides.push({ x1: mx, y1: Math.min(...ys), x2: mx, y2: Math.max(...ys), marks })
     }
   }
   // Horizontal guide(s).
@@ -89,13 +108,9 @@ export function computeSnap(moving: Box, targets: Box[], threshold: number): Sna
     for (const my of yAnchors(snapped)) {
       const aligned = targets.filter((t) => yAnchors(t).some((a) => Math.abs(a - my) < COINCIDE))
       if (aligned.length === 0) continue
-      let left = snapped.x
-      let right = snapped.x + snapped.width
-      for (const t of aligned) {
-        left = Math.min(left, t.x)
-        right = Math.max(right, t.x + t.width)
-      }
-      guides.push({ x1: left, y1: my, x2: right, y2: my })
+      const marks = [snapped, ...aligned].flatMap((b) => marksOnHorizontal(b, my))
+      const xs = marks.map((m) => m.x)
+      guides.push({ x1: Math.min(...xs), y1: my, x2: Math.max(...xs), y2: my, marks })
     }
   }
 
