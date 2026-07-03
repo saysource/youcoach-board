@@ -122,10 +122,10 @@ export function FieldCameraLayer({ viewBox }: { viewBox: string }) {
   const spots = model.spots.map((s) => proj(s[0], s[1])).filter(Boolean) as { x: number; y: number }[]
 
   const sliders: { key: keyof Orbit; label: string; min: number; max: number; step: number }[] = [
-    { key: 'azimuth', label: 'Rotate', min: -180, max: 180, step: 1 },
-    { key: 'elevation', label: 'Tilt', min: 0, max: 89, step: 1 },
-    { key: 'distance', label: 'Distance', min: Math.round(len * 0.3), max: Math.round(len * 5), step: 1 },
-    { key: 'fov', label: 'FOV', min: 8, max: 100, step: 1 },
+    { key: 'azimuth', label: 'Rotate', min: -180, max: 180, step: 0.5 },
+    { key: 'elevation', label: 'Tilt', min: 0, max: 89, step: 0.5 },
+    { key: 'distance', label: 'Distance', min: Math.round(len * 0.3), max: Math.round(len * 5), step: 0.5 },
+    { key: 'fov', label: 'FOV', min: 8, max: 100, step: 0.5 },
     { key: 'targetX', label: 'Pan ↔', min: Math.round(-0.4 * len), max: Math.round(1.4 * len), step: 0.5 },
     { key: 'targetZ', label: 'Pan ↕', min: Math.round(-0.4 * wid), max: Math.round(1.4 * wid), step: 0.5 },
   ]
