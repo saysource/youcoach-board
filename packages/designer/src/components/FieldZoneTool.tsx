@@ -178,6 +178,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
   }
   function del(i: number) {
     setZones((zs) => zs.filter((_, j) => j !== i))
+    setSelected((sel) => (sel >= i && sel > 0 ? sel - 1 : sel))
   }
   function relabel(i: number, label: string) {
     setZones((zs) => zs.map((z, j) => (j === i ? { ...z, label, id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || z.id } : z)))
@@ -197,16 +198,20 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
       <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 z-20 h-full w-full" style={{ pointerEvents: 'none' }}>
         {/* Current locked target. */}
         {tgt && <circle cx={tgt.x} cy={tgt.y} r={10} fill="none" stroke="#f59e0b" strokeWidth={2} vectorEffect="non-scaling-stroke" />}
-        {markers.map((m, i) =>
-          m.behind ? null : (
-            <g key={zones[i].id} transform={`translate(${m.x} ${m.y})`} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onPointerDown={(e) => e.stopPropagation()} onClick={() => selectZone(i)}>
+        {markers.map((m, i) => {
+          // `markers` is set from the rAF loop, so it can briefly be longer than
+          // `zones` right after a delete — guard against the missing zone.
+          const z = zones[i]
+          if (!z || m.behind) return null
+          return (
+            <g key={z.id} transform={`translate(${m.x} ${m.y})`} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onPointerDown={(e) => e.stopPropagation()} onClick={() => selectZone(i)}>
               <circle r={15} fill={i === selected ? '#0891b2' : '#0f172a'} fillOpacity={0.85} stroke="#ffffff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
               <text textAnchor="middle" dominantBaseline="central" fontSize={17} fontWeight={600} fill="#ffffff">
                 {i}
               </text>
             </g>
-          ),
-        )}
+          )
+        })}
       </svg>
 
       <div className="pointer-events-auto absolute z-30 w-72 rounded-xl border border-border bg-card shadow-lg" style={{ left: panel.x, top: panel.y }}>
