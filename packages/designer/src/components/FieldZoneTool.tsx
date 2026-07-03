@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { GripHorizontal, MapPin, Copy, Plus, Crosshair, Camera, Trash2 } from 'lucide-react'
+import { GripHorizontal, MapPin, Copy, Plus, Crosshair, Camera, Trash2, RectangleVertical, RectangleHorizontal, Rotate3d } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView } from '@youcoach-board/core'
 import { projectToBoard, boardToGround } from '../lib/arrow3d'
 import { clientToBoard } from '../lib/draw'
 import { FIELD_ZONES, type Zone } from '../lib/field-zones'
-import type { PitchType } from '../lib/field-camera'
+import { orbitToConfig, type PitchType } from '../lib/field-camera'
+import { cn } from '../lib/cn'
 import { useEditorStore } from '../store/context'
 import { Button } from './ui/button'
 
@@ -52,6 +53,11 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
   const [tgt, setTgt] = useState<{ x: number; y: number } | null>(null)
   const [panel, setPanel] = useState({ x: 12, y: 56 })
   const [panelDrag, setPanelDrag] = useState(false)
+  const [topView, setTopView] = useState<'portrait' | 'landscape' | null>(null)
+  // Set-position mode: the zone whose target is being (re)placed by clicking the
+  // grass, plus the orange disc's board position under the cursor.
+  const [setPos, setSetPos] = useState<number | null>(null)
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
 
   const zonesRef = useRef(zones)
   useEffect(() => {
@@ -128,6 +134,43 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     }
   }, [panelDrag])
 
+  // Top view (near-overhead, pan+zoom only); azimuth sets the orientation.
+  function goTopView(orientation: 'portrait' | 'landscape') {
+    const cam = camRef.current
+    const controls = controlsRef.current
+    if (!cam || !controls) return
+    const pose = orbitToConfig({ targetX: 52.5, targetZ: 34, azimuth: orientation === 'portrait' ? 90 : 0, elevation: 89.5, distance: orientation === 'portrait' ? 135 : 100, fov: FOV }, field3d.ref as PitchType)
+    cam.position.set(pose.position[0], pose.position[1], pose.position[2])
+    controls.target.set(pose.target[0], pose.target[1], pose.target[2])
+    cam.lookAt(controls.target)
+    controls.update()
+    setTopView(orientation)
+  }
+  useEffect(() => {
+    const controls = controlsRef.current
+    if (!controls) return
+    controls.enableRotate = !topView
+    controls.enablePan = !!topView
+    controls.screenSpacePanning = true
+    controls.mouseButtons.LEFT = topView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
+  }, [topView])
+
+  // Set-position mode: freeze the camera and let a click on the grass place a
+  // zone's target. Esc cancels.
+  useEffect(() => {
+    const controls = controlsRef.current
+    if (controls) controls.enabled = setPos === null
+    if (setPos === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSetPos(null)
+        setHover(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [setPos])
+
   const currentPose = (): Zone['camera'] => {
     const cam = camRef.current!
     const c = controlsRef.current!
@@ -138,20 +181,32 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     return [round(c.target.x), round(c.target.y), round(c.target.z)]
   }
 
-  // Re-aim the locked target by clicking the grass (a click, not an orbit drag).
   function onSurfaceDown(e: React.PointerEvent) {
     downRef.current = { x: e.clientX, y: e.clientY }
+  }
+  // In set-position mode the orange disc tracks the ground under the cursor.
+  function onSurfaceMove(e: React.PointerEvent) {
+    if (setPos === null || !svgRef.current) return
+    setHover(clientToBoard(svgRef.current, e.clientX, e.clientY))
   }
   function onSurfaceUp(e: React.PointerEvent) {
     const d = downRef.current
     downRef.current = null
-    if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return // was an orbit drag
     const cam = camRef.current
     const controls = controlsRef.current
     if (!cam || !controls || !svgRef.current) return
     const b = clientToBoard(svgRef.current, e.clientX, e.clientY)
     const g = boardToGround(b.x, b.y, cam)
     if (!g) return
+    if (setPos !== null) {
+      // Place the zone's target at the clicked ground point, then leave the mode.
+      const i = setPos
+      setZones((zs) => zs.map((z, j) => (j === i ? { ...z, target: [round(g.x), 0, round(g.z)] } : z)))
+      setSetPos(null)
+      setHover(null)
+      return
+    }
+    if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return // was an orbit drag
     controls.target.set(g.x, 0, g.z)
     cam.lookAt(controls.target)
     controls.update()
@@ -163,6 +218,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     const controls = controlsRef.current
     if (!z || !cam || !controls) return
     setSelected(i)
+    setTopView(null)
     cam.position.copy(v3(z.camera.position))
     controls.target.copy(v3(z.target))
     cam.lookAt(controls.target)
@@ -198,10 +254,15 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
 
   return (
     <>
-      <div ref={surfaceRef} className="absolute inset-0 z-20" style={{ touchAction: 'none', cursor: 'grab' }} onPointerDown={onSurfaceDown} onPointerUp={onSurfaceUp} />
+      <div ref={surfaceRef} className="absolute inset-0 z-20" style={{ touchAction: 'none', cursor: setPos !== null ? 'crosshair' : 'grab' }} onPointerDown={onSurfaceDown} onPointerMove={onSurfaceMove} onPointerUp={onSurfaceUp} />
       <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 z-20 h-full w-full" style={{ pointerEvents: 'none' }}>
-        {/* Current locked target. */}
-        {tgt && <circle cx={tgt.x} cy={tgt.y} r={10} fill="none" stroke="#f59e0b" strokeWidth={2} vectorEffect="non-scaling-stroke" />}
+        {setPos !== null ? (
+          // Set-position mode: an orange disc under the cursor previews the target.
+          hover && <circle cx={hover.x} cy={hover.y} r={10} fill="#f59e0b" fillOpacity={0.85} stroke="#ffffff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+        ) : (
+          // The current locked target.
+          tgt && <circle cx={tgt.x} cy={tgt.y} r={10} fill="none" stroke="#f59e0b" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        )}
         {markers.map((m, i) => {
           // `markers` is set from the rAF loop, so it can briefly be longer than
           // `zones` right after a delete — guard against the missing zone.
@@ -223,7 +284,19 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
           <GripHorizontal className="size-3.5 text-muted-foreground" /> <MapPin className="size-3.5" /> Field zones
         </div>
         <div className="p-2.5">
-          <div className="mb-2 text-[11px] text-muted-foreground">Drag to orbit · wheel to zoom · click the grass to aim the target.</div>
+          <div className="mb-2 text-[11px] text-muted-foreground">Drag to orbit · wheel to zoom · click the grass to aim.</div>
+          {/* Camera views (same as Edit-Background): top-down portrait/landscape + 3D orbit. */}
+          <div className="mb-2 flex items-center gap-1 rounded-md border border-border p-0.5">
+            <ZoneViewBtn label="Top view (portrait)" active={topView === 'portrait'} onClick={() => goTopView('portrait')}>
+              <RectangleVertical />
+            </ZoneViewBtn>
+            <ZoneViewBtn label="Top view (landscape)" active={topView === 'landscape'} onClick={() => goTopView('landscape')}>
+              <RectangleHorizontal />
+            </ZoneViewBtn>
+            <ZoneViewBtn label="3D orbit view" active={topView === null} onClick={() => setTopView(null)}>
+              <Rotate3d />
+            </ZoneViewBtn>
+          </div>
           <div className="mb-2 flex gap-1.5">
             <Button size="sm" className="flex-1" onClick={addZone}>
               <Plus /> Add zone
@@ -232,6 +305,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
               <Camera /> Set pose
             </Button>
           </div>
+          {setPos !== null && <div className="mb-2 rounded bg-primary/10 px-2 py-1 text-[11px] text-foreground">Click the pitch to set “{zones[setPos]?.label}”. Esc to cancel.</div>}
           <div className="max-h-44 overflow-y-auto rounded-md border border-border">
             {zones.map((z, i) => (
               <div key={z.id} className={`flex items-center gap-1 border-b border-border px-1.5 py-1 last:border-0 ${i === selected ? 'bg-primary/10' : ''}`}>
@@ -239,7 +313,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
                   {i}
                 </button>
                 <input value={z.label} onChange={(e) => relabel(i, e.currentTarget.value)} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] outline-none hover:border-border focus:border-border" />
-                <button type="button" aria-label="Aim here" title="Fly + select" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => selectZone(i)}>
+                <button type="button" aria-label="Set target position" title="Set target position (click the pitch)" className={cn('shrink-0 hover:text-foreground', setPos === i ? 'text-primary' : 'text-muted-foreground')} onClick={() => { setSetPos(i); setHover(null) }}>
                   <Crosshair className="size-3.5" />
                 </button>
                 <button type="button" aria-label="Delete zone" className="shrink-0 text-muted-foreground hover:text-destructive" onClick={() => del(i)}>
@@ -255,5 +329,21 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
         </div>
       </div>
     </>
+  )
+}
+
+// A compact segmented icon button for the zone tool's camera-view row.
+function ZoneViewBtn({ label, active, onClick, children }: { label: string; active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
+      onClick={onClick}
+      className={cn('flex h-7 flex-1 items-center justify-center rounded [&_svg]:size-4', active ? 'bg-primary/15 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}
+    >
+      {children}
+    </button>
   )
 }
