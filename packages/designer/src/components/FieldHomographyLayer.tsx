@@ -18,12 +18,42 @@ import { cn } from '../lib/cn'
 const round = (n: number) => Math.round(n * 1e6) / 1e6
 const METRIC = new Map(SOCCER11.points.map((p) => [p.id, p.metric] as const))
 
+// Calibration is authoring state (not document data), so it persists per field in
+// localStorage — re-opening the tool for the same field restores the placed points.
+const storageKey = (fieldSvg: string | null) => `ycb.fieldHomography.${fieldSvg ?? 'nofield'}`
+
+interface Saved {
+  pts: Record<string, [number, number]>
+  active: Set<string>
+}
+
+function loadSaved(fieldSvg: string | null): Saved | null {
+  try {
+    const raw = localStorage.getItem(storageKey(fieldSvg))
+    if (!raw) return null
+    const o = JSON.parse(raw) as { pts?: Record<string, [number, number]>; active?: string[] }
+    if (!o || typeof o.pts !== 'object' || !Array.isArray(o.active)) return null
+    // Merge onto a fresh seed so any new/missing reference point still has a spot.
+    const pts = seedLayout(SOCCER11, BOARD_WIDTH, BOARD_HEIGHT)
+    for (const p of SOCCER11.points) {
+      const v = o.pts[p.id]
+      if (Array.isArray(v) && v.length === 2 && Number.isFinite(v[0]) && Number.isFinite(v[1])) pts[p.id] = [v[0], v[1]]
+    }
+    const known = new Set(SOCCER11.points.map((p) => p.id))
+    return { pts, active: new Set(o.active.filter((id) => known.has(id))) }
+  } catch {
+    return null
+  }
+}
+
 export function FieldHomographyLayer({ viewBox }: { viewBox: string }) {
   const bg = useEditorStore((s) => s.doc.background)
   const svgRef = useRef<SVGSVGElement | null>(null)
-  // Point positions in board coordinates + which points are still present.
-  const [pts, setPts] = useState<Record<string, [number, number]>>(() => seedLayout(SOCCER11, BOARD_WIDTH, BOARD_HEIGHT))
-  const [active, setActive] = useState<Set<string>>(() => new Set(SOCCER11.points.map((p) => p.id)))
+  // Point positions in board coordinates + which points are still present, seeded
+  // from the field's saved calibration when there is one.
+  const [saved] = useState<Saved | null>(() => loadSaved(bg.fieldSvg))
+  const [pts, setPts] = useState<Record<string, [number, number]>>(() => saved?.pts ?? seedLayout(SOCCER11, BOARD_WIDTH, BOARD_HEIGHT))
+  const [active, setActive] = useState<Set<string>>(() => saved?.active ?? new Set(SOCCER11.points.map((p) => p.id)))
   const [erase, setErase] = useState(false)
   const [drag, setDrag] = useState<string | null>(null)
   // Panel position (px within the board container) — draggable so it never keeps
@@ -35,6 +65,15 @@ export function FieldHomographyLayer({ viewBox }: { viewBox: string }) {
     setPts(seedLayout(SOCCER11, BOARD_WIDTH, BOARD_HEIGHT))
     setActive(new Set(SOCCER11.points.map((p) => p.id)))
   }
+
+  // Persist the calibration for this field on every change (cheap; ~33 points).
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey(bg.fieldSvg), JSON.stringify({ pts, active: [...active] }))
+    } catch {
+      /* storage may be unavailable (private mode / quota) — ignore */
+    }
+  }, [pts, active, bg.fieldSvg])
 
   // Handles: pointer-down starts a drag (or erases); movement is tracked on the
   // SVG itself (robust — no setPointerCapture, which rejects synthetic pointers).
