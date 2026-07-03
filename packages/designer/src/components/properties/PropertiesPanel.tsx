@@ -29,7 +29,7 @@ import {
   AlignEndHorizontal,
   AlignVerticalDistributeCenter,
 } from 'lucide-react'
-import { type ArrowTip, type BoardElement, type TokenShape, type TokenFill, type TextAlign, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX, TEXT_MIN_FONT, TEXT_MAX_FONT } from '@youcoach-board/core'
+import { type ArrowTip, type BoardElement, type Arrow3DElement, type TokenShape, type TokenFill, type TextAlign, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX, TEXT_MIN_FONT, TEXT_MAX_FONT } from '@youcoach-board/core'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
@@ -138,6 +138,9 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
         ) : p.allPlayer ? (
           // Player: skin/kit editors + opacity in one settings popover.
           <PlayerSettingsButton side="right" />
+        ) : p.allArrow3d ? (
+          // 3D arrow: colour + a settings popover (opacity + geometry).
+          <Arrow3DControls side="right" />
         ) : p.allMaterialColor ? (
           // Material: a single custom color (yc-color-1), no opacity, + opacity settings.
           <>
@@ -246,6 +249,60 @@ function ColorButton({
         <ColorPickerWidget value={value} onChange={onChange} fillStyle={fillStyle} onFillStyleChange={onFillStyleChange} showOpacity={showOpacity} />
       </PopoverContent>
     </Popover>
+  )
+}
+
+// 3D-arrow controls: a colour swatch + a settings popover for opacity and the
+// arrow geometry (thickness / widths / arc). Edits the selected arrow(s) directly.
+function Arrow3DControls({ side }: { side: 'right' | 'top' }) {
+  const doc = useEditorStore((s) => s.doc)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
+  const updateElements = useEditorStore((s) => s.updateElements)
+  const arrows = doc.elements.filter((e): e is Arrow3DElement => e.type === 'arrow3d' && selectedIds.includes(e.id))
+  const first = arrows[0]
+  if (!first) return null
+  const setField = <K extends keyof Arrow3DElement>(k: K, v: Arrow3DElement[K]) => updateElements(arrows.map((a) => ({ id: a.id, before: { [k]: a[k] }, after: { [k]: v } })))
+  return (
+    <>
+      <ColorButton kind="fill" label="Color" value={first.fill} onChange={(c) => setField('fill', c)} side={side} showOpacity={false} />
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button size="icon" aria-label="3D arrow settings">
+                <SlidersHorizontal />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Arrow settings</TooltipContent>
+        </Tooltip>
+        <PopoverContent side={side} align="start" className="w-56">
+          <div className="grid gap-3">
+            <Field label={`Opacity (${Math.round(first.opacity * 100)}%)`}>
+              <WaveSlider min={0} max={100} value={Math.round(first.opacity * 100)} onChange={(v) => setField('opacity', v / 100)} />
+            </Field>
+            <Field label="Curve height">
+              <WaveSlider min={0} max={80} value={Math.round(first.splineHeight * 10)} onChange={(v) => setField('splineHeight', v / 10)} />
+            </Field>
+            <Field label="Completeness">
+              <WaveSlider min={10} max={100} value={Math.round(first.splineLength * 100)} onChange={(v) => setField('splineLength', v / 100)} />
+            </Field>
+            <Field label="Thickness">
+              <WaveSlider min={1} max={40} value={Math.round(first.thickness * 100)} onChange={(v) => setField('thickness', v / 100)} />
+            </Field>
+            <Field label="Stick width">
+              <WaveSlider min={5} max={100} value={Math.round(first.stickWidth * 100)} onChange={(v) => setField('stickWidth', v / 100)} />
+            </Field>
+            <Field label="Tip width">
+              <WaveSlider min={5} max={80} value={Math.round(first.tipWidth * 100)} onChange={(v) => setField('tipWidth', v / 100)} />
+            </Field>
+            <Field label="Tip length">
+              <WaveSlider min={10} max={150} value={Math.round(first.tipLength * 100)} onChange={(v) => setField('tipLength', v / 100)} />
+            </Field>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </>
   )
 }
 

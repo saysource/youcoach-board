@@ -77,6 +77,7 @@ export function usePropertyEditing() {
       allText: textTool,
       allMaterialColor: false,
       allPlayer: false,
+      allArrow3d: false,
       values: {
         stroke: toolDefaults.stroke as string | undefined,
         strokeWidth: toolDefaults.strokeWidth as number | undefined,
@@ -170,6 +171,7 @@ export function usePropertyEditing() {
   const allToken = tokens.length === els.length
   const texts = els.filter((e): e is Extract<BoardElement, { type: 'text' }> => e.type === 'text')
   const allText = texts.length === els.length
+  const allArrow3d = els.length > 0 && els.every((e) => e.type === 'arrow3d')
   // Each displayed value is the FIRST selected element's (not blanked when mixed).
   const first = els[0]
   const firstPoly = first.type === 'polyline' ? first : undefined
@@ -223,6 +225,7 @@ export function usePropertyEditing() {
     allText,
     allMaterialColor,
     allPlayer,
+    allArrow3d,
     values: {
       stroke: first.stroke,
       strokeWidth: first.strokeWidth,
