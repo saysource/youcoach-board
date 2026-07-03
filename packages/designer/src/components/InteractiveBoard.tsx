@@ -65,7 +65,7 @@ import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
-import { fieldHomography, fieldCamera } from '../lib/field-reference'
+import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera } from '../lib/field-camera'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
@@ -515,9 +515,14 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     return arrow3DHandlePositions(el.x, el.y, el.z, el.splineWidth, el.splineHeight)
   }
   // Defaults for a new arrow — metric metres when a field camera or homography is
-  // active (both view the metric pitch), fixed-camera world units otherwise.
+  // active (both view the metric pitch), fixed-camera world units otherwise. Sizes
+  // scale with the pitch length (soccer 105 = 1×) so an arrow isn't huge on a small
+  // futsal court / training grid.
   const arrow3dMetric = !!(fieldCamCfg || fieldH)
-  const arrow3dDefaults = arrow3dMetric ? { ...ARROW3D_DEFAULTS, splineWidth: 18, splineHeight: 4, stickWidth: 1.2, thickness: 0.3, tipWidth: 3, tipLength: 5 } : ARROW3D_DEFAULTS
+  const pitchK = fieldCamCfg ? PITCH_MODELS[fieldCamCfg.ref].size[0] / 105 : 1
+  const arrow3dDefaults = arrow3dMetric
+    ? { ...ARROW3D_DEFAULTS, splineWidth: 18 * pitchK, splineHeight: 4 * pitchK, stickWidth: 1.2 * pitchK, thickness: 0.3 * pitchK, tipWidth: 3 * pitchK, tipLength: 5 * pitchK }
+    : ARROW3D_DEFAULTS
   // Draft while drag-creating (tail + head on the ground), preview-rendered.
   const [arrow3dDraft, setArrow3dDraft] = useState<{ tail: { x: number; z: number }; head: { x: number; z: number } } | null>(null)
   // In-progress edit of one arrow (drag a handle or the body).

@@ -12,8 +12,13 @@
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 
-/** The stored, unambiguous camera: metres in the pitch world frame, FOV in degrees. */
+/** Which canonical pitch a field was calibrated against (sets the metric frame). */
+export type PitchType = 'soccer11' | 'futsal' | 'area'
+
+/** The stored, unambiguous camera: metres in the pitch world frame, FOV in degrees.
+ *  `ref` records which pitch model those metres belong to. */
 export interface CameraConfig {
+  ref: PitchType
   position: [number, number, number]
   target: [number, number, number]
   fov: number
@@ -43,13 +48,14 @@ export function makeCalibratedCamera(cfg: CameraConfig, aspect = BOARD_WIDTH / B
 
 /** Orbit params → stored config. Azimuth 0 looks along +Z; +azimuth swings toward
  *  +X; elevation lifts the camera above the ground. */
-export function orbitToConfig(o: Orbit): CameraConfig {
+export function orbitToConfig(o: Orbit, ref: PitchType): CameraConfig {
   const az = o.azimuth * DEG
   const el = o.elevation * DEG
   const ce = Math.cos(el)
   const dir: [number, number, number] = [ce * Math.sin(az), Math.sin(el), ce * Math.cos(az)]
   const target: [number, number, number] = [o.targetX, 0, o.targetZ]
   return {
+    ref,
     position: [target[0] + o.distance * dir[0], target[1] + o.distance * dir[1], target[2] + o.distance * dir[2]],
     target,
     fov: o.fov,

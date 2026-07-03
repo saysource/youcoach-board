@@ -7,7 +7,7 @@
 // Only soccer-11 is defined for now (FIFA proportions); futsal / small-training
 // reuse the same structure later. Values are easy to tweak.
 
-import type { CameraConfig } from './field-camera'
+import type { CameraConfig, PitchType } from './field-camera'
 
 export interface RefPoint {
   id: string
@@ -114,8 +114,8 @@ export function fieldHomography(fieldSvg: string | null | undefined): number[] |
 // these take precedence over the homography: a real camera renders arrows with
 // correct height + shadow. Keyed by fieldSvg; will also move into catalog.json.
 export const FIELD_CAMERA: Record<string, CameraConfig> = {
-  'images/optimized/fields/11/49.svg': { position: [52, 152.98, 31.33], target: [52, 0, 34], fov: 31 },
-  'images/optimized/fields/11/5.svg': { position: [90.31, 40.92, 34], target: [36, 0, 34], fov: 32 },
+  'images/optimized/fields/11/49.svg': { ref: 'soccer11', position: [52, 152.98, 31.33], target: [52, 0, 34], fov: 31 },
+  'images/optimized/fields/11/5.svg': { ref: 'soccer11', position: [90.31, 40.92, 34], target: [36, 0, 34], fov: 32 },
 }
 
 /** The posed camera for the currently-loaded field, or null. */
@@ -123,9 +123,21 @@ export function fieldCamera(fieldSvg: string | null | undefined): CameraConfig |
   return (fieldSvg && FIELD_CAMERA[fieldSvg]) || null
 }
 
-// The soccer-11 pitch skeleton as world-ground segments (metric metres; x = length,
-// z = width) for the Field-camera wireframe. Curves (centre circle, penalty arcs)
-// are tessellated so they read as smooth ellipses under perspective.
+// ── Pitch models for the Field-camera wireframe ──────────────────────────────
+// Each model is a set of world-ground segments (metric metres; x = length,
+// z = width) plus marked spots, drawn through the posed camera. Curves are
+// tessellated so they read as smooth ellipses under perspective.
+
+/** A canonical pitch the camera tool poses against; `id` is stored on the camera. */
+export interface PitchModel {
+  id: PitchType
+  label: string
+  size: [number, number] // [length x, width z] in metres
+  segments: [[number, number], [number, number]][]
+  spots: [number, number][]
+}
+
+type Seg = [[number, number], [number, number]]
 function circle(cxm: number, czm: number, r: number, a0: number, a1: number, steps: number): [number, number][] {
   const pts: [number, number][] = []
   for (let i = 0; i <= steps; i++) {
@@ -134,37 +146,82 @@ function circle(cxm: number, czm: number, r: number, a0: number, a1: number, ste
   }
   return pts
 }
-function chain(pts: [number, number][], out: [[number, number], [number, number]][]) {
+function chain(pts: [number, number][], out: Seg[]) {
   for (let i = 1; i < pts.length; i++) out.push([pts[i - 1], pts[i]])
 }
 
-export function pitchSegments(): [[number, number], [number, number]][] {
-  const segs: [[number, number], [number, number]][] = []
-  // Touchlines + goal lines.
-  chain([[0, 0], [L, 0], [L, W], [0, W], [0, 0]], segs)
-  // Halfway line.
-  chain([[L / 2, 0], [L / 2, W]], segs)
-  // Penalty areas (open on the goal line).
-  chain([[0, cy - paHalf], [16.5, cy - paHalf], [16.5, cy + paHalf], [0, cy + paHalf]], segs)
+function soccer11Segments(): Seg[] {
+  const segs: Seg[] = []
+  chain([[0, 0], [L, 0], [L, W], [0, W], [0, 0]], segs) // touchlines + goal lines
+  chain([[L / 2, 0], [L / 2, W]], segs) // halfway
+  chain([[0, cy - paHalf], [16.5, cy - paHalf], [16.5, cy + paHalf], [0, cy + paHalf]], segs) // penalty areas
   chain([[L, cy - paHalf], [L - 16.5, cy - paHalf], [L - 16.5, cy + paHalf], [L, cy + paHalf]], segs)
-  // Goal areas.
-  chain([[0, cy - gaHalf], [5.5, cy - gaHalf], [5.5, cy + gaHalf], [0, cy + gaHalf]], segs)
+  chain([[0, cy - gaHalf], [5.5, cy - gaHalf], [5.5, cy + gaHalf], [0, cy + gaHalf]], segs) // goal areas
   chain([[L, cy - gaHalf], [L - 5.5, cy - gaHalf], [L - 5.5, cy + gaHalf], [L, cy + gaHalf]], segs)
-  // Goal mouths (posts on the ground).
-  chain([[0, cy - goalHalf], [0, cy + goalHalf]], segs)
+  chain([[0, cy - goalHalf], [0, cy + goalHalf]], segs) // goal mouths
   chain([[L, cy - goalHalf], [L, cy + goalHalf]], segs)
-  // Centre circle.
-  chain(circle(L / 2, cy, R, 0, 2 * Math.PI, 48), segs)
-  // Penalty arcs (the "D": part of a 9.15 m circle round the spot, outside the box).
-  const ang = Math.acos((16.5 - 11) / R) // half-angle where the arc meets the box edge
+  chain(circle(L / 2, cy, R, 0, 2 * Math.PI, 48), segs) // centre circle
+  const ang = Math.acos((16.5 - 11) / R) // penalty arcs (the "D")
   chain(circle(11, cy, R, -ang, ang, 16), segs)
   chain(circle(L - 11, cy, R, Math.PI - ang, Math.PI + ang, 16), segs)
   return segs
 }
 
-/** The pitch spots (centre + two penalty spots) as world-ground points. */
-export function pitchSpots(): [number, number][] {
-  return [[L / 2, cy], [11, cy], [L - 11, cy]]
+// Futsal (FIFA range; the tool default is 42 × 25). Centre circle r 3, goals 3 m,
+// penalty mark 6 m + second mark 10 m, and the 6 m goal-area (two quarter arcs
+// off the posts joined by a straight line).
+function futsalSegments(len: number, wid: number): Seg[] {
+  const c = wid / 2
+  const gh = 1.5 // goal half-width (3 m goal)
+  const r = 6 // goal-area radius
+  const segs: Seg[] = []
+  chain([[0, 0], [len, 0], [len, wid], [0, wid], [0, 0]], segs) // perimeter
+  chain([[len / 2, 0], [len / 2, wid]], segs) // halfway
+  chain(circle(len / 2, c, 3, 0, 2 * Math.PI, 40), segs) // centre circle
+  chain([[0, c - gh], [0, c + gh]], segs) // goal mouths
+  chain([[len, c - gh], [len, c + gh]], segs)
+  // Left goal area: quarter arc off each post + connecting line.
+  chain(circle(0, c - gh, r, -Math.PI / 2, 0, 10), segs)
+  chain(circle(0, c + gh, r, Math.PI / 2, 0, 10), segs)
+  chain([[r, c - gh], [r, c + gh]], segs)
+  // Right goal area (mirrored).
+  chain(circle(len, c - gh, r, -Math.PI / 2, -Math.PI, 10), segs)
+  chain(circle(len, c + gh, r, Math.PI / 2, Math.PI, 10), segs)
+  chain([[len - r, c - gh], [len - r, c + gh]], segs)
+  return segs
+}
+
+function futsalSpots(len: number, wid: number): [number, number][] {
+  const c = wid / 2
+  return [[len / 2, c], [6, c], [len - 6, c], [10, c], [len - 10, c]]
+}
+
+// A plain training grid: just the rectangle (its 4 corners are the calibration points).
+function rectSegments(len: number, wid: number): Seg[] {
+  const segs: Seg[] = []
+  chain([[0, 0], [len, 0], [len, wid], [0, wid], [0, 0]], segs)
+  return segs
+}
+
+const FUTSAL_LEN = 42
+const FUTSAL_WID = 25
+const AREA_LEN = 40
+const AREA_WID = 30
+
+export const PITCH_MODELS: Record<PitchType, PitchModel> = {
+  soccer11: { id: 'soccer11', label: 'Soccer 11', size: [L, W], segments: soccer11Segments(), spots: [[L / 2, cy], [11, cy], [L - 11, cy]] },
+  futsal: { id: 'futsal', label: 'Futsal', size: [FUTSAL_LEN, FUTSAL_WID], segments: futsalSegments(FUTSAL_LEN, FUTSAL_WID), spots: futsalSpots(FUTSAL_LEN, FUTSAL_WID) },
+  area: { id: 'area', label: 'Area (40×30)', size: [AREA_LEN, AREA_WID], segments: rectSegments(AREA_LEN, AREA_WID), spots: [] },
+}
+
+export const PITCH_LIST: PitchModel[] = [PITCH_MODELS.soccer11, PITCH_MODELS.futsal, PITCH_MODELS.area]
+
+/** Best-guess pitch type from a field's SVG path (overridable in the tool). */
+export function pitchTypeFor(fieldSvg: string | null | undefined): PitchType {
+  const s = fieldSvg ?? ''
+  if (/futsal/i.test(s)) return 'futsal'
+  if (/area|training|grid/i.test(s)) return 'area'
+  return 'soccer11'
 }
 
 /** Initial board positions for a reference: fit the metric pitch into a centred
