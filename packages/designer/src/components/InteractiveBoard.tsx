@@ -231,6 +231,46 @@ function eraserTailPath(pts: TailPt[], r: number): string {
   return `M ${left.join(' L ')} L ${right.reverse().join(' L ')} Z`
 }
 
+// ── Lasso hit-testing ────────────────────────────────────────────────────────
+// Ray-cast: is `pt` inside the (implicitly closed) polygon `poly`?
+function pointInPolygon(pt: Point, poly: Point[]): boolean {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]
+    const b = poly[j]
+    if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+// Do segments p1p2 and p3p4 cross?
+function segmentsIntersect(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
+  const side = (a: Point, b: Point, c: Point) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+  const d1 = side(p3, p4, p1)
+  const d2 = side(p3, p4, p2)
+  const d3 = side(p1, p2, p3)
+  const d4 = side(p1, p2, p4)
+  return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0
+}
+// Does the closed lasso loop touch the axis-aligned box (enclose it, be drawn over
+// it, or cross one of its edges)?
+function lassoHitsBox(poly: Point[], b: Box): boolean {
+  if (poly.length < 2) return false
+  const corners = [
+    { x: b.x, y: b.y },
+    { x: b.x + b.width, y: b.y },
+    { x: b.x + b.width, y: b.y + b.height },
+    { x: b.x, y: b.y + b.height },
+  ]
+  if (corners.some((c) => pointInPolygon(c, poly))) return true // box enclosed
+  if (poly.some((p) => p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height)) return true // loop over box
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]
+    const c = poly[(i + 1) % poly.length] // includes the closing edge
+    for (let k = 0; k < 4; k++) if (segmentsIntersect(a, c, corners[k], corners[(k + 1) % 4])) return true
+  }
+  return false
+}
+
 const GRID_STEP = 60 // board units → a 20×15 grid over the 1200×900 board
 function BoardGrid() {
   const lines: React.ReactNode[] = []
@@ -262,6 +302,8 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
   const snapToObjects = useEditorStore((s) => s.snapToObjects)
+  const keepToolActive = useEditorStore((s) => s.keepToolActive)
+  const setActiveTool = useEditorStore((s) => s.setActiveTool)
   const panBy = useEditorStore((s) => s.panBy)
   const zoomBy = useEditorStore((s) => s.zoomBy)
   const viewBox = `${viewport.panX} ${viewport.panY} ${BOARD_WIDTH / viewport.zoom} ${BOARD_HEIGHT / viewport.zoom}`
@@ -430,7 +472,25 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
 
   const creating = isCreationTool(activeTool)
   const eraserTool = activeTool === 'eraser'
+  const lassoTool = activeTool === 'lasso'
   const selectedSet = new Set(selectedIds)
+
+  // Lasso: free-draw a loop; every element the (implicitly closed) loop touches is
+  // selected live and stays selected for the rest of the gesture (accumulated in a
+  // ref so rapid moves read the latest). `lasso` holds the path for rendering.
+  const lassoRef = useRef<{ pts: Point[]; ids: Set<string> } | null>(null)
+  const [lasso, setLasso] = useState<Point[] | null>(null)
+  // Add every element the current loop touches to the accumulated selection.
+  function updateLassoHits() {
+    const g = lassoRef.current
+    if (!g) return
+    for (const el of doc.elements) {
+      if (g.ids.has(el.id)) continue // already selected — stays selected
+      const b = unionBounds([el])
+      if (b && lassoHitsBox(g.pts, b)) g.ids.add(el.id)
+    }
+    setSelection([...g.ids])
+  }
 
   // Eraser: on drag, elements the moving circle touches dim to opacity-25 and are
   // deleted on pointer-up. `ids` accumulates every touched element. `pts` is the
@@ -861,6 +921,19 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       return
     }
 
+    // Lasso: start a free-draw selection loop (elements it touches select live).
+    if (lassoTool) {
+      lassoRef.current = { pts: [p], ids: new Set() }
+      setLasso([p])
+      setSelection([])
+      try {
+        containerRef.current?.setPointerCapture(e.pointerId)
+      } catch {
+        /* capture is best-effort; moves over the board still reach the handler */
+      }
+      return
+    }
+
     // Freehand: start capturing a stroke (points appended on move).
     if (activeTool === 'draw') {
       setFreeDraft([clampToCanvas(p)])
@@ -1173,6 +1246,17 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       syncErase()
       return
     }
+    // Lasso: extend the loop (skip near-duplicate samples) and re-test hits.
+    const lg = lassoRef.current
+    if (lg) {
+      const last = lg.pts[lg.pts.length - 1]
+      if (Math.hypot(p.x - last.x, p.y - last.y) >= FREEHAND_MIN_STEP) {
+        lg.pts.push(p)
+        setLasso(lg.pts.slice())
+        updateLassoHits()
+      }
+      return
+    }
     if (bgPan) {
       setBackground({ position: [bgPan.origin[0] + (p.x - bgPan.start.x), bgPan.origin[1] + (p.y - bgPan.start.y)] })
     } else if (freeDraft) {
@@ -1209,6 +1293,12 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       setErasing(false)
       setErase(null)
       if (ids.length) removeElements(ids)
+    } else if (lassoRef.current) {
+      // Selection is already set live; keep it and hand over to the select tool
+      // (unless the tool is locked) so the user can act on the picked elements.
+      lassoRef.current = null
+      setLasso(null)
+      if (!keepToolActive) setActiveTool('select')
     } else if (bgPan) {
       setBgPan(null)
       commitTransaction()
@@ -1412,7 +1502,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     <div
       ref={containerRef}
       data-board-surface
-      className={cn('relative h-full w-full touch-none select-none', creating ? 'cursor-crosshair' : 'cursor-default')}
+      className={cn('relative h-full w-full touch-none select-none', creating || lassoTool ? 'cursor-crosshair' : 'cursor-default')}
       style={eraserTool ? { cursor: eraserCursor } : undefined}
       onPointerDown={onContainerPointerDown}
       onPointerMove={onPointerMove}
@@ -1488,6 +1578,19 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                 strokeWidth={1}
                 vectorEffect="non-scaling-stroke"
                 shapeRendering="crispEdges"
+                pointerEvents="none"
+              />
+            )}
+            {/* Lasso: the free-drawn selection loop (closed, dashed). */}
+            {lasso && lasso.length >= 2 && (
+              <polygon
+                points={lasso.map((p) => `${p.x},${p.y}`).join(' ')}
+                fill="var(--color-selection-frame)"
+                fillOpacity={0.12}
+                stroke="var(--color-selection-handle)"
+                strokeWidth={1}
+                strokeDasharray="4 3"
+                vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               />
             )}
@@ -1615,7 +1718,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
           </>
         }
       >
-        <g style={{ pointerEvents: creating || backgroundMode || eraserTool ? 'none' : 'auto' }}>
+        <g style={{ pointerEvents: creating || backgroundMode || eraserTool || lassoTool ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
             const live = liveElement(el)
             const erasing = erase?.ids.has(el.id)

@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users } from 'lucide-react'
+import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -47,6 +47,7 @@ export type ToolId =
   | 'text'
   | 'draw'
   | 'eraser'
+  | 'lasso'
 
 // Shapes-menu entries (order shown in the dropdown). The first is the default.
 const SHAPE_ITEMS: { id: ShapeTool; label: string; icon: ElementType }[] = [
@@ -320,6 +321,11 @@ function MoreToolsMenu({
               </DropdownMenuItem>
             )
           })}
+        <DropdownMenuSeparator />
+        {/* Lasso: free-draw a selection; elements the loop touches are selected. */}
+        <DropdownMenuItem onSelect={() => onToolChange('lasso')}>
+          <Lasso /> Lasso select
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {/* Token stamp tool — placed by clicking the board, then edited inline. */}
         <DropdownMenuItem onSelect={() => onToolChange('token')}>

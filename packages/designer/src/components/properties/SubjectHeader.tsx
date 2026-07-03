@@ -1,5 +1,5 @@
 import { type ComponentType } from 'react'
-import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Hand, Pencil, Eraser, Type } from 'lucide-react'
+import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Hand, Pencil, Eraser, Type, Lasso } from 'lucide-react'
 import { TrapezoidIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from '../icons'
 import type { BoardElement } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
@@ -54,6 +54,7 @@ const TOOL_SUBJECT: Record<ToolId, Subject> = {
   text: { icon: Type, label: 'Text' },
   draw: { icon: Pencil, label: 'Draw' },
   eraser: { icon: Eraser, label: 'Eraser' },
+  lasso: { icon: Lasso, label: 'Lasso' },
 }
 
 function subjectFor(els: BoardElement[], activeTool: ToolId): Subject {
