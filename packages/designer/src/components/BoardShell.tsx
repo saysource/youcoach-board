@@ -130,6 +130,18 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   function finishFieldCamera() {
     setCameraEditing(false)
   }
+
+  // Field-zones authoring mode: build the notable-spot markers + default poses.
+  const [zoneEditing, setZoneEditing] = useState(false)
+  function startFieldZones() {
+    const s = store.getState()
+    s.setSelection([])
+    s.setActiveTool('select')
+    setZoneEditing(true)
+  }
+  function finishFieldZones() {
+    setZoneEditing(false)
+  }
   const activeTool = useEditorStore((s) => s.activeTool)
   const setActiveTool = useEditorStore((s) => s.setActiveTool)
   const keepToolActive = useEditorStore((s) => s.keepToolActive)
@@ -283,7 +295,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} showGrid={showGrid} />
+            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} />
           </div>
 
           {/* Top-left menu */}
@@ -312,6 +324,12 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                   <Check /> Finish field camera
                 </Button>
               </div>
+            ) : zoneEditing ? (
+              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+                <Button size="sm" onClick={finishFieldZones} className="font-medium">
+                  <Check /> Finish field zones
+                </Button>
+              </div>
             ) : (
               <Toolbar
                 activeTool={activeTool}
@@ -322,6 +340,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 onEditBackground={editBackground}
                 onFieldHomography={fieldHomography}
                 onFieldCamera={startFieldCamera}
+                onFieldZones={startFieldZones}
                 onPickFormation={setFormation}
               />
             )}

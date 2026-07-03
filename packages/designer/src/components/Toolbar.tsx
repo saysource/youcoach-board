@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, Grid3x3, Video } from 'lucide-react'
+import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, Grid3x3, Video, MapPin } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -104,6 +104,8 @@ interface ToolbarProps {
   onFieldHomography: () => void
   /** Enter the field-camera calibration mode (from the More-tools menu). */
   onFieldCamera: () => void
+  /** Enter the field-zones authoring mode (from the More-tools menu). */
+  onFieldZones: () => void
   /** Pick a game system to place (opens its direction/style dialog). */
   onPickFormation: (code: string) => void
 }
@@ -111,7 +113,7 @@ interface ToolbarProps {
 // Which toolbar dropdown is currently open (only one at a time).
 type ToolbarMenu = 'shapes' | 'lines' | 'more'
 
-export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onFieldHomography, onFieldCamera, onPickFormation }: ToolbarProps) {
+export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onFieldHomography, onFieldCamera, onFieldZones, onPickFormation }: ToolbarProps) {
   // The shape last picked/used, so the Shapes button shows it and re-opening the
   // menu re-activates it. Null until the first use (button shows the generic icon).
   const [lastShape, setLastShape] = useState<ShapeTool | null>(null)
@@ -152,7 +154,7 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
         </ToolButton>
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onEditBackground={onEditBackground} onFieldHomography={onFieldHomography} onFieldCamera={onFieldCamera} onPickFormation={onPickFormation} {...menuProps('more')} />
+      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onEditBackground={onEditBackground} onFieldHomography={onFieldHomography} onFieldCamera={onFieldCamera} onFieldZones={onFieldZones} onPickFormation={onPickFormation} {...menuProps('more')} />
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ToolButton label="Eraser" active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
         <Eraser />
@@ -284,6 +286,7 @@ function MoreToolsMenu({
   onEditBackground,
   onFieldHomography,
   onFieldCamera,
+  onFieldZones,
   onPickFormation,
   open,
   onOpenChange,
@@ -293,6 +296,7 @@ function MoreToolsMenu({
   onEditBackground: () => void
   onFieldHomography: () => void
   onFieldCamera: () => void
+  onFieldZones: () => void
   onPickFormation: (code: string) => void
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -381,6 +385,10 @@ function MoreToolsMenu({
         {/* Pose a real perspective camera onto the field (dev/authoring tool). */}
         <DropdownMenuItem onSelect={onFieldCamera}>
           <Video /> Field camera
+        </DropdownMenuItem>
+        {/* Author the 3D-field zone markers + default poses (dev/authoring tool). */}
+        <DropdownMenuItem onSelect={onFieldZones}>
+          <MapPin /> Field zones
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

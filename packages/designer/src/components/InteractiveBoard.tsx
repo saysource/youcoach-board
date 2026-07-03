@@ -67,6 +67,7 @@ import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
 import { FieldSceneLayer } from './FieldSceneLayer'
 import { FieldEditOverlay } from './FieldEditOverlay'
+import { FieldZoneTool } from './FieldZoneTool'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
@@ -297,7 +298,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, showGrid = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; showGrid?: boolean }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean }) {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -1056,7 +1057,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function onContainerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only the LEFT button drives interactions (touch/pen primary press is 0 too).
     if (e.button !== 0) return
-    if (backgroundMode || homographyMode || cameraMode) return // calibration modes: only their own handles are active
+    if (backgroundMode || homographyMode || cameraMode || zoneMode) return // calibration modes: only their own handles are active
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
@@ -1217,7 +1218,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   function onElementPointerDown(e: React.PointerEvent, el: BoardElement) {
     if (e.button !== 0) return
-    if (creating || backgroundMode || homographyMode || cameraMode) return // calibration modes: elements are inert
+    if (creating || backgroundMode || homographyMode || cameraMode || zoneMode) return // calibration modes: elements are inert
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
@@ -1969,7 +1970,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           </>
         }
       >
-        <g style={{ pointerEvents: creating || backgroundMode || homographyMode || cameraMode || eraserTool || lassoTool ? 'none' : 'auto' }}>
+        <g style={{ pointerEvents: creating || backgroundMode || homographyMode || cameraMode || zoneMode || eraserTool || lassoTool ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
             const live = liveElement(el)
             const erasing = erase?.ids.has(el.id)
@@ -1995,6 +1996,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
+      {zoneMode && field3d && <FieldZoneTool field3d={field3d} viewBox={viewBox} />}
       {/* 3D-field pose editor: OrbitControls + numbered zone markers (bg-edit). */}
       {editing3d && field3d && <FieldEditOverlay field3d={field3d} viewBox={viewBox} onPose={(p) => setBackground({ field3d: p })} />}
       {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
