@@ -94,6 +94,20 @@ export const SOCCER11: FieldReference = {
   ],
 }
 
+// Per-field homographies (metric pitch metres → field-image px), authored with the
+// Field-homography tool and pasted here. Keyed by fieldSvg. Later this moves into
+// catalog.json; for now a code registry drives the perspective arrows.
+export const FIELD_HOMOGRAPHY: Record<string, number[]> = {
+  'images/optimized/fields/11/49.svg': [10.72033, -0.033036, 35.370248, 0.037492, 10.552272, 91.378929, 0.000084, -0.000033, 1],
+  'images/optimized/fields/11/5.svg': [-6.045488, -15.540906, 938.411057, 0.645298, -2.238379, 153.750796, -0.009101, -0.010827, 1],
+}
+
+/** The homography for the currently-loaded field, or null (arrows fall back to the
+ *  default fixed camera). */
+export function fieldHomography(fieldSvg: string | null | undefined): number[] | null {
+  return (fieldSvg && FIELD_HOMOGRAPHY[fieldSvg]) || null
+}
+
 /** Initial board positions for a reference: fit the metric pitch into a centred
  *  box on the board so the user only nudges the seeded wireframe onto the field. */
 export function seedLayout(ref: FieldReference, boardW: number, boardH: number): Record<string, [number, number]> {
