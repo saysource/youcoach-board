@@ -11,6 +11,7 @@ export type {
   BoardBackground,
   BoardAnimation,
   LogoPosition,
+  FieldView,
 } from './model'
 export {
   EMPTY_BOARD,

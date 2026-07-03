@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { RotateCcw, RotateCw, ChevronsUp, ChevronsDown, ZoomIn, ZoomOut, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react'
 import {
   BoardCanvas,
   BOARD_WIDTH,
@@ -64,9 +65,11 @@ import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMa
 import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
+import { FieldSceneLayer } from './FieldSceneLayer'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
-import { makeCalibratedCamera } from '../lib/field-camera'
+import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
+import { DEFAULT_FIELD_PRESET } from '../lib/field-presets'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -496,11 +499,21 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // the default fixed near-ortho camera. `arrow3dCam` is the calibrated camera when
   // one exists, so the camera-parameterised arrow math (ground/handles/height) all
   // works unchanged; homography still uses its own custom projection.
-  const fieldCamCfg = fieldCamera(doc.background.fieldSvg)
+  // A real 3D field (background.field3d) wins over the legacy per-field calibrated
+  // camera, which wins over the homography, which wins over the fixed camera.
+  const field3d = doc.background.field3d
+  const fieldCamCfg = field3d ?? fieldCamera(doc.background.fieldSvg)
   const fieldH = fieldHomography(doc.background.fieldSvg)
   const useHomography = !!fieldH && !fieldCamCfg
   const fixedCam = useState(() => makeArrow3DCamera())[0]
   const arrow3dCam = useMemo(() => (fieldCamCfg ? makeCalibratedCamera(fieldCamCfg) : fixedCam), [fieldCamCfg, fixedCam])
+  // Edit-Background camera nudges for the 3D field (coach-friendly, discrete steps;
+  // fov stays 50). Each is one undo step.
+  function nudgeField3d(fn: (o: Orbit) => Orbit) {
+    if (!field3d) return
+    setBackground({ field3d: orbitToConfig(fn(configToOrbit(field3d)), field3d.ref as PitchType) })
+  }
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
   // Board point → ground position: metric metres under a field camera/homography.
   function arrow3dGround(p: Point): { x: number; z: number } | null {
     return useHomography ? boardToMetric(fieldH!, p.x, p.y) : boardToGround(p.x, p.y, arrow3dCam)
@@ -519,7 +532,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // scale with the pitch length (soccer 105 = 1×) so an arrow isn't huge on a small
   // futsal court / training grid.
   const arrow3dMetric = !!(fieldCamCfg || fieldH)
-  const pitchK = fieldCamCfg ? PITCH_MODELS[fieldCamCfg.ref].size[0] / 105 : 1
+  const pitchLen = fieldCamCfg ? (PITCH_MODELS[fieldCamCfg.ref as PitchType] ?? PITCH_MODELS.soccer11).size[0] : 105
+  const pitchK = pitchLen / 105
   const arrow3dDefaults = arrow3dMetric
     ? { ...ARROW3D_DEFAULTS, splineWidth: 18 * pitchK, splineHeight: 4 * pitchK, stickWidth: 1.2 * pitchK, thickness: 0.3 * pitchK, tipWidth: 3 * pitchK, tipLength: 5 * pitchK }
     : ARROW3D_DEFAULTS
@@ -1715,12 +1729,22 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     <div
       ref={containerRef}
       data-board-surface
-      className={cn('relative h-full w-full touch-none select-none', creating || lassoTool ? 'cursor-crosshair' : 'cursor-default')}
+      className={cn('relative isolate h-full w-full touch-none select-none', creating || lassoTool ? 'cursor-crosshair' : 'cursor-default')}
       style={eraserTool ? { cursor: eraserCursor } : undefined}
       onPointerDown={onContainerPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
+      {/* Real 3D field: a bottom image/solid layer + the pitch scene, both BELOW
+          the 2D SVG (negative z within this isolated stacking context). */}
+      {field3d && (
+        <>
+          <div className="absolute inset-0" style={{ zIndex: -2, backgroundColor: doc.background.image ? undefined : doc.background.color }}>
+            {doc.background.image && <img src={doc.background.image} alt="" className="h-full w-full object-cover" />}
+          </div>
+          <FieldSceneLayer camera={field3d} viewport={viewport} svgRef={svgRef} containerRef={containerRef} />
+        </>
+      )}
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
@@ -1957,6 +1981,24 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
+      {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
+      {backgroundMode && field3d && (
+        <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">
+          <FieldCtl label="Rotate left" onClick={() => nudgeField3d((o) => ({ ...o, azimuth: o.azimuth - 15 }))}><RotateCcw /></FieldCtl>
+          <FieldCtl label="Rotate right" onClick={() => nudgeField3d((o) => ({ ...o, azimuth: o.azimuth + 15 }))}><RotateCw /></FieldCtl>
+          <span className="mx-0.5 h-6 w-px bg-border" />
+          <FieldCtl label="Tilt up" onClick={() => nudgeField3d((o) => ({ ...o, elevation: clamp(o.elevation + 5, 20, 88) }))}><ChevronsUp /></FieldCtl>
+          <FieldCtl label="Tilt down" onClick={() => nudgeField3d((o) => ({ ...o, elevation: clamp(o.elevation - 5, 20, 88) }))}><ChevronsDown /></FieldCtl>
+          <span className="mx-0.5 h-6 w-px bg-border" />
+          <FieldCtl label="Zoom in" onClick={() => nudgeField3d((o) => ({ ...o, distance: clamp(o.distance - 12, 40, 400) }))}><ZoomIn /></FieldCtl>
+          <FieldCtl label="Zoom out" onClick={() => nudgeField3d((o) => ({ ...o, distance: clamp(o.distance + 12, 40, 400) }))}><ZoomOut /></FieldCtl>
+          <span className="mx-0.5 h-6 w-px bg-border" />
+          <FieldCtl label="Pan forward" onClick={() => nudgeField3d((o) => ({ ...o, targetX: clamp(o.targetX + 6, 5, 100) }))}><ArrowUp /></FieldCtl>
+          <FieldCtl label="Pan back" onClick={() => nudgeField3d((o) => ({ ...o, targetX: clamp(o.targetX - 6, 5, 100) }))}><ArrowDown /></FieldCtl>
+          <span className="mx-0.5 h-6 w-px bg-border" />
+          <FieldCtl label="Reset view" onClick={() => setBackground({ field3d: DEFAULT_FIELD_PRESET.camera })}><RefreshCw /></FieldCtl>
+        </div>
+      )}
       {selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
         <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           {/* Dotted guides: tail → apex → head, and apex → base midpoint. */}
@@ -2101,5 +2143,20 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         />
       )}
     </div>
+  )
+}
+
+// A compact icon button for the 3D-field Edit-Background control bar.
+function FieldCtl({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-4"
+    >
+      {children}
+    </button>
   )
 }

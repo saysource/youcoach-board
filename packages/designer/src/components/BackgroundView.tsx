@@ -55,6 +55,10 @@ export function BackgroundView({ doc }: { doc: BoardDoc }) {
     }
   }, [fieldUrl])
 
+  // A real 3D field owns the background (rendered by FieldSceneLayer below the SVG,
+  // over a bottom image/solid layer) — draw nothing here so the pitch shows.
+  if (bg.field3d) return null
+
   const field = fieldUrl ? tpl.t : null
   const cx = BOARD_WIDTH / 2
   const cy = BOARD_HEIGHT / 2

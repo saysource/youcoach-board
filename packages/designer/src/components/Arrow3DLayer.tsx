@@ -3,7 +3,8 @@ import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type Arrow3DElement } from '@youcoach-board/core'
 import { createArrowGeometry, makeArrow3DCamera, arrow3DWorldHandles } from '../lib/arrow3d'
 import { buildProjectionMatrix, worldToBoard, DEFAULT_HEIGHT } from '../lib/homography-camera'
-import { makeCalibratedCamera, type CameraConfig } from '../lib/field-camera'
+import { makeCalibratedCamera, applyViewCamera, type PosedCamera } from '../lib/field-camera'
+import { SUN_POSITION, SUN_TARGET } from '../lib/field3d'
 
 /** Imperative API the InteractiveBoard uses to hit-test 3D arrows (which aren't
  *  SVG, so they can't be clicked through the normal element handlers). */
@@ -16,9 +17,9 @@ interface Props {
   elements: Arrow3DElement[]
   selectedIds: string[]
   viewport: { zoom: number; panX: number; panY: number }
-  /** A hand-posed real camera for the field (takes precedence over homography):
+  /** A hand-posed / field-preset real camera (takes precedence over homography):
    *  arrows render with correct 3D height + shadow through it. */
-  camera: CameraConfig | null
+  camera: PosedCamera | null
   /** The active field's homography (metric→board px). Used only when there's no
    *  camera: arrows render via a custom projection; otherwise the fixed camera. */
   homography: number[] | null
@@ -106,8 +107,8 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     // (x∈0..105, z∈0..68) used under the homography projection; it also covers the
     // small near-origin world of the default fixed camera.
     const dir = new THREE.DirectionalLight(0xffffff, 3)
-    dir.position.set(72, 120, 44)
-    dir.target.position.set(52, 0, 34)
+    dir.position.copy(SUN_POSITION)
+    dir.target.position.copy(SUN_TARGET)
     dir.castShadow = true
     const d = 80
     dir.shadow.camera.left = -d
@@ -200,19 +201,10 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     canvas.style.height = `${rect.height}px`
     ctx.renderer.setSize(rect.width, rect.height, false)
     if (camera) {
-      // Hand-posed real camera: correct 3D height + shadow. Honour pan/zoom via a
-      // view offset (same as the fixed camera).
-      const cam = ctx.calibCam
-      const zoom = viewport.zoom || 1
-      cam.aspect = BOARD_WIDTH / BOARD_HEIGHT
-      cam.fov = camera.fov
-      cam.position.set(camera.position[0], camera.position[1], camera.position[2])
-      cam.up.set(0, 1, 0)
-      cam.lookAt(new THREE.Vector3(camera.target[0], camera.target[1], camera.target[2]))
-      cam.setViewOffset(BOARD_WIDTH, BOARD_HEIGHT, viewport.panX, viewport.panY, BOARD_WIDTH / zoom, BOARD_HEIGHT / zoom)
-      cam.updateProjectionMatrix()
-      cam.updateMatrixWorld()
-      ctx.renderer.render(ctx.scene, cam)
+      // Hand-posed / field-preset real camera: correct 3D height + shadow, shared
+      // with the field scene so arrows and pitch align exactly.
+      applyViewCamera(ctx.calibCam, camera, viewport)
+      ctx.renderer.render(ctx.scene, ctx.calibCam)
     } else if (homography) {
       // Custom projection built from the field homography: the ground plane (+
       // shadow) reproduces the field perspective exactly; height lifts screen-up.

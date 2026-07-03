@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { cn } from '../lib/cn'
 import { useAssets, buildFigureElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { clientToBoard } from '../lib/draw'
+import { FIELD_PRESETS } from '../lib/field-presets'
 import { useEditorStore } from '../store/context'
 
 // Movement (px) below which a press is a tap, not a drag; touch hold (ms) to start.
@@ -334,6 +335,26 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
         <div className="p-3 text-sm text-muted-foreground">Couldn’t load the library ({catalogError}).</div>
       ) : !catalog ? (
         <div className="p-3 text-sm text-muted-foreground">Loading library…</div>
+      ) : fieldsOnly ? (
+        /* Background mode: the "fields" are camera angles onto the real 3D pitch.
+           (Legacy hand-drawn field SVGs are kept in data but hidden here.) */
+        <div className="flex-1 overflow-y-auto p-2">
+          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">3D field — camera angles</div>
+          <div className="grid grid-cols-2 gap-2">
+            {FIELD_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                title={p.name}
+                onClick={() => setBackground({ field3d: p.camera, fieldSvg: null })}
+                className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
+              >
+                <img src={p.thumb} alt={p.name} loading="lazy" className="aspect-4/3 w-full rounded object-cover" />
+                <span className="text-[11px]">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       ) : (
         <>
           {/* Category selector + the sub-categories (actions) jump dropdown. */}
@@ -370,7 +391,9 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
             /* Full categorized list fills the panel. */
             <div className="flex-1 overflow-y-auto">
               {catalog.groups
-                .map((g) => (fieldsOnly ? { ...g, categories: g.categories.filter((id) => catalog.categories[id]?.kind === 'field') } : g))
+                /* Field categories are hidden from the palette everywhere — 3D-field
+                   presets replace them (background mode shows those instead). */
+                .map((g) => ({ ...g, categories: g.categories.filter((id) => catalog.categories[id]?.kind !== 'field') }))
                 .filter((g) => g.categories.length > 0)
                 .map((g) => (
                 <div key={g.id}>

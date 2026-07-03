@@ -12,6 +12,29 @@
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 
+/** Just the posed-camera fields (both CameraConfig and the core FieldView satisfy this). */
+export interface PosedCamera {
+  position: [number, number, number]
+  target: [number, number, number]
+  fov: number
+}
+
+/** Pose a real perspective camera and apply the board's pan/zoom as a view offset.
+ *  Shared by the field scene and the arrow scene so they render through the exact
+ *  same projection. Mutates + returns `cam`. */
+export function applyViewCamera(cam: THREE.PerspectiveCamera, cfg: PosedCamera, viewport: { zoom: number; panX: number; panY: number }): THREE.PerspectiveCamera {
+  const zoom = viewport.zoom || 1
+  cam.aspect = BOARD_WIDTH / BOARD_HEIGHT
+  cam.fov = cfg.fov
+  cam.position.set(cfg.position[0], cfg.position[1], cfg.position[2])
+  cam.up.set(0, 1, 0)
+  cam.lookAt(new THREE.Vector3(cfg.target[0], cfg.target[1], cfg.target[2]))
+  cam.setViewOffset(BOARD_WIDTH, BOARD_HEIGHT, viewport.panX, viewport.panY, BOARD_WIDTH / zoom, BOARD_HEIGHT / zoom)
+  cam.updateProjectionMatrix()
+  cam.updateMatrixWorld()
+  return cam
+}
+
 /** Which canonical pitch a field was calibrated against (sets the metric frame). */
 export type PitchType = 'soccer11' | 'futsal' | 'area'
 
@@ -37,7 +60,7 @@ export interface Orbit {
 const DEG = Math.PI / 180
 
 /** Build a three.js camera from a stored config (aspect = board 4:3 by default). */
-export function makeCalibratedCamera(cfg: CameraConfig, aspect = BOARD_WIDTH / BOARD_HEIGHT): THREE.PerspectiveCamera {
+export function makeCalibratedCamera(cfg: PosedCamera, aspect = BOARD_WIDTH / BOARD_HEIGHT): THREE.PerspectiveCamera {
   const cam = new THREE.PerspectiveCamera(cfg.fov, aspect, 0.1, 4000)
   cam.position.set(cfg.position[0], cfg.position[1], cfg.position[2])
   cam.up.set(0, 1, 0)
@@ -63,7 +86,7 @@ export function orbitToConfig(o: Orbit, ref: PitchType): CameraConfig {
 }
 
 /** Stored config → orbit params (inverse of orbitToConfig, for seeding the tool). */
-export function configToOrbit(c: CameraConfig): Orbit {
+export function configToOrbit(c: PosedCamera): Orbit {
   const dx = c.position[0] - c.target[0]
   const dy = c.position[1] - c.target[1]
   const dz = c.position[2] - c.target[2]

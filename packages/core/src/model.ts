@@ -21,12 +21,25 @@ export type LogoPosition = 'center' | 'top-left' | 'top-right' | 'bottom-left' |
 
 /** Background configuration: a solid color, an optional raster image, and an
  *  optional field SVG overlay whose declared colors the user can tweak. */
+/** A real 3D field: a pitch model rendered by three.js, viewed through a posed
+ *  camera (metres; corner-origin world frame, fov in degrees). When set on the
+ *  background it takes precedence over `fieldSvg` (the legacy hand-drawn fields). */
+export interface FieldView {
+  /** Which pitch model (e.g. 'soccer11'); reserved for futsal/area later. */
+  ref: string
+  position: [number, number, number]
+  target: [number, number, number]
+  fov: number
+}
+
 export interface BoardBackground {
   color: string
   /** URL of a raster background image (e.g. grass), or null. */
   image: string | null
   /** URL of an overlay field SVG (e.g. an 11v11 pitch), or null. */
   fieldSvg: string | null
+  /** A real 3D field (three.js) + its camera pose. When set, wins over fieldSvg. */
+  field3d: FieldView | null
   /** Values for the field SVG's configurable colors, keyed by color slot. */
   fieldColors: Record<string, string>
   /** Scale + translation of the field SVG within the board. */
@@ -64,6 +77,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   color: '#2f8a3e',
   image: null,
   fieldSvg: null,
+  field3d: null,
   fieldColors: {},
   scale: 1,
   position: [0, 0],
@@ -90,6 +104,22 @@ function num(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
 }
 
+function vec3(v: unknown): [number, number, number] | null {
+  if (!Array.isArray(v) || v.length !== 3) return null
+  const [a, b, c] = v
+  if (![a, b, c].every((n) => typeof n === 'number' && Number.isFinite(n))) return null
+  return [a as number, b as number, c as number]
+}
+
+function parseFieldView(raw: unknown): FieldView | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const o = raw as Record<string, unknown>
+  const position = vec3(o.position)
+  const target = vec3(o.target)
+  if (!position || !target) return null
+  return { ref: typeof o.ref === 'string' ? o.ref : 'soccer11', position, target, fov: num(o.fov, 50) }
+}
+
 function parseBackground(raw: unknown): BoardBackground {
   if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_BACKGROUND }
   const o = raw as Record<string, unknown>
@@ -98,6 +128,7 @@ function parseBackground(raw: unknown): BoardBackground {
     color: typeof o.color === 'string' ? o.color : DEFAULT_BACKGROUND.color,
     image: typeof o.image === 'string' ? o.image : null,
     fieldSvg: typeof o.fieldSvg === 'string' ? o.fieldSvg : null,
+    field3d: parseFieldView(o.field3d),
     fieldColors:
       typeof o.fieldColors === 'object' && o.fieldColors !== null
         ? (o.fieldColors as Record<string, string>)

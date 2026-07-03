@@ -7,10 +7,9 @@ import type { ThemeSetting } from './lib/use-theme'
 // TEMPORARY default field background. Will be replaced once asset locations are
 // defined/loaded dynamically (the URL just feeds the doc's background.image).
 import defaultFieldImage from './assets/field0.jpg'
+import { DEFAULT_FIELD_PRESET } from './lib/field-presets'
 
-// The field the board opens on (catalog fields_11 / 49, a top view). Path + figure
-// scale mirror what selecting it in the drawer applies (see LibraryDrawer.drop).
-const DEFAULT_FIELD_SVG = 'images/optimized/fields/11/49.svg'
+// Base image kept for legacy (fieldSvg) docs; figure scale for the default field.
 const DEFAULT_FIELD_FIGURE_SCALE = 0.3
 
 export interface BoardDesignerProps {
@@ -34,15 +33,18 @@ export interface BoardDesignerProps {
 // The editor's public entry point: a per-instance editor store wrapping the
 // floating-chrome shell + interactive board.
 export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, assets, onChange }: BoardDesignerProps) {
-  // Default the background to the bundled base image + the opening field (11/49)
-  // unless the caller supplied their own.
+  // A fresh board opens on the real 3D field (a default preset pose). Legacy docs
+  // that carry a hand-drawn `fieldSvg` keep the old base-image + SVG rendering.
+  const bg = initialDoc?.background
+  const legacy = !!bg?.fieldSvg
   const docWithBackground = {
     ...initialDoc,
     background: {
-      ...initialDoc?.background,
-      image: initialDoc?.background?.image ?? defaultFieldImage,
-      fieldSvg: initialDoc?.background?.fieldSvg ?? DEFAULT_FIELD_SVG,
-      figureScale: initialDoc?.background?.figureScale ?? DEFAULT_FIELD_FIGURE_SCALE,
+      ...bg,
+      image: bg?.image ?? (legacy ? defaultFieldImage : null),
+      fieldSvg: bg?.fieldSvg ?? null,
+      field3d: bg?.field3d ?? (legacy ? null : DEFAULT_FIELD_PRESET.camera),
+      figureScale: bg?.figureScale ?? DEFAULT_FIELD_FIGURE_SCALE,
     },
   }
   return (
