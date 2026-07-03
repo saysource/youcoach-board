@@ -24,6 +24,9 @@ import {
   type BoardElement,
   type ElementTransform,
   type Box,
+  type Arrow3DElement,
+  ARROW3D_DEFAULTS,
+  IDENTITY_TRANSFORM,
 } from '@youcoach-board/core'
 import { useEditorStore } from '../store/context'
 import { isCreationTool } from '../store/editorStore'
@@ -58,6 +61,8 @@ import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from 
 import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
 import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMark, type SnapLine } from '../lib/snapping'
+import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
+import { arrow3DHandlePositions, arrow3DWorldHandles, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -473,7 +478,80 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const creating = isCreationTool(activeTool)
   const eraserTool = activeTool === 'eraser'
   const lassoTool = activeTool === 'lasso'
+  const arrow3dTool = activeTool === 'arrow3d'
   const selectedSet = new Set(selectedIds)
+
+  // ── 3D arrows (three.js overlay) ────────────────────────────────────────────
+  // The WebGL layer's imperative handle (for click hit-testing), and a fixed
+  // projection camera (no view-offset) used for ground raycasts / handle math —
+  // it matches the projection the layer uses for full-board coordinates.
+  const arrow3dLayerRef = useRef<Arrow3DLayerHandle>(null)
+  const [arrow3dCam] = useState(() => makeArrow3DCamera())
+  // Draft while drag-creating (tail + head on the ground), preview-rendered.
+  const [arrow3dDraft, setArrow3dDraft] = useState<{ tail: { x: number; z: number }; head: { x: number; z: number } } | null>(null)
+  // In-progress edit of one arrow (drag a handle or the body).
+  const [arrow3dGesture, setArrow3dGesture] = useState<{ id: string; kind: 'tail' | 'head' | 'apex' | 'body'; orig: Arrow3DElement; grabGround: { x: number; z: number } } | null>(null)
+  const arrow3dElements = doc.elements.filter((e): e is Arrow3DElement => e.type === 'arrow3d')
+
+  // Build a fresh 3D arrow element with the given ground placement.
+  function makeArrow3D(x: number, z: number, y: number, splineWidth: number): Arrow3DElement {
+    return {
+      id: crypto.randomUUID(),
+      type: 'arrow3d',
+      transform: { ...IDENTITY_TRANSFORM },
+      stroke: '#000000',
+      strokeWidth: 1,
+      strokeStyle: 'solid',
+      fill: ARROW3D_DEFAULTS.fill,
+      fillStyle: 'solid',
+      x,
+      z,
+      y,
+      splineWidth,
+      splineHeight: ARROW3D_DEFAULTS.splineHeight,
+      splineLength: ARROW3D_DEFAULTS.splineLength,
+      stickWidth: ARROW3D_DEFAULTS.stickWidth,
+      thickness: ARROW3D_DEFAULTS.thickness,
+      tipWidth: ARROW3D_DEFAULTS.tipWidth,
+      tipLength: ARROW3D_DEFAULTS.tipLength,
+      opacity: ARROW3D_DEFAULTS.opacity,
+    }
+  }
+
+  // Placement (x, z, y-rotation, splineWidth) for a tail→head pair on the ground.
+  function arrow3dPlacement(tail: { x: number; z: number }, head: { x: number; z: number }) {
+    const dx = tail.x - head.x
+    const dz = tail.z - head.z
+    return { x: tail.x, z: tail.z, y: Math.atan2(dx, dz), splineWidth: Math.max(0.3, Math.hypot(dx, dz)) }
+  }
+
+  // Update the dragged arrow's fields live (inside the gesture's transaction).
+  function editArrow3D(g: NonNullable<typeof arrow3dGesture>, patch: Partial<Arrow3DElement>) {
+    const before: Partial<Arrow3DElement> = {}
+    for (const k of Object.keys(patch) as (keyof Arrow3DElement)[]) (before as Record<string, unknown>)[k] = g.orig[k]
+    updateElements([{ id: g.id, before, after: patch }])
+  }
+
+  // Handle a move of the current 3D-arrow gesture to board point `p`.
+  function dragArrow3D(g: NonNullable<typeof arrow3dGesture>, p: Point) {
+    if (g.kind === 'apex') {
+      const apex = arrow3DWorldHandles(g.orig.x, g.orig.y, g.orig.z, g.orig.splineWidth, g.orig.splineHeight)[2]
+      editArrow3D(g, { splineHeight: boardToHeight(p.x, p.y, apex.z, arrow3dCam) })
+      return
+    }
+    const ground = boardToGround(p.x, p.y, arrow3dCam)
+    if (!ground) return
+    if (g.kind === 'body') {
+      editArrow3D(g, { x: g.orig.x + (ground.x - g.grabGround.x), z: g.orig.z + (ground.z - g.grabGround.z) })
+      return
+    }
+    // tail or head drag: recompute placement from the tail/head ground pair.
+    const headWorld = arrow3DWorldHandles(g.orig.x, g.orig.y, g.orig.z, g.orig.splineWidth, g.orig.splineHeight)[1]
+    const tail = g.kind === 'tail' ? ground : { x: g.orig.x, z: g.orig.z }
+    const head = g.kind === 'head' ? ground : { x: headWorld.x, z: headWorld.z }
+    const pl = arrow3dPlacement(tail, head)
+    editArrow3D(g, pl)
+  }
 
   // Lasso: free-draw a loop; every element the (implicitly closed) loop touches is
   // selected live and stays selected for the rest of the gesture (accumulated in a
@@ -485,7 +563,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const g = lassoRef.current
     if (!g) return
     for (const el of doc.elements) {
-      if (g.ids.has(el.id)) continue // already selected — stays selected
+      if (g.ids.has(el.id) || el.type === 'arrow3d') continue // already selected, or a 3D arrow (no SVG box)
       const b = unionBounds([el])
       if (b && lassoHitsBox(g.pts, b)) g.ids.add(el.id)
     }
@@ -535,6 +613,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   function elementsUnder(p: Point, r: number): string[] {
     const out: string[] = []
     for (const el of doc.elements) {
+      if (el.type === 'arrow3d') continue // 3D arrows have no SVG box; not erasable this way
       const b = getElementBounds(el)
       const cx = Math.max(b.x, Math.min(p.x, b.x + b.width))
       const cy = Math.max(b.y, Math.min(p.y, b.y + b.height))
@@ -629,7 +708,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const movingPts = (originEls.length === 1 ? notablePoints(originEls[0]) : boxPoints(u)).map((p) => ({ x: p.x + raw.x, y: p.y + raw.y }))
     const moving: SnapElement = { box: movingBox, points: movingPts }
     const targets = doc.elements
-      .filter((e) => !m.ids.includes(e.id))
+      .filter((e) => !m.ids.includes(e.id) && e.type !== 'arrow3d')
       .map((e): SnapElement | null => {
         const b = unionBounds([e])
         return b ? { box: b, points: notablePoints(e) } : null
@@ -680,7 +759,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const edgeY = g.handle.includes('s') ? box.y + box.height : g.handle.includes('n') ? box.y : null
     const xPts = edgeX != null ? pts.filter((p) => Math.abs(p.x - edgeX) < 0.5) : []
     const yPts = edgeY != null ? pts.filter((p) => Math.abs(p.y - edgeY) < 0.5) : []
-    const targetPts = doc.elements.filter((e) => e.id !== g.id).flatMap((e) => notablePoints(e))
+    const targetPts = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d').flatMap((e) => notablePoints(e))
     const { dx, dy, guides } = snapResize(xPts, yPts, targetPts, SNAP_PX / (scale || 1))
     return { pointer: clampToCanvas({ x: base.x + dx, y: base.y + dy }), guides }
   }
@@ -758,7 +837,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   function snapVertexBoard(g: Gesture, board: Point, excludeIdx: number): { board: Point; guides: SnapLine[] } {
     const el = doc.elements.find((e) => e.id === g.id)
     if (!snapToObjects || !el) return { board, guides: [] }
-    const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id).flatMap((e) => notablePoints(e))
+    const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d').flatMap((e) => notablePoints(e))
     if (el.type === 'polyline') {
       el.points.forEach((pt, idx) => {
         if (idx !== excludeIdx) targetPts.push(elementToBoard({ x: pt[0], y: pt[1] }, g.box0, g.t0))
@@ -934,6 +1013,20 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       return
     }
 
+    // 3D arrow: drag on the ground plane to set tail → head; created on pointer-up.
+    if (arrow3dTool) {
+      const g = boardToGround(p.x, p.y, arrow3dCam)
+      if (g) {
+        setArrow3dDraft({ tail: g, head: g })
+        try {
+          containerRef.current?.setPointerCapture(e.pointerId)
+        } catch {
+          /* best-effort */
+        }
+      }
+      return
+    }
+
     // Freehand: start capturing a stroke (points appended on move).
     if (activeTool === 'draw') {
       setFreeDraft([clampToCanvas(p)])
@@ -995,8 +1088,42 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool), curve: toolIsCurved(activeTool), zigzag: toolIsZigzag(activeTool), double: toolIsDouble(activeTool), snap: e.shiftKey })
       containerRef.current?.setPointerCapture(e.pointerId)
     } else {
+      // A 3D arrow under the cursor selects (and starts a body-move) — it isn't an
+      // SVG element, so it can't be hit by the normal element handlers.
+      const hitId = arrow3dLayerRef.current?.pick(p.x, p.y)
+      if (hitId) {
+        const el = doc.elements.find((x) => x.id === hitId)
+        if (el?.type === 'arrow3d') {
+          setSelection(e.shiftKey ? [...new Set([...selectedIds, hitId])] : [hitId])
+          const ground = boardToGround(p.x, p.y, arrow3dCam)
+          if (ground) {
+            beginTransaction()
+            setArrow3dGesture({ id: hitId, kind: 'body', orig: el, grabGround: ground })
+          }
+          try {
+            containerRef.current?.setPointerCapture(e.pointerId)
+          } catch {
+            /* best-effort */
+          }
+          return
+        }
+      }
       setMarquee({ start: p, current: p, additive: e.shiftKey, base: selectedIds })
       containerRef.current?.setPointerCapture(e.pointerId)
+    }
+  }
+
+  // Start dragging one of a selected 3D arrow's control handles.
+  function onArrow3DHandleDown(el: Arrow3DElement, kind: 'tail' | 'head' | 'apex', e: React.PointerEvent) {
+    e.stopPropagation()
+    const p = svgRef.current ? clientToBoard(svgRef.current, e.clientX, e.clientY) : { x: 0, y: 0 }
+    const ground = boardToGround(p.x, p.y, arrow3dCam) ?? { x: el.x, z: el.z }
+    beginTransaction()
+    setArrow3dGesture({ id: el.id, kind, orig: el, grabGround: ground })
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId)
+    } catch {
+      /* best-effort */
     }
   }
 
@@ -1006,6 +1133,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
     const contain = m.current.y >= m.start.y
     const hits = doc.elements
       .filter((el) => {
+        if (el.type === 'arrow3d') return false // 3D arrows aren't marquee-selectable (no SVG box)
         const b = getElementBounds(el)
         return contain ? boxContains(box, b) : boxesIntersect(b, box)
       })
@@ -1257,6 +1385,16 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       }
       return
     }
+    // 3D arrow: extend the create-draft, or edit a handle / move the body.
+    if (arrow3dDraft) {
+      const g = boardToGround(p.x, p.y, arrow3dCam)
+      if (g) setArrow3dDraft((d) => (d ? { ...d, head: g } : d))
+      return
+    }
+    if (arrow3dGesture) {
+      dragArrow3D(arrow3dGesture, p)
+      return
+    }
     if (bgPan) {
       setBackground({ position: [bgPan.origin[0] + (p.x - bgPan.start.x), bgPan.origin[1] + (p.y - bgPan.start.y)] })
     } else if (freeDraft) {
@@ -1299,6 +1437,16 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       lassoRef.current = null
       setLasso(null)
       if (!keepToolActive) setActiveTool('select')
+    } else if (arrow3dDraft) {
+      // Finalize a new 3D arrow. A click (no real drag) → a default-sized arrow.
+      const { tail, head } = arrow3dDraft
+      setArrow3dDraft(null)
+      const dragged = Math.hypot(tail.x - head.x, tail.z - head.z) >= 0.5
+      const pl = dragged ? arrow3dPlacement(tail, head) : { x: tail.x, z: tail.z, y: 0, splineWidth: ARROW3D_DEFAULTS.splineWidth }
+      createFigure(makeArrow3D(pl.x, pl.z, pl.y, pl.splineWidth))
+    } else if (arrow3dGesture) {
+      setArrow3dGesture(null)
+      commitTransaction()
     } else if (bgPan) {
       setBgPan(null)
       commitTransaction()
@@ -1484,9 +1632,28 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   const alignGuides = [...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides]
   const gapGuides = objectSnap?.gaps ?? []
 
+  // 2D selection chrome excludes 3D arrows (they have no SVG box; their own
+  // handles are drawn separately over the WebGL layer).
+  const liveSelected2D = liveSelected.filter((el) => el.type !== 'arrow3d')
+  const selectedArrow3D = liveSelected.length === 1 && liveSelected[0].type === 'arrow3d' ? (liveSelected[0] as Arrow3DElement) : null
+  // Elements handed to the WebGL layer (+ a live preview while drag-creating).
+  const arrow3dLayerElements = arrow3dDraft
+    ? [...arrow3dElements, (() => {
+        const d = arrow3dDraft
+        const dragged = Math.hypot(d.tail.x - d.head.x, d.tail.z - d.head.z) >= 0.5
+        const pl = dragged ? arrow3dPlacement(d.tail, d.head) : { x: d.tail.x, z: d.tail.z, y: 0, splineWidth: ARROW3D_DEFAULTS.splineWidth }
+        const el = makeArrow3D(pl.x, pl.z, pl.y, pl.splineWidth)
+        el.id = 'arrow3d-draft'
+        return el
+      })()]
+    : arrow3dElements
+  // Selected arrow's handle positions in BOARD coords (pure — projected via the
+  // fixed camera). Rendered in an SVG overlay that shares the board viewBox, so
+  // pan/zoom/letterbox are handled without touching a ref during render.
+  const arrow3dHandles = selectedArrow3D ? arrow3DHandlePositions(selectedArrow3D.x, selectedArrow3D.y, selectedArrow3D.z, selectedArrow3D.splineWidth, selectedArrow3D.splineHeight) : null
   // Group frame box (padded for display) for a multi-selection — the interactive
   // group resize/rotate chrome is drawn on it.
-  const groupUnion = liveSelected.length >= 2 ? unionBounds(liveSelected) : null
+  const groupUnion = liveSelected2D.length >= 2 ? unionBounds(liveSelected2D) : null
   const groupPad = 6 / scale
   const groupBox = groupUnion
     ? { x: groupUnion.x - groupPad, y: groupUnion.y - groupPad, width: groupUnion.width + 2 * groupPad, height: groupUnion.height + 2 * groupPad }
@@ -1539,7 +1706,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
                 Drawn under the handles so handles win the pointer. Skipped for
                 straight lines (2-point polylines), grabbed by their own stroke. */}
             {!creating &&
-              liveSelected.map((el) =>
+              liveSelected2D.map((el) =>
                 el.type === 'polyline' && el.points.length === 2 ? null : (
                   <polygon
                     key={`hit-${el.id}`}
@@ -1553,7 +1720,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
             {/* Selection chrome: full handles for a single selection, plain
                 outlines + a group frame for a multi-selection. */}
             {!creating &&
-              liveSelected.map((el) => (
+              liveSelected2D.map((el) => (
                 <SelectionHandles
                   key={`sel-${el.id}`}
                   element={el}
@@ -1739,6 +1906,46 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
           })}
         </g>
       </BoardCanvas>
+      {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
+      <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} />
+      {selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
+        <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
+          {/* Dotted guides: tail → apex → head, and apex → base midpoint. */}
+          <polyline
+            points={`${arrow3dHandles[0].x},${arrow3dHandles[0].y} ${arrow3dHandles[2].x},${arrow3dHandles[2].y} ${arrow3dHandles[1].x},${arrow3dHandles[1].y}`}
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth={1}
+            strokeDasharray="5 3"
+            vectorEffect="non-scaling-stroke"
+          />
+          <line
+            x1={arrow3dHandles[2].x}
+            y1={arrow3dHandles[2].y}
+            x2={(arrow3dHandles[0].x + arrow3dHandles[1].x) / 2}
+            y2={(arrow3dHandles[0].y + arrow3dHandles[1].y) / 2}
+            stroke="#ffffff"
+            strokeWidth={1}
+            strokeDasharray="2 3"
+            opacity={0.7}
+            vectorEffect="non-scaling-stroke"
+          />
+          {(['tail', 'head', 'apex'] as const).map((kind, i) => (
+            <circle
+              key={kind}
+              cx={arrow3dHandles[i].x}
+              cy={arrow3dHandles[i].y}
+              r={7 / scale}
+              fill="#ffffff"
+              stroke="#3b82f6"
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+              style={{ pointerEvents: 'auto', cursor: 'grab' }}
+              onPointerDown={(e) => onArrow3DHandleDown(selectedArrow3D, kind, e)}
+            />
+          ))}
+        </svg>
+      )}
       {/* Pan surface: covers the board while Space is held or the Hand tool is
           active, so a drag translates the viewport instead of hitting elements. */}
       {panActive && (

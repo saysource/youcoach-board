@@ -22,7 +22,7 @@ import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
  *  straight line on drag, or a multi-point polyline on click (see
  *  InteractiveBoard); see toolElementType for the drag-create mapping. */
 export function isCreationTool(tool: ToolId): boolean {
-  return isShapeTool(tool) || isLineTool(tool) || tool === 'draw' || tool === 'token' || tool === 'text'
+  return isShapeTool(tool) || isLineTool(tool) || tool === 'draw' || tool === 'token' || tool === 'text' || tool === 'arrow3d'
 }
 
 // ── Viewport (zoom/pan) ──────────────────────────────────────────────────────

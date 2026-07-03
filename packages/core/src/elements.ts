@@ -33,7 +33,7 @@ export interface ElementTransform {
 
 export const IDENTITY_TRANSFORM: ElementTransform = { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1 }
 
-export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw' | 'figure' | 'token' | 'text'
+export type ElementType = 'rect' | 'ellipse' | 'polyline' | 'draw' | 'figure' | 'token' | 'text' | 'arrow3d'
 
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
 
@@ -200,7 +200,38 @@ export interface TextElement extends BaseElement {
   bold: boolean
 }
 
-export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement
+/** A real 3D arrow rendered with three.js (designer overlay), not SVG. Its shape
+ *  lives in a fixed 3D scene: the arrow sits on the ground plane at (x, z), rotated
+ *  `y` radians about the vertical axis, arcing up by `splineHeight` over a span of
+ *  `splineWidth`. The remaining fields size the extruded ribbon + arrowhead. Board
+ *  color = `fill` (BaseElement); `opacity` is its own 0..1 field. `transform` is
+ *  unused (kept identity) — placement is intrinsic. See lib/arrow3d in designer. */
+export interface Arrow3DElement extends BaseElement {
+  type: 'arrow3d'
+  /** Tail position on the ground plane. */
+  x: number
+  z: number
+  /** Rotation around the vertical (Y) axis, in radians. */
+  y: number
+  /** Tail→head span (arc length base). */
+  splineWidth: number
+  /** Arc height. */
+  splineHeight: number
+  /** How much of the arc is drawn (0..1; the head sits at the far end). */
+  splineLength: number
+  /** Ribbon half-width of the stick. */
+  stickWidth: number
+  /** Ribbon thickness (extrusion depth). */
+  thickness: number
+  /** Arrowhead half-width. */
+  tipWidth: number
+  /** Arrowhead length. */
+  tipLength: number
+  /** 0..1. */
+  opacity: number
+}
+
+export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement
 
 // ── Smooth curves (auto, no user handles) ───────────────────────────────────
 // A polyline with `curve` renders as a Catmull-Rom spline through its points,
@@ -684,6 +715,9 @@ export function getLocalBounds(el: BoardElement): Box {
     const ys = el.points.map((p) => p[1])
     return normalizeBox(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys))
   }
+  // A 3D arrow has no SVG box (it lives in the 3D overlay); the designer computes
+  // its screen bounds by projecting its handles. Return an empty box here.
+  if (el.type === 'arrow3d') return { x: 0, y: 0, width: 0, height: 0 }
   return { x: el.x, y: el.y, width: el.width, height: el.height }
 }
 
@@ -852,8 +886,43 @@ export function parseElement(raw: unknown): BoardElement | null {
       bold: o.bold === true,
     }
   }
+  if (o.type === 'arrow3d') {
+    return {
+      ...base,
+      type: 'arrow3d',
+      fill: str(o.fill, ARROW3D_DEFAULTS.fill),
+      x: num(o.x) ?? ARROW3D_DEFAULTS.x,
+      z: num(o.z) ?? ARROW3D_DEFAULTS.z,
+      y: num(o.y) ?? ARROW3D_DEFAULTS.y,
+      splineWidth: num(o.splineWidth) ?? ARROW3D_DEFAULTS.splineWidth,
+      splineHeight: num(o.splineHeight) ?? ARROW3D_DEFAULTS.splineHeight,
+      splineLength: num(o.splineLength) ?? ARROW3D_DEFAULTS.splineLength,
+      stickWidth: num(o.stickWidth) ?? ARROW3D_DEFAULTS.stickWidth,
+      thickness: num(o.thickness) ?? ARROW3D_DEFAULTS.thickness,
+      tipWidth: num(o.tipWidth) ?? ARROW3D_DEFAULTS.tipWidth,
+      tipLength: num(o.tipLength) ?? ARROW3D_DEFAULTS.tipLength,
+      opacity: clamp(num(o.opacity) ?? ARROW3D_DEFAULTS.opacity, 0, 1),
+    }
+  }
   return null
 }
+
+/** Default geometry/appearance for a new 3D arrow (from YouCoach Video Analysis,
+ *  with x/z/y placement chosen so a fresh arrow lands in view on the board). */
+export const ARROW3D_DEFAULTS = {
+  x: 0,
+  z: 0,
+  y: 0,
+  splineWidth: 8,
+  splineHeight: 3,
+  splineLength: 1,
+  stickWidth: 0.3,
+  thickness: 0.05,
+  tipWidth: 0.15,
+  tipLength: 0.5,
+  fill: '#FF0000',
+  opacity: 1,
+} as const
 
 function parseTip(v: unknown): ArrowTip {
   return v === 'arrow' ? 'arrow' : 'none'

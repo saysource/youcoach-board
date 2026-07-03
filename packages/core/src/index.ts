@@ -37,6 +37,8 @@ export {
   type TokenFill,
   type TextElement,
   type TextAlign,
+  type Arrow3DElement,
+  ARROW3D_DEFAULTS,
   type ElementType,
   type ElementTransform,
   type StrokeStyle,

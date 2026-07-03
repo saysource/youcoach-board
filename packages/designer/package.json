@@ -23,7 +23,8 @@
   },
   "dependencies": {
     "@youcoach-board/core": "0.0.0",
-    "react-colorful": "^5.7.0"
+    "react-colorful": "^5.7.0",
+    "three": "^0.180.0"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
+    "@types/three": "^0.180.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.8.0",

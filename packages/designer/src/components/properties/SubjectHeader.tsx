@@ -28,6 +28,7 @@ function elementSubject(el: BoardElement): Subject {
   if (el.type === 'figure') return { icon: Shapes, label: 'Figure' }
   if (el.type === 'token') return { icon: TokenIcon, label: el.shape === 'jersey' ? 'Jersey' : 'Token' }
   if (el.type === 'text') return { icon: Type, label: 'Text' }
+  if (el.type === 'arrow3d') return { icon: Spline, label: '3D Arrow' }
   // Diamond/pentagon/triangle/trapezoid are created as closed polylines, so they
   // surface here through polylineSubject (a closed polyline → "Shape").
   return polylineSubject(el)
@@ -55,6 +56,7 @@ const TOOL_SUBJECT: Record<ToolId, Subject> = {
   draw: { icon: Pencil, label: 'Draw' },
   eraser: { icon: Eraser, label: 'Eraser' },
   lasso: { icon: Lasso, label: 'Lasso' },
+  arrow3d: { icon: Spline, label: '3D Arrow' },
 }
 
 function subjectFor(els: BoardElement[], activeTool: ToolId): Subject {

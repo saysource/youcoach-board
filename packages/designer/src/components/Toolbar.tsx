@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso } from 'lucide-react'
+import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -48,6 +48,7 @@ export type ToolId =
   | 'draw'
   | 'eraser'
   | 'lasso'
+  | 'arrow3d'
 
 // Shapes-menu entries (order shown in the dropdown). The first is the default.
 const SHAPE_ITEMS: { id: ShapeTool; label: string; icon: ElementType }[] = [
@@ -140,7 +141,7 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ShapesMenu activeTool={activeTool} lastShape={lastShape} onPick={pickShape} {...menuProps('shapes')} />
-      <LinesMenu activeTool={activeTool} lastLine={lastLine} onPick={pickLine} {...menuProps('lines')} />
+      <LinesMenu activeTool={activeTool} lastLine={lastLine} onPick={pickLine} onPick3D={() => onToolChange('arrow3d')} {...menuProps('lines')} />
       {DRAW_TOOLS.map((tool) => (
         <ToolButton key={tool.id} label={tool.label} active={activeTool === tool.id} shortcut={tool.shortcut} onClick={() => onToolChange(tool.id)}>
           <tool.icon />
@@ -217,17 +218,19 @@ function LinesMenu({
   activeTool,
   lastLine,
   onPick,
+  onPick3D,
   open,
   onOpenChange,
 }: {
   activeTool: ToolId
   lastLine: LineTool | null
   onPick: (tool: LineTool) => void
+  onPick3D: () => void
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const active = isLineTool(activeTool)
-  const current = active ? activeTool : lastLine
+  const active = isLineTool(activeTool) || activeTool === 'arrow3d'
+  const current = isLineTool(activeTool) ? activeTool : lastLine
   const Icon = current ? LINE_ICON[current] : LinesIcon
   return (
     <DropdownMenu
@@ -258,6 +261,11 @@ function LinesMenu({
             <it.icon /> {it.label}
           </DropdownMenuItem>
         ))}
+        <DropdownMenuSeparator />
+        {/* A real three.js 3D arrow (drawn on the WebGL overlay). */}
+        <DropdownMenuItem onSelect={onPick3D}>
+          <Spline /> 3D Arrow
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
