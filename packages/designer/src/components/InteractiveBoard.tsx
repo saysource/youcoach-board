@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { RotateCcw, RotateCw, ChevronsUp, ChevronsDown, ZoomIn, ZoomOut, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react'
+import { RotateCcw, RotateCw, ChevronsUp, ChevronsDown, ZoomIn, ZoomOut, ArrowUp, ArrowDown, RefreshCw, RectangleVertical, RectangleHorizontal, Rotate3d } from 'lucide-react'
 import {
   BoardCanvas,
   BOARD_WIDTH,
@@ -514,6 +514,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // camera + zone markers align) and coalesce the whole session — orbit + nudges +
   // zone jumps — into ONE undo step (begin on enter, commit on Finish).
   const editing3d = backgroundMode && !!field3d
+  // Top-view lock: null = free orbit; else a near-overhead pan/zoom-only view.
+  const [topView, setTopView] = useState<'portrait' | 'landscape' | null>(null)
   useEffect(() => {
     if (!editing3d) return
     zoomReset()
@@ -526,9 +528,18 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // fov stays 50). Each is one undo step.
   function nudgeField3d(fn: (o: Orbit) => Orbit) {
     if (!field3d) return
+    setTopView(null)
     setBackground({ field3d: orbitToConfig(fn(configToOrbit(field3d)), field3d.ref as PitchType) })
   }
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+  // A near-overhead top view; azimuth sets the orientation (0 = landscape / goals
+  // left-right, 90 = portrait / goals top-bottom). Orbit is disabled while locked.
+  function goTopView(orientation: 'portrait' | 'landscape') {
+    const ref = (field3d?.ref ?? 'soccer11') as PitchType
+    const pose = orbitToConfig({ targetX: 52.5, targetZ: 34, azimuth: orientation === 'portrait' ? 90 : 0, elevation: 89.5, distance: orientation === 'portrait' ? 135 : 100, fov: 50 }, ref)
+    setTopView(orientation)
+    setBackground({ field3d: pose })
+  }
   // Board point → ground position: metric metres under a field camera/homography.
   function arrow3dGround(p: Point): { x: number; z: number } | null {
     return useHomography ? boardToMetric(fieldH!, p.x, p.y) : boardToGround(p.x, p.y, arrow3dCam)
@@ -1998,7 +2009,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
       {zoneMode && field3d && <FieldZoneTool field3d={field3d} viewBox={viewBox} />}
       {/* 3D-field pose editor: OrbitControls + numbered zone markers (bg-edit). */}
-      {editing3d && field3d && <FieldEditOverlay field3d={field3d} viewBox={viewBox} onPose={(p) => setBackground({ field3d: p })} />}
+      {editing3d && field3d && <FieldEditOverlay field3d={field3d} viewBox={viewBox} topView={topView} onExitTopView={() => setTopView(null)} onPose={(p) => setBackground({ field3d: p })} />}
       {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
       {backgroundMode && field3d && (
         <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">
@@ -2014,7 +2025,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           <FieldCtl label="Pan forward" onClick={() => nudgeField3d((o) => ({ ...o, targetX: clamp(o.targetX + 6, 5, 100) }))}><ArrowUp /></FieldCtl>
           <FieldCtl label="Pan back" onClick={() => nudgeField3d((o) => ({ ...o, targetX: clamp(o.targetX - 6, 5, 100) }))}><ArrowDown /></FieldCtl>
           <span className="mx-0.5 h-6 w-px bg-border" />
-          <FieldCtl label="Reset view" onClick={() => setBackground({ field3d: DEFAULT_ZONE.camera })}><RefreshCw /></FieldCtl>
+          <FieldCtl label="Top view (portrait)" active={topView === 'portrait'} onClick={() => goTopView('portrait')}><RectangleVertical /></FieldCtl>
+          <FieldCtl label="Top view (landscape)" active={topView === 'landscape'} onClick={() => goTopView('landscape')}><RectangleHorizontal /></FieldCtl>
+          <FieldCtl label="3D orbit view" active={topView === null} onClick={() => setTopView(null)}><Rotate3d /></FieldCtl>
+          <span className="mx-0.5 h-6 w-px bg-border" />
+          <FieldCtl label="Reset view" onClick={() => { setTopView(null); setBackground({ field3d: DEFAULT_ZONE.camera }) }}><RefreshCw /></FieldCtl>
         </div>
       )}
       {selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
@@ -2165,14 +2180,15 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 }
 
 // A compact icon button for the 3D-field Edit-Background control bar.
-function FieldCtl({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+function FieldCtl({ label, onClick, active, children }: { label: string; onClick: () => void; active?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active}
       title={label}
       onClick={onClick}
-      className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-4"
+      className={cn('flex size-8 items-center justify-center rounded-md [&_svg]:size-4', active ? 'bg-primary/15 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}
     >
       {children}
     </button>

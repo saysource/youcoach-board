@@ -30,7 +30,7 @@ interface Fly {
   start: number
 }
 
-export function FieldEditOverlay({ field3d, viewBox, onPose }: { field3d: FieldView; viewBox: string; onPose: (p: Pose) => void }) {
+export function FieldEditOverlay({ field3d, viewBox, topView, onPose, onExitTopView }: { field3d: FieldView; viewBox: string; topView: 'portrait' | 'landscape' | null; onPose: (p: Pose) => void; onExitTopView: () => void }) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const camRef = useRef<THREE.PerspectiveCamera | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
@@ -123,6 +123,17 @@ export function FieldEditOverlay({ field3d, viewBox, onPose }: { field3d: FieldV
     flyTo(field3d.position, field3d.target)
   }, [field3d])
 
+  // Top-view lock: disable rotation, left-drag pans (screen-space), wheel zooms.
+  // Orbit re-enables rotation and restores left-drag = rotate.
+  useEffect(() => {
+    const controls = controlsRef.current
+    if (!controls) return
+    controls.enableRotate = !topView
+    controls.enablePan = !!topView
+    controls.screenSpacePanning = true
+    controls.mouseButtons.LEFT = topView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
+  }, [topView])
+
   return (
     <>
       {/* OrbitControls input surface (empty; markers sit above it). */}
@@ -130,7 +141,7 @@ export function FieldEditOverlay({ field3d, viewBox, onPose }: { field3d: FieldV
       <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 z-20 h-full w-full" style={{ pointerEvents: 'none' }}>
         {markers.map((m, i) =>
           m.behind ? null : (
-            <g key={FIELD_ZONES[i].id} transform={`translate(${m.x} ${m.y})`} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onPointerDown={(e) => e.stopPropagation()} onClick={() => flyTo(FIELD_ZONES[i].camera.position, FIELD_ZONES[i].target)}>
+            <g key={FIELD_ZONES[i].id} transform={`translate(${m.x} ${m.y})`} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onPointerDown={(e) => e.stopPropagation()} onClick={() => { onExitTopView(); flyTo(FIELD_ZONES[i].camera.position, FIELD_ZONES[i].target) }}>
               <circle r={16} fill="#0f172a" fillOpacity={0.82} stroke="#ffffff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
               <text textAnchor="middle" dominantBaseline="central" fontSize={18} fontWeight={600} fill="#ffffff">
                 {i}
