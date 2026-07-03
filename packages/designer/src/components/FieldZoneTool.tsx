@@ -6,7 +6,7 @@ import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView } from '@youcoach-board/core'
 import { projectToBoard, boardToGround } from '../lib/arrow3d'
 import { clientToBoard } from '../lib/draw'
 import { FIELD_ZONES, type Zone } from '../lib/field-zones'
-import type { PitchType } from '../lib/field-camera'
+import { snapAzimuth, type PitchType } from '../lib/field-camera'
 import { useEditorStore } from '../store/context'
 import { Button } from './ui/button'
 
@@ -45,6 +45,8 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
   const camRef = useRef<THREE.PerspectiveCamera | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
   const downRef = useRef<{ x: number; y: number } | null>(null)
+  const shiftRef = useRef(false)
+  const truePosRef = useRef<THREE.Vector3 | null>(null) // unsnapped orbit position
 
   const [zones, setZones] = useState<Zone[]>(() => loadZones())
   const [selected, setSelected] = useState<number>(0)
@@ -77,6 +79,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     controls.enablePan = false
     controls.enableDamping = true
     controls.dampingFactor = 0.09
+    controls.rotateSpeed = 0.45
     controls.maxPolarAngle = Math.PI / 2 - 0.04
     controls.minDistance = 6
     controls.maxDistance = 400
@@ -86,11 +89,27 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     camRef.current = cam
     controlsRef.current = controls
 
+    // Hold Shift → magnetic 15° azimuth snapping. OrbitControls reserves Shift+Left
+    // for pan (disabled here), so swap the left button to PAN while Shift is held —
+    // its "pan + modifier" branch rotates instead, letting Shift+drag orbit.
+    const onKey = (e: KeyboardEvent) => {
+      shiftRef.current = e.shiftKey
+      controls.mouseButtons.LEFT = e.shiftKey ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKey)
+
     const tmp = new THREE.Vector3()
+    // The true (unsnapped) orbit position: OrbitControls accumulates on it; we snap
+    // only for display/mirror (see FieldEditOverlay for why). Cleared by any manual
+    // camera jump (selectZone) so the loop doesn't restore a stale position.
     let raf = 0
     const loop = () => {
       raf = requestAnimationFrame(loop)
+      if (truePosRef.current) cam.position.copy(truePosRef.current)
       controls.update()
+      truePosRef.current = cam.position.clone()
+      if (shiftRef.current) snapAzimuth(cam, controls.target)
       setMarkers(
         zonesRef.current.map((z) => {
           tmp.set(z.target[0], z.target[1], z.target[2])
@@ -106,6 +125,8 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     loop()
     return () => {
       cancelAnimationFrame(raf)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKey)
       controls.dispose()
       commitTransaction()
       camRef.current = null
@@ -166,6 +187,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     controls.target.copy(v3(z.target))
     cam.lookAt(controls.target)
     controls.update()
+    truePosRef.current = null // don't let the loop restore the pre-jump position
   }
 
   function addZone() {
@@ -180,12 +202,15 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     setZones((zs) => zs.filter((_, j) => j !== i))
     setSelected((sel) => (sel >= i && sel > 0 ? sel - 1 : sel))
   }
+  // Only the label changes while typing — the id (React key) stays stable so the
+  // input never remounts/loses focus. The id is slugified from the label at export.
   function relabel(i: number, label: string) {
-    setZones((zs) => zs.map((z, j) => (j === i ? { ...z, label, id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || z.id } : z)))
+    setZones((zs) => zs.map((z, j) => (j === i ? { ...z, label } : z)))
   }
+  const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
   const exportText = `export const FIELD_ZONES: Zone[] = [\n${zones
-    .map((z) => `  { id: '${z.id}', label: '${z.label}', target: [${z.target.map(round).join(', ')}], camera: { ref: '${z.camera.ref}', position: [${z.camera.position.map(round).join(', ')}], target: [${z.camera.target.map(round).join(', ')}], fov: ${z.camera.fov} } },`)
+    .map((z) => `  { id: '${slug(z.label) || z.id}', label: '${z.label}', target: [${z.target.map(round).join(', ')}], camera: { ref: '${z.camera.ref}', position: [${z.camera.position.map(round).join(', ')}], target: [${z.camera.target.map(round).join(', ')}], fov: ${z.camera.fov} } },`)
     .join('\n')}\n]`
   function copyExport() {
     console.log(exportText)
