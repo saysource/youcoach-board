@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline } from 'lucide-react'
+import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, Grid3x3 } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -100,6 +100,8 @@ interface ToolbarProps {
   onOpenCategory: (catId: string) => void
   /** Enter background-edit mode (from the More-tools menu). */
   onEditBackground: () => void
+  /** Enter the field-homography calibration mode (from the More-tools menu). */
+  onFieldHomography: () => void
   /** Pick a game system to place (opens its direction/style dialog). */
   onPickFormation: (code: string) => void
 }
@@ -107,7 +109,7 @@ interface ToolbarProps {
 // Which toolbar dropdown is currently open (only one at a time).
 type ToolbarMenu = 'shapes' | 'lines' | 'more'
 
-export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onPickFormation }: ToolbarProps) {
+export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onFieldHomography, onPickFormation }: ToolbarProps) {
   // The shape last picked/used, so the Shapes button shows it and re-opening the
   // menu re-activates it. Null until the first use (button shows the generic icon).
   const [lastShape, setLastShape] = useState<ShapeTool | null>(null)
@@ -148,7 +150,7 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
         </ToolButton>
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onEditBackground={onEditBackground} onPickFormation={onPickFormation} {...menuProps('more')} />
+      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onEditBackground={onEditBackground} onFieldHomography={onFieldHomography} onPickFormation={onPickFormation} {...menuProps('more')} />
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ToolButton label="Eraser" active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
         <Eraser />
@@ -278,6 +280,7 @@ function MoreToolsMenu({
   onToolChange,
   onOpenCategory,
   onEditBackground,
+  onFieldHomography,
   onPickFormation,
   open,
   onOpenChange,
@@ -285,6 +288,7 @@ function MoreToolsMenu({
   onToolChange: (tool: ToolId) => void
   onOpenCategory: (catId: string) => void
   onEditBackground: () => void
+  onFieldHomography: () => void
   onPickFormation: (code: string) => void
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -365,6 +369,10 @@ function MoreToolsMenu({
         {/* Enters background-edit mode (its own toolbar + fields-only drawer). */}
         <DropdownMenuItem onSelect={onEditBackground}>
           <SoccerFieldIcon /> Edit Background
+        </DropdownMenuItem>
+        {/* Calibrate the field-perspective homography (dev/authoring tool). */}
+        <DropdownMenuItem onSelect={onFieldHomography}>
+          <Grid3x3 /> Field homography
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

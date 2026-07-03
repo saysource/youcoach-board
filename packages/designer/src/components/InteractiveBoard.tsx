@@ -62,6 +62,7 @@ import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
 import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMark, type SnapLine } from '../lib/snapping'
 import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
+import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { arrow3DHandlePositions, arrow3DWorldHandles, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
 import { cn } from '../lib/cn'
 
@@ -288,7 +289,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, showGrid = false }: { backgroundMode?: boolean; showGrid?: boolean }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, showGrid = false }: { backgroundMode?: boolean; homographyMode?: boolean; showGrid?: boolean }) {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -982,7 +983,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
   function onContainerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only the LEFT button drives interactions (touch/pen primary press is 0 too).
     if (e.button !== 0) return
-    if (backgroundMode) return // background-edit mode: only the bg move handle is active
+    if (backgroundMode || homographyMode) return // bg-edit / homography mode: only their own handles are active
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
@@ -1143,7 +1144,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
 
   function onElementPointerDown(e: React.PointerEvent, el: BoardElement) {
     if (e.button !== 0) return
-    if (creating || backgroundMode) return // background-edit mode: elements are inert
+    if (creating || backgroundMode || homographyMode) return // bg-edit / homography: elements are inert
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
@@ -1885,7 +1886,7 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
           </>
         }
       >
-        <g style={{ pointerEvents: creating || backgroundMode || eraserTool || lassoTool ? 'none' : 'auto' }}>
+        <g style={{ pointerEvents: creating || backgroundMode || homographyMode || eraserTool || lassoTool ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
             const live = liveElement(el)
             const erasing = erase?.ids.has(el.id)
@@ -1908,6 +1909,8 @@ export function InteractiveBoard({ backgroundMode = false, showGrid = false }: {
       </BoardCanvas>
       {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} />
+      {/* Field-homography calibration overlay (dedicated mode). */}
+      {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
         <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           {/* Dotted guides: tail → apex → head, and apex → base midpoint. */}

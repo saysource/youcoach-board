@@ -103,6 +103,20 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     setBgEditing(false)
     setDrawerOpen(false)
   }
+
+  // Field-homography calibration mode: a dedicated overlay (bespoke handles) that
+  // computes the per-field perspective matrix. Like bg-edit, it disables element
+  // actions; exited with "Finish".
+  const [homographyEditing, setHomographyEditing] = useState(false)
+  function fieldHomography() {
+    const s = store.getState()
+    s.setSelection([])
+    s.setActiveTool('select')
+    setHomographyEditing(true)
+  }
+  function finishHomography() {
+    setHomographyEditing(false)
+  }
   const activeTool = useEditorStore((s) => s.activeTool)
   const setActiveTool = useEditorStore((s) => s.setActiveTool)
   const keepToolActive = useEditorStore((s) => s.keepToolActive)
@@ -256,7 +270,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} showGrid={showGrid} />
+            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} showGrid={showGrid} />
           </div>
 
           {/* Top-left menu */}
@@ -273,6 +287,12 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                   <Check /> Finish editing background
                 </Button>
               </div>
+            ) : homographyEditing ? (
+              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+                <Button size="sm" onClick={finishHomography} className="font-medium">
+                  <Check /> Finish field homography
+                </Button>
+              </div>
             ) : (
               <Toolbar
                 activeTool={activeTool}
@@ -281,6 +301,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 onToggleLock={toggleKeepTool}
                 onOpenCategory={openCategory}
                 onEditBackground={editBackground}
+                onFieldHomography={fieldHomography}
                 onPickFormation={setFormation}
               />
             )}
