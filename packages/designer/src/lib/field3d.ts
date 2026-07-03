@@ -1,6 +1,7 @@
-// A real, procedural 3D soccer pitch (ground + line texture + goals + optional
-// corner flags), ported from the reference soccer-field.html. Framework-free
-// (three.js only) so the React layer just mounts it.
+// A real, procedural 3D soccer pitch: crisp white markings as FLAT GROUND GEOMETRY
+// (resolution-independent — no texture to blur when zoomed), translucent white
+// "mowing" shading bands over a TRANSPARENT ground (the board background shows
+// through), plus goals + optional corner flags. Framework-free (three.js only).
 //
 // World frame matches lib/arrow3d.ts and the field cameras: x = pitch length
 // (0..105), z = pitch width (0..68), y = up (metres). The reference builds the
@@ -18,91 +19,103 @@ const GOAL_W = 7.32
 const GOAL_H = 2.44
 const GOAL_D = 2.0
 const POST_R = 0.06
-const PLANE_L = 125 // a green run-off surround
-const PLANE_W = 85
+const LINE_W = 0.16 // pitch line width (metres) — crisp flat geometry, not texture
+const BAND_OVERFLOW = 0.2 // stripe bands extend this fraction of the pitch beyond each edge
+const BAND_OPACITY = 0.08 // semi-transparent white "shading" bands
 
 // One shared sun so the field and the arrow scene cast agreeing shadows.
 export const SUN_POSITION = new THREE.Vector3(120, 165, 70)
 export const SUN_TARGET = new THREE.Vector3(HALF_L, 0, HALF_W)
 
-/* ---- field line texture (procedural canvas, centred on the pitch) ---------- */
-function makeFieldTexture(): THREE.Texture {
-  const PPM = 16
-  const cv = document.createElement('canvas')
-  cv.width = PLANE_L * PPM
-  cv.height = PLANE_W * PPM
-  const g = cv.getContext('2d')!
-  const cX = cv.width / 2
-  const cY = cv.height / 2
-  const P = (x: number, z: number): [number, number] => [cX + x * PPM, cY + z * PPM]
+/* ---- field markings as flat ground geometry (crisp at any zoom) ------------- *
+ * Everything is built in the centred frame (x −52.5..52.5, z −34..34) in the
+ * y=0 plane; the group is shifted to the corner-origin frame at the end.        */
 
-  g.fillStyle = '#2e7d32'
-  g.fillRect(0, 0, cv.width, cv.height)
+// Push a flat quad (two triangles) at y=0 into a positions array.
+function quad(pos: number[], ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number) {
+  pos.push(ax, 0, az, bx, 0, bz, cx, 0, cz, ax, 0, az, cx, 0, cz, dx, 0, dz)
+}
+// A straight line as a width-w ribbon from (x0,z0) to (x1,z1).
+function seg(pos: number[], x0: number, z0: number, x1: number, z1: number, w = LINE_W) {
+  const dx = x1 - x0
+  const dz = z1 - z0
+  const len = Math.hypot(dx, dz) || 1
+  const nx = (-dz / len) * (w / 2)
+  const nz = (dx / len) * (w / 2)
+  quad(pos, x0 + nx, z0 + nz, x1 + nx, z1 + nz, x1 - nx, z1 - nz, x0 - nx, z0 - nz)
+}
+// A polyline (closed if `close`) as connected ribbons.
+function poly(pos: number[], pts: [number, number][], close = false) {
+  for (let i = 1; i < pts.length; i++) seg(pos, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1])
+  if (close && pts.length > 2) seg(pos, pts[pts.length - 1][0], pts[pts.length - 1][1], pts[0][0], pts[0][1])
+}
+// An arc/circle as a width-w annulus strip.
+function arc(pos: number[], cx: number, cz: number, r: number, a0: number, a1: number, steps: number, w = LINE_W) {
+  const ro = r + w / 2
+  const ri = r - w / 2
+  for (let i = 0; i < steps; i++) {
+    const t0 = a0 + ((a1 - a0) * i) / steps
+    const t1 = a0 + ((a1 - a0) * (i + 1)) / steps
+    quad(pos, cx + ro * Math.cos(t0), cz + ro * Math.sin(t0), cx + ro * Math.cos(t1), cz + ro * Math.sin(t1), cx + ri * Math.cos(t1), cz + ri * Math.sin(t1), cx + ri * Math.cos(t0), cz + ri * Math.sin(t0))
+  }
+}
+// A filled disc (penalty / centre spots) as a triangle fan.
+function disc(pos: number[], cx: number, cz: number, r: number, steps = 16) {
+  for (let i = 0; i < steps; i++) {
+    const t0 = (2 * Math.PI * i) / steps
+    const t1 = (2 * Math.PI * (i + 1)) / steps
+    pos.push(cx, 0, cz, cx + r * Math.cos(t0), 0, cz + r * Math.sin(t0), cx + r * Math.cos(t1), 0, cz + r * Math.sin(t1))
+  }
+}
 
-  // Mowing stripes inside the pitch.
-  const bands = 12
-  const bw = L / bands
-  for (let b = 0; b < bands; b++) {
-    const x0 = -HALF_L + b * bw
-    const [px0, pz0] = P(x0, -HALF_W)
-    const [px1, pz1] = P(x0 + bw, HALF_W)
-    g.fillStyle = b % 2 === 0 ? '#4aa84f' : '#3f9c46'
-    g.fillRect(px0, pz0, px1 - px0, pz1 - pz0)
-  }
-
-  g.strokeStyle = '#ffffff'
-  g.fillStyle = '#ffffff'
-  g.lineWidth = 0.2 * PPM
-  g.lineJoin = 'round'
-  const rect = (x0: number, z0: number, x1: number, z1: number) => {
-    const [ax, ay] = P(x0, z0)
-    const [bx, by] = P(x1, z1)
-    g.strokeRect(ax, ay, bx - ax, by - ay)
-  }
-  const line = (x0: number, z0: number, x1: number, z1: number) => {
-    g.beginPath()
-    const [ax, ay] = P(x0, z0)
-    const [bx, by] = P(x1, z1)
-    g.moveTo(ax, ay)
-    g.lineTo(bx, by)
-    g.stroke()
-  }
-  const circle = (x: number, z: number, r: number, s = 0, e = Math.PI * 2) => {
-    g.beginPath()
-    const [px, pz] = P(x, z)
-    g.arc(px, pz, r * PPM, s, e)
-    g.stroke()
-  }
-  const dot = (x: number, z: number, r: number) => {
-    g.beginPath()
-    const [px, pz] = P(x, z)
-    g.arc(px, pz, r * PPM, 0, Math.PI * 2)
-    g.fill()
-  }
-
-  rect(-HALF_L, -HALF_W, HALF_L, HALF_W) // boundary
-  line(0, -HALF_W, 0, HALF_W) // halfway
-  circle(0, 0, 9.15) // centre circle
-  dot(0, 0, 0.18)
+function markingsGeometry(): THREE.BufferGeometry {
+  const p: number[] = []
+  // Outer boundary + halfway.
+  poly(p, [[-HALF_L, -HALF_W], [HALF_L, -HALF_W], [HALF_L, HALF_W], [-HALF_L, HALF_W]], true)
+  seg(p, 0, -HALF_W, 0, HALF_W)
+  // Centre circle + spot.
+  arc(p, 0, 0, 9.15, 0, 2 * Math.PI, 96)
+  disc(p, 0, 0, 0.18)
   const penAngle = Math.acos(5.5 / 9.15)
   for (const s of [-1, 1]) {
-    const goalLine = s * HALF_L
-    rect(goalLine, -20.16, goalLine - s * 16.5, 20.16) // penalty area
-    rect(goalLine, -9.16, goalLine - s * 5.5, 9.16) // goal area
-    const spotX = goalLine - s * 11
-    dot(spotX, 0, 0.18)
-    if (s < 0) circle(spotX, 0, 9.15, -penAngle, penAngle)
-    else circle(spotX, 0, 9.15, Math.PI - penAngle, Math.PI + penAngle)
+    const gl = s * HALF_L
+    // Penalty + goal areas (open on the goal line, which is the boundary).
+    poly(p, [[gl, -20.16], [gl - s * 16.5, -20.16], [gl - s * 16.5, 20.16], [gl, 20.16]])
+    poly(p, [[gl, -9.16], [gl - s * 5.5, -9.16], [gl - s * 5.5, 9.16], [gl, 9.16]])
+    const spotX = gl - s * 11
+    disc(p, spotX, 0, 0.18)
+    if (s < 0) arc(p, spotX, 0, 9.15, -penAngle, penAngle, 24)
+    else arc(p, spotX, 0, 9.15, Math.PI - penAngle, Math.PI + penAngle, 24)
   }
-  circle(-HALF_L, -HALF_W, 1, 0, Math.PI / 2) // corner arcs
-  circle(HALF_L, -HALF_W, 1, Math.PI / 2, Math.PI)
-  circle(-HALF_L, HALF_W, 1, -Math.PI / 2, 0)
-  circle(HALF_L, HALF_W, 1, Math.PI, Math.PI * 1.5)
+  // Corner arcs.
+  arc(p, -HALF_L, -HALF_W, 1, 0, Math.PI / 2, 12)
+  arc(p, HALF_L, -HALF_W, 1, Math.PI / 2, Math.PI, 12)
+  arc(p, -HALF_L, HALF_W, 1, -Math.PI / 2, 0, 12)
+  arc(p, HALF_L, HALF_W, 1, Math.PI, Math.PI * 1.5, 12)
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+  return geo
+}
 
-  const tex = new THREE.CanvasTexture(cv)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.anisotropy = 16
-  return tex
+// Alternating translucent-white "mowing" bands, extended past the pitch so the
+// shading covers a larger surface than the lines.
+function bandsGeometry(): THREE.BufferGeometry {
+  const p: number[] = []
+  const mx = L * BAND_OVERFLOW
+  const mz = W * BAND_OVERFLOW
+  const x0 = -HALF_L - mx
+  const x1 = HALF_L + mx
+  const z0 = -HALF_W - mz
+  const z1 = HALF_W + mz
+  const bands = 14
+  const bw = (x1 - x0) / bands
+  for (let b = 0; b < bands; b += 2) {
+    const bx0 = x0 + b * bw
+    quad(p, bx0, z0, bx0 + bw, z0, bx0 + bw, z1, bx0, z1)
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+  return geo
 }
 
 /* ---- goal net texture (transparent grid) ----------------------------------- */
@@ -193,14 +206,28 @@ function makeFlag(x: number, z: number): THREE.Group {
   return grp
 }
 
-/** Build the pitch as one group in the corner-origin world frame (0..105 × 0..68). */
+/** Build the pitch as one group in the corner-origin world frame (0..105 × 0..68).
+ *  The ground is transparent (the board background shows through); only the white
+ *  lines + translucent shading bands are drawn, plus goals + flags. */
 export function buildFieldGroup(opts: { flags?: boolean } = {}): THREE.Group {
   const group = new THREE.Group()
 
-  const field = new THREE.Mesh(new THREE.PlaneGeometry(PLANE_L, PLANE_W), new THREE.MeshStandardMaterial({ map: makeFieldTexture(), roughness: 0.95, metalness: 0 }))
-  field.rotation.x = -Math.PI / 2
-  field.receiveShadow = true
-  group.add(field)
+  // Transparent ground that still catches the goals' soft shadows.
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.6, W * 1.8), new THREE.ShadowMaterial({ opacity: 0.18 }))
+  shadow.rotation.x = -Math.PI / 2
+  shadow.receiveShadow = true
+  group.add(shadow)
+
+  // Translucent white shading bands (extended past the pitch), then crisp lines.
+  const bands = new THREE.Mesh(bandsGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
+  bands.position.y = 0.003
+  bands.renderOrder = 1
+  group.add(bands)
+
+  const lines = new THREE.Mesh(markingsGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, depthWrite: false }))
+  lines.position.y = 0.02
+  lines.renderOrder = 2
+  group.add(lines)
 
   const netTex = makeNetTexture()
   group.add(makeGoal(-1, netTex))
