@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type Arrow3DElement } from '@youcoach-board/core'
 import { createArrowGeometry, makeArrow3DCamera, arrow3DWorldHandles } from '../lib/arrow3d'
 import { buildProjectionMatrix, worldToBoard, DEFAULT_HEIGHT } from '../lib/homography-camera'
+import { makeCalibratedCamera, type CameraConfig } from '../lib/field-camera'
 
 /** Imperative API the InteractiveBoard uses to hit-test 3D arrows (which aren't
  *  SVG, so they can't be clicked through the normal element handlers). */
@@ -15,8 +16,11 @@ interface Props {
   elements: Arrow3DElement[]
   selectedIds: string[]
   viewport: { zoom: number; panX: number; panY: number }
-  /** The active field's homography (metric→board px). When set, arrows render in
-   *  the field's perspective via a custom projection; otherwise the fixed camera. */
+  /** A hand-posed real camera for the field (takes precedence over homography):
+   *  arrows render with correct 3D height + shadow through it. */
+  camera: CameraConfig | null
+  /** The active field's homography (metric→board px). Used only when there's no
+   *  camera: arrows render via a custom projection; otherwise the fixed camera. */
   homography: number[] | null
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -28,6 +32,7 @@ interface Ctx {
   camera: THREE.PerspectiveCamera
   pickCamera: THREE.PerspectiveCamera
   customCam: THREE.Camera
+  calibCam: THREE.PerspectiveCamera
   meshes: Map<string, THREE.Mesh>
 }
 
@@ -79,7 +84,7 @@ function hexColor(fill: string): { color: number; alpha: number } {
   return { color: parseInt(hex, 16), alpha: 1 }
 }
 
-export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow3DLayer({ elements, selectedIds, viewport, homography, svgRef, containerRef }, ref) {
+export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow3DLayer({ elements, selectedIds, viewport, camera, homography, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -122,7 +127,7 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     plane.name = 'ground'
     scene.add(plane)
 
-    ctxRef.current = { renderer, scene, camera, pickCamera: makeArrow3DCamera(), customCam: new THREE.Camera(), meshes: new Map() }
+    ctxRef.current = { renderer, scene, camera, pickCamera: makeArrow3DCamera(), customCam: new THREE.Camera(), calibCam: new THREE.PerspectiveCamera(), meshes: new Map() }
     return ctxRef.current
   }
 
@@ -194,7 +199,21 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     canvas.style.width = `${rect.width}px`
     canvas.style.height = `${rect.height}px`
     ctx.renderer.setSize(rect.width, rect.height, false)
-    if (homography) {
+    if (camera) {
+      // Hand-posed real camera: correct 3D height + shadow. Honour pan/zoom via a
+      // view offset (same as the fixed camera).
+      const cam = ctx.calibCam
+      const zoom = viewport.zoom || 1
+      cam.aspect = BOARD_WIDTH / BOARD_HEIGHT
+      cam.fov = camera.fov
+      cam.position.set(camera.position[0], camera.position[1], camera.position[2])
+      cam.up.set(0, 1, 0)
+      cam.lookAt(new THREE.Vector3(camera.target[0], camera.target[1], camera.target[2]))
+      cam.setViewOffset(BOARD_WIDTH, BOARD_HEIGHT, viewport.panX, viewport.panY, BOARD_WIDTH / zoom, BOARD_HEIGHT / zoom)
+      cam.updateProjectionMatrix()
+      cam.updateMatrixWorld()
+      ctx.renderer.render(ctx.scene, cam)
+    } else if (homography) {
       // Custom projection built from the field homography: the ground plane (+
       // shadow) reproduces the field perspective exactly; height lifts screen-up.
       const m = buildProjectionMatrix(homography, viewport, DEFAULT_HEIGHT)
@@ -215,7 +234,7 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, selectedIds, viewport, homography])
+  }, [elements, selectedIds, viewport, camera, homography])
 
   // Re-render on container resize (the letterbox rect moves/scales).
   useEffect(() => {
@@ -231,6 +250,20 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     pick(boardX: number, boardY: number): string | null {
       const ctx = ctxRef.current
       if (!ctx) return null
+      if (camera) {
+        // Real camera: a plain raycaster works. Board coords are full-board, so use
+        // a full-board camera (no view offset).
+        const cam = makeCalibratedCamera(camera)
+        const ndc = new THREE.Vector2((boardX / BOARD_WIDTH) * 2 - 1, -(boardY / BOARD_HEIGHT) * 2 + 1)
+        const ray = new THREE.Raycaster()
+        ray.setFromCamera(ndc, cam)
+        const hits = ray.intersectObjects([...ctx.meshes.values()], false)
+        for (const h of hits) {
+          const id = (h.object.userData as { id?: string }).id
+          if (id) return id
+        }
+        return null
+      }
       if (homography) {
         // Custom projection: THREE's raycaster only supports std cameras, so hit-test
         // the arrow's projected triangle (tail–apex–head) in board space, top first.

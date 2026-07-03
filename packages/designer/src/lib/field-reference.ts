@@ -7,6 +7,8 @@
 // Only soccer-11 is defined for now (FIFA proportions); futsal / small-training
 // reuse the same structure later. Values are easy to tweak.
 
+import type { CameraConfig } from './field-camera'
+
 export interface RefPoint {
   id: string
   label: string
@@ -106,6 +108,62 @@ export const FIELD_HOMOGRAPHY: Record<string, number[]> = {
  *  default fixed camera). */
 export function fieldHomography(fieldSvg: string | null | undefined): number[] | null {
   return (fieldSvg && FIELD_HOMOGRAPHY[fieldSvg]) || null
+}
+
+// Per-field hand-posed perspective cameras (the "Field camera" tool). When present
+// these take precedence over the homography: a real camera renders arrows with
+// correct height + shadow. Keyed by fieldSvg; will also move into catalog.json.
+export const FIELD_CAMERA: Record<string, CameraConfig> = {
+  'images/optimized/fields/11/5.svg': { position: [166.63, 37.08, 34], target: [52.5, 0, 34], fov: 32 },
+}
+
+/** The posed camera for the currently-loaded field, or null. */
+export function fieldCamera(fieldSvg: string | null | undefined): CameraConfig | null {
+  return (fieldSvg && FIELD_CAMERA[fieldSvg]) || null
+}
+
+// The soccer-11 pitch skeleton as world-ground segments (metric metres; x = length,
+// z = width) for the Field-camera wireframe. Curves (centre circle, penalty arcs)
+// are tessellated so they read as smooth ellipses under perspective.
+function circle(cxm: number, czm: number, r: number, a0: number, a1: number, steps: number): [number, number][] {
+  const pts: [number, number][] = []
+  for (let i = 0; i <= steps; i++) {
+    const a = a0 + ((a1 - a0) * i) / steps
+    pts.push([cxm + r * Math.cos(a), czm + r * Math.sin(a)])
+  }
+  return pts
+}
+function chain(pts: [number, number][], out: [[number, number], [number, number]][]) {
+  for (let i = 1; i < pts.length; i++) out.push([pts[i - 1], pts[i]])
+}
+
+export function pitchSegments(): [[number, number], [number, number]][] {
+  const segs: [[number, number], [number, number]][] = []
+  // Touchlines + goal lines.
+  chain([[0, 0], [L, 0], [L, W], [0, W], [0, 0]], segs)
+  // Halfway line.
+  chain([[L / 2, 0], [L / 2, W]], segs)
+  // Penalty areas (open on the goal line).
+  chain([[0, cy - paHalf], [16.5, cy - paHalf], [16.5, cy + paHalf], [0, cy + paHalf]], segs)
+  chain([[L, cy - paHalf], [L - 16.5, cy - paHalf], [L - 16.5, cy + paHalf], [L, cy + paHalf]], segs)
+  // Goal areas.
+  chain([[0, cy - gaHalf], [5.5, cy - gaHalf], [5.5, cy + gaHalf], [0, cy + gaHalf]], segs)
+  chain([[L, cy - gaHalf], [L - 5.5, cy - gaHalf], [L - 5.5, cy + gaHalf], [L, cy + gaHalf]], segs)
+  // Goal mouths (posts on the ground).
+  chain([[0, cy - goalHalf], [0, cy + goalHalf]], segs)
+  chain([[L, cy - goalHalf], [L, cy + goalHalf]], segs)
+  // Centre circle.
+  chain(circle(L / 2, cy, R, 0, 2 * Math.PI, 48), segs)
+  // Penalty arcs (the "D": part of a 9.15 m circle round the spot, outside the box).
+  const ang = Math.acos((16.5 - 11) / R) // half-angle where the arc meets the box edge
+  chain(circle(11, cy, R, -ang, ang, 16), segs)
+  chain(circle(L - 11, cy, R, Math.PI - ang, Math.PI + ang, 16), segs)
+  return segs
+}
+
+/** The pitch spots (centre + two penalty spots) as world-ground points. */
+export function pitchSpots(): [number, number][] {
+  return [[L / 2, cy], [11, cy], [L - 11, cy]]
 }
 
 /** Initial board positions for a reference: fit the metric pitch into a centred

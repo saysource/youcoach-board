@@ -117,6 +117,19 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   function finishHomography() {
     setHomographyEditing(false)
   }
+
+  // Field-camera calibration mode: pose a real perspective camera onto the drawn
+  // field (the preferred calibration path). Same dedicated-mode shape as above.
+  const [cameraEditing, setCameraEditing] = useState(false)
+  function startFieldCamera() {
+    const s = store.getState()
+    s.setSelection([])
+    s.setActiveTool('select')
+    setCameraEditing(true)
+  }
+  function finishFieldCamera() {
+    setCameraEditing(false)
+  }
   const activeTool = useEditorStore((s) => s.activeTool)
   const setActiveTool = useEditorStore((s) => s.setActiveTool)
   const keepToolActive = useEditorStore((s) => s.keepToolActive)
@@ -270,7 +283,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} showGrid={showGrid} />
+            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} showGrid={showGrid} />
           </div>
 
           {/* Top-left menu */}
@@ -293,6 +306,12 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                   <Check /> Finish field homography
                 </Button>
               </div>
+            ) : cameraEditing ? (
+              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+                <Button size="sm" onClick={finishFieldCamera} className="font-medium">
+                  <Check /> Finish field camera
+                </Button>
+              </div>
             ) : (
               <Toolbar
                 activeTool={activeTool}
@@ -302,6 +321,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 onOpenCategory={openCategory}
                 onEditBackground={editBackground}
                 onFieldHomography={fieldHomography}
+                onFieldCamera={startFieldCamera}
                 onPickFormation={setFormation}
               />
             )}

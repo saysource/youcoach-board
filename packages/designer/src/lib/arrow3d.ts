@@ -241,10 +241,12 @@ export function createArrowGeometry(
 }
 
 // ── Projection: 3D world → board (0..1200, 0..900) ──────────────────────────
-function worldToBoard(point: THREE.Vector3, camera: THREE.Camera): { x: number; y: number } {
+/** Project a world point to board coordinates through any camera. */
+export function projectToBoard(point: THREE.Vector3, camera: THREE.Camera): { x: number; y: number } {
   const v = point.clone().project(camera)
   return { x: ((v.x + 1) * BOARD_WIDTH) / 2, y: (-(v.y - 1) * BOARD_HEIGHT) / 2 }
 }
+const worldToBoard = projectToBoard
 
 /** The arrow's local handle points (tail, head, apex) in world space, given its
  *  ground placement. */
@@ -262,6 +264,11 @@ export function arrow3DWorldHandles(x: number, y: number, z: number, splineWidth
 /** The three handle positions (tail, head, height-apex) in board coordinates. */
 export function arrow3DHandlePositions(x: number, y: number, z: number, splineWidth: number, splineHeight: number): { x: number; y: number }[] {
   const camera = projectionCamera()
+  return arrow3DWorldHandles(x, y, z, splineWidth, splineHeight).map((p) => worldToBoard(p, camera))
+}
+
+/** Same, but projected through a given camera (for a hand-posed field camera). */
+export function arrow3DHandlePositionsVia(camera: THREE.Camera, x: number, y: number, z: number, splineWidth: number, splineHeight: number): { x: number; y: number }[] {
   return arrow3DWorldHandles(x, y, z, splineWidth, splineHeight).map((p) => worldToBoard(p, camera))
 }
 
@@ -290,4 +297,24 @@ export function boardToHeight(bx: number, by: number, apexWorldZ: number, camera
   const distance = (apexWorldZ - camera.position.z) / ndc.z
   const pos = camera.position.clone().add(ndc.multiplyScalar(distance))
   return Math.max(0, pos.y)
+}
+
+/** Height (world y ≥ 0) at which the apex — fixed on the vertical line through its
+ *  base (ax,az) — projects to board point (bx,by), for an ARBITRARY camera. The
+ *  drag is intersected with the vertical plane through the base that faces the
+ *  camera, so it works for any hand-posed field camera (boardToHeight assumes the
+ *  fixed near-ortho camera's axis). */
+export function boardToApexHeight(bx: number, by: number, ax: number, az: number, camera: THREE.Camera): number {
+  const ndc = new THREE.Vector2((bx / BOARD_WIDTH) * 2 - 1, -(by / BOARD_HEIGHT) * 2 + 1)
+  const ray = new THREE.Raycaster()
+  ray.setFromCamera(ndc, camera)
+  const base = new THREE.Vector3(ax, 0, az)
+  const normal = camera.position.clone().sub(base)
+  normal.y = 0
+  if (normal.lengthSq() < 1e-9) normal.set(0, 0, 1)
+  normal.normalize()
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, base)
+  const hit = new THREE.Vector3()
+  if (!ray.ray.intersectPlane(plane, hit)) return 0
+  return Math.max(0, hit.y)
 }

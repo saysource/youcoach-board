@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BoardCanvas,
   BOARD_WIDTH,
@@ -63,8 +63,10 @@ import { BackgroundView } from './BackgroundView'
 import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMark, type SnapLine } from '../lib/snapping'
 import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
-import { arrow3DHandlePositions, arrow3DWorldHandles, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
-import { fieldHomography } from '../lib/field-reference'
+import { FieldCameraLayer } from './FieldCameraLayer'
+import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
+import { fieldHomography, fieldCamera } from '../lib/field-reference'
+import { makeCalibratedCamera } from '../lib/field-camera'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -291,7 +293,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, showGrid = false }: { backgroundMode?: boolean; homographyMode?: boolean; showGrid?: boolean }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, showGrid = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; showGrid?: boolean }) {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -489,25 +491,33 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // projection camera (no view-offset) used for ground raycasts / handle math —
   // it matches the projection the layer uses for full-board coordinates.
   const arrow3dLayerRef = useRef<Arrow3DLayerHandle>(null)
-  const [arrow3dCam] = useState(() => makeArrow3DCamera())
-  // Active field homography (metric metres ↔ board px). When set, arrows live in
-  // metric pitch coordinates and render in the field's perspective; otherwise the
-  // default fixed camera + its world units.
+  // Field-perspective calibration for arrows. Precedence: a hand-posed camera wins
+  // (real 3D height + shadow), else a homography (ground-exact, faked height), else
+  // the default fixed near-ortho camera. `arrow3dCam` is the calibrated camera when
+  // one exists, so the camera-parameterised arrow math (ground/handles/height) all
+  // works unchanged; homography still uses its own custom projection.
+  const fieldCamCfg = fieldCamera(doc.background.fieldSvg)
   const fieldH = fieldHomography(doc.background.fieldSvg)
-  // Board point → ground position (metric metres under a field, else fixed ground).
+  const useHomography = !!fieldH && !fieldCamCfg
+  const fixedCam = useState(() => makeArrow3DCamera())[0]
+  const arrow3dCam = useMemo(() => (fieldCamCfg ? makeCalibratedCamera(fieldCamCfg) : fixedCam), [fieldCamCfg, fixedCam])
+  // Board point → ground position: metric metres under a field camera/homography.
   function arrow3dGround(p: Point): { x: number; z: number } | null {
-    return fieldH ? boardToMetric(fieldH, p.x, p.y) : boardToGround(p.x, p.y, arrow3dCam)
+    return useHomography ? boardToMetric(fieldH!, p.x, p.y) : boardToGround(p.x, p.y, arrow3dCam)
   }
   // The three handle board positions (tail, head, apex) for an arrow.
   function arrow3dHandleBoard(el: Arrow3DElement): { x: number; y: number }[] {
-    if (fieldH) {
+    if (useHomography) {
       const [t, h, a] = arrow3DWorldHandles(el.x, el.y, el.z, el.splineWidth, el.splineHeight)
-      return [worldToBoard(fieldH, t.x, t.y, t.z), worldToBoard(fieldH, h.x, h.y, h.z), worldToBoard(fieldH, a.x, a.y, a.z)]
+      return [worldToBoard(fieldH!, t.x, t.y, t.z), worldToBoard(fieldH!, h.x, h.y, h.z), worldToBoard(fieldH!, a.x, a.y, a.z)]
     }
+    if (fieldCamCfg) return arrow3DHandlePositionsVia(arrow3dCam, el.x, el.y, el.z, el.splineWidth, el.splineHeight)
     return arrow3DHandlePositions(el.x, el.y, el.z, el.splineWidth, el.splineHeight)
   }
-  // Defaults for a new arrow — metres under a field homography, fixed-camera units otherwise.
-  const arrow3dDefaults = fieldH ? { ...ARROW3D_DEFAULTS, splineWidth: 18, splineHeight: 4, stickWidth: 1.2, thickness: 0.3, tipWidth: 3, tipLength: 5 } : ARROW3D_DEFAULTS
+  // Defaults for a new arrow — metric metres when a field camera or homography is
+  // active (both view the metric pitch), fixed-camera world units otherwise.
+  const arrow3dMetric = !!(fieldCamCfg || fieldH)
+  const arrow3dDefaults = arrow3dMetric ? { ...ARROW3D_DEFAULTS, splineWidth: 18, splineHeight: 4, stickWidth: 1.2, thickness: 0.3, tipWidth: 3, tipLength: 5 } : ARROW3D_DEFAULTS
   // Draft while drag-creating (tail + head on the ground), preview-rendered.
   const [arrow3dDraft, setArrow3dDraft] = useState<{ tail: { x: number; z: number }; head: { x: number; z: number } } | null>(null)
   // In-progress edit of one arrow (drag a handle or the body).
@@ -557,10 +567,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function dragArrow3D(g: NonNullable<typeof arrow3dGesture>, p: Point) {
     if (g.kind === 'apex') {
       const apex = arrow3DWorldHandles(g.orig.x, g.orig.y, g.orig.z, g.orig.splineWidth, g.orig.splineHeight)[2]
-      if (fieldH) {
+      if (fieldCamCfg) {
+        // Real camera: drag intersects the vertical plane through the apex's base.
+        editArrow3D(g, { splineHeight: boardToApexHeight(p.x, p.y, apex.x, apex.z, arrow3dCam) })
+      } else if (useHomography) {
         // Local vertical scale (board px per metre of height) about the apex.
-        const g0 = worldToBoard(fieldH, apex.x, 0, apex.z)
-        const perM = g0.y - worldToBoard(fieldH, apex.x, 1, apex.z).y
+        const g0 = worldToBoard(fieldH!, apex.x, 0, apex.z)
+        const perM = g0.y - worldToBoard(fieldH!, apex.x, 1, apex.z).y
         editArrow3D(g, { splineHeight: Math.abs(perM) > 1e-4 ? Math.max(0, (g0.y - p.y) / perM) : g.orig.splineHeight })
       } else {
         editArrow3D(g, { splineHeight: boardToHeight(p.x, p.y, apex.z, arrow3dCam) })
@@ -1010,7 +1023,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function onContainerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only the LEFT button drives interactions (touch/pen primary press is 0 too).
     if (e.button !== 0) return
-    if (backgroundMode || homographyMode) return // bg-edit / homography mode: only their own handles are active
+    if (backgroundMode || homographyMode || cameraMode) return // calibration modes: only their own handles are active
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
@@ -1171,7 +1184,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   function onElementPointerDown(e: React.PointerEvent, el: BoardElement) {
     if (e.button !== 0) return
-    if (creating || backgroundMode || homographyMode) return // bg-edit / homography: elements are inert
+    if (creating || backgroundMode || homographyMode || cameraMode) return // calibration modes: elements are inert
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
@@ -1913,7 +1926,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           </>
         }
       >
-        <g style={{ pointerEvents: creating || backgroundMode || homographyMode || eraserTool || lassoTool ? 'none' : 'auto' }}>
+        <g style={{ pointerEvents: creating || backgroundMode || homographyMode || cameraMode || eraserTool || lassoTool ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
             const live = liveElement(el)
             const erasing = erase?.ids.has(el.id)
@@ -1935,9 +1948,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         </g>
       </BoardCanvas>
       {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
-      <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={fieldH} />
-      {/* Field-homography calibration overlay (dedicated mode). */}
+      <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
+      {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
+      {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
       {selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
         <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           {/* Dotted guides: tail → apex → head, and apex → base midpoint. */}
