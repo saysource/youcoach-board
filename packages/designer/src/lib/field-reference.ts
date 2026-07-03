@@ -114,7 +114,8 @@ export function fieldHomography(fieldSvg: string | null | undefined): number[] |
 // these take precedence over the homography: a real camera renders arrows with
 // correct height + shadow. Keyed by fieldSvg; will also move into catalog.json.
 export const FIELD_CAMERA: Record<string, CameraConfig> = {
-  'images/optimized/fields/11/5.svg': { position: [166.63, 37.08, 34], target: [52.5, 0, 34], fov: 32 },
+  'images/optimized/fields/11/49.svg': { position: [52, 152.98, 31.33], target: [52, 0, 34], fov: 31 },
+  'images/optimized/fields/11/5.svg': { position: [90.31, 40.92, 34], target: [36, 0, 34], fov: 32 },
 }
 
 /** The posed camera for the currently-loaded field, or null. */
