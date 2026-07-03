@@ -222,6 +222,14 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     }
   }
 
+  // Keep the latest render() in a ref so the ResizeObserver (created once) always
+  // runs the current closure — otherwise a pure container resize (e.g. a drawer
+  // opening) would re-render with the first render's stale props.
+  const renderRef = useRef(render)
+  useEffect(() => {
+    renderRef.current = render
+  })
+
   // Re-render whenever the document/selection/viewport/field change.
   useEffect(() => {
     render()
@@ -232,7 +240,7 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
   useEffect(() => {
     const container = containerRef.current
     if (!container || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => render())
+    const ro = new ResizeObserver(() => renderRef.current())
     ro.observe(container)
     return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -74,17 +74,26 @@ export function FieldSceneLayer({ camera, viewport, svgRef, containerRef }: Prop
     return { left: sr.left - cr.left + (sr.width - width) / 2, top: sr.top - cr.top + (sr.height - height) / 2, width, height }
   }
 
+  // The latest props, so render() reads current values even when invoked from the
+  // ResizeObserver (whose callback is created once and would otherwise close over
+  // the first render's camera — causing a stale reset when the drawer resizes it).
+  const propsRef = useRef({ camera, viewport })
+  useEffect(() => {
+    propsRef.current = { camera, viewport }
+  })
+
   function render() {
     const ctx = ensureCtx()
     const canvas = canvasRef.current
     const rect = boardRect()
     if (!ctx || !canvas || !rect || rect.width < 1) return
+    const { camera: cam, viewport: vp } = propsRef.current
     canvas.style.left = `${rect.left}px`
     canvas.style.top = `${rect.top}px`
     canvas.style.width = `${rect.width}px`
     canvas.style.height = `${rect.height}px`
     ctx.renderer.setSize(rect.width, rect.height, false)
-    applyViewCamera(ctx.cam, camera, viewport)
+    applyViewCamera(ctx.cam, cam, vp)
     ctx.renderer.render(ctx.scene, ctx.cam)
   }
 
