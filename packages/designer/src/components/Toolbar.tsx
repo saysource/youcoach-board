@@ -322,11 +322,6 @@ function MoreToolsMenu({
             )
           })}
         <DropdownMenuSeparator />
-        {/* Lasso: free-draw a selection; elements the loop touches are selected. */}
-        <DropdownMenuItem onSelect={() => onToolChange('lasso')}>
-          <Lasso /> Lasso select
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         {/* Token stamp tool — placed by clicking the board, then edited inline. */}
         <DropdownMenuItem onSelect={() => onToolChange('token')}>
           <TokenIcon /> Token
@@ -355,6 +350,10 @@ function MoreToolsMenu({
           </DropdownMenuSub>
         )}
         <DropdownMenuSeparator />
+        {/* Lasso: free-draw a selection; elements the loop touches are selected. */}
+        <DropdownMenuItem onSelect={() => onToolChange('lasso')}>
+          <Lasso /> Lasso select
+        </DropdownMenuItem>
         {/* Enters background-edit mode (its own toolbar + fields-only drawer). */}
         <DropdownMenuItem onSelect={onEditBackground}>
           <SoccerFieldIcon /> Edit Background
