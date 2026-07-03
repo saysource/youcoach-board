@@ -3,7 +3,6 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView } from '@youcoach-board/core'
 import { projectToBoard } from '../lib/arrow3d'
-import { snapAzimuth } from '../lib/field-camera'
 import { FIELD_ZONES } from '../lib/field-zones'
 
 // Edit-Background overlay for the real 3D field: real OrbitControls (drag = orbit,
@@ -36,7 +35,6 @@ export function FieldEditOverlay({ field3d, viewBox, onPose }: { field3d: FieldV
   const camRef = useRef<THREE.PerspectiveCamera | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
   const flyRef = useRef<Fly | null>(null)
-  const shiftRef = useRef(false)
   const onPoseRef = useRef(onPose)
   useEffect(() => {
     onPoseRef.current = onPose
@@ -74,21 +72,7 @@ export function FieldEditOverlay({ field3d, viewBox, onPose }: { field3d: FieldV
     camRef.current = cam
     controlsRef.current = controls
 
-    // Hold Shift → magnetic 15° azimuth snapping. OrbitControls reserves Shift+Left
-    // for pan (disabled here), so swap the left button to PAN while Shift is held —
-    // its "pan + modifier" branch rotates instead, letting Shift+drag orbit.
-    const onKey = (e: KeyboardEvent) => {
-      shiftRef.current = e.shiftKey
-      controls.mouseButtons.LEFT = e.shiftKey ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
-    }
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('keyup', onKey)
-
     const tmp = new THREE.Vector3()
-    // The true (unsnapped) orbit position: OrbitControls accumulates on it, and we
-    // only snap the camera for what we render/mirror — otherwise snapping every
-    // frame would stop the damped delta from ever crossing a 15° step.
-    let truePos: THREE.Vector3 | null = null
     let raf = 0
     const loop = () => {
       raf = requestAnimationFrame(loop)
@@ -99,16 +83,12 @@ export function FieldEditOverlay({ field3d, viewBox, onPose }: { field3d: FieldV
         cam.position.lerpVectors(fly.fromPos, fly.toPos, e)
         controls.target.lerpVectors(fly.fromTgt, fly.toTgt, e)
         cam.lookAt(controls.target)
-        truePos = null
         if (t >= 1) {
           flyRef.current = null
           controls.update() // resync internal spherical after the manual move
         }
       } else {
-        if (truePos) cam.position.copy(truePos) // restore the unsnapped angle
-        controls.update() // damped orbit accumulates on the true angle
-        truePos = cam.position.clone()
-        if (shiftRef.current) snapAzimuth(cam, controls.target) // snap only for display/mirror
+        controls.update() // damped orbit
       }
       // Project the zone targets to board coords; flag ones behind the camera.
       setMarkers(
@@ -124,8 +104,6 @@ export function FieldEditOverlay({ field3d, viewBox, onPose }: { field3d: FieldV
     loop()
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('keyup', onKey)
       controls.dispose()
       camRef.current = null
       controlsRef.current = null

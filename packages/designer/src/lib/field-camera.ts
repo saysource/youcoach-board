@@ -69,18 +69,6 @@ export function makeCalibratedCamera(cfg: PosedCamera, aspect = BOARD_WIDTH / BO
   return cam
 }
 
-/** Snap a camera's azimuth around a target to the nearest step (default 15°),
- *  keeping its elevation + distance — a "magnetic" orbit while a modifier is held. */
-export function snapAzimuth(camera: THREE.PerspectiveCamera, target: THREE.Vector3, stepRad = Math.PI / 12): void {
-  const off = camera.position.clone().sub(target)
-  const sph = new THREE.Spherical().setFromVector3(off)
-  sph.theta = Math.round(sph.theta / stepRad) * stepRad
-  sph.makeSafe()
-  off.setFromSpherical(sph)
-  camera.position.copy(target).add(off)
-  camera.lookAt(target)
-}
-
 /** Orbit params → stored config. Azimuth 0 looks along +Z; +azimuth swings toward
  *  +X; elevation lifts the camera above the ground. */
 export function orbitToConfig(o: Orbit, ref: PitchType): CameraConfig {
