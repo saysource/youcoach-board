@@ -66,10 +66,11 @@ import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
 import { FieldSceneLayer } from './FieldSceneLayer'
+import { FieldEditOverlay } from './FieldEditOverlay'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
-import { DEFAULT_FIELD_PRESET } from '../lib/field-presets'
+import { DEFAULT_ZONE } from '../lib/field-zones'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -310,6 +311,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const setBackground = useEditorStore((s) => s.setBackground)
   const beginTransaction = useEditorStore((s) => s.beginTransaction)
   const commitTransaction = useEditorStore((s) => s.commitTransaction)
+  const zoomReset = useEditorStore((s) => s.zoomReset)
   const updateElements = useEditorStore((s) => s.updateElements)
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
@@ -507,6 +509,18 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const useHomography = !!fieldH && !fieldCamCfg
   const fixedCam = useState(() => makeArrow3DCamera())[0]
   const arrow3dCam = useMemo(() => (fieldCamCfg ? makeCalibratedCamera(fieldCamCfg) : fixedCam), [fieldCamCfg, fixedCam])
+  // While editing a 3D field's background: reset the board framing (so the orbit
+  // camera + zone markers align) and coalesce the whole session — orbit + nudges +
+  // zone jumps — into ONE undo step (begin on enter, commit on Finish).
+  const editing3d = backgroundMode && !!field3d
+  useEffect(() => {
+    if (!editing3d) return
+    zoomReset()
+    beginTransaction()
+    return () => commitTransaction()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing3d])
+
   // Edit-Background camera nudges for the 3D field (coach-friendly, discrete steps;
   // fov stays 50). Each is one undo step.
   function nudgeField3d(fn: (o: Orbit) => Orbit) {
@@ -1981,6 +1995,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
+      {/* 3D-field pose editor: OrbitControls + numbered zone markers (bg-edit). */}
+      {editing3d && field3d && <FieldEditOverlay field3d={field3d} viewBox={viewBox} onPose={(p) => setBackground({ field3d: p })} />}
       {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
       {backgroundMode && field3d && (
         <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">
@@ -1996,7 +2012,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           <FieldCtl label="Pan forward" onClick={() => nudgeField3d((o) => ({ ...o, targetX: clamp(o.targetX + 6, 5, 100) }))}><ArrowUp /></FieldCtl>
           <FieldCtl label="Pan back" onClick={() => nudgeField3d((o) => ({ ...o, targetX: clamp(o.targetX - 6, 5, 100) }))}><ArrowDown /></FieldCtl>
           <span className="mx-0.5 h-6 w-px bg-border" />
-          <FieldCtl label="Reset view" onClick={() => setBackground({ field3d: DEFAULT_FIELD_PRESET.camera })}><RefreshCw /></FieldCtl>
+          <FieldCtl label="Reset view" onClick={() => setBackground({ field3d: DEFAULT_ZONE.camera })}><RefreshCw /></FieldCtl>
         </div>
       )}
       {selectedArrow3D && !arrow3dGesture && arrow3dHandles && (

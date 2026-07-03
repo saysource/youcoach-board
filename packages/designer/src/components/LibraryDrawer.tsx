@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { cn } from '../lib/cn'
 import { useAssets, buildFigureElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { clientToBoard } from '../lib/draw'
-import { FIELD_PRESETS } from '../lib/field-presets'
+import { FIELD_ZONES } from '../lib/field-zones'
 import { useEditorStore } from '../store/context'
 
 // Movement (px) below which a press is a tap, not a drag; touch hold (ms) to start.
@@ -336,21 +336,21 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
       ) : !catalog ? (
         <div className="p-3 text-sm text-muted-foreground">Loading library…</div>
       ) : fieldsOnly ? (
-        /* Background mode: the "fields" are camera angles onto the real 3D pitch.
-           (Legacy hand-drawn field SVGs are kept in data but hidden here.) */
+        /* Background mode: the "fields" are notable ZONES of the real 3D pitch —
+           clicking one flies the camera to that spot (legacy SVG fields hidden). */
         <div className="flex-1 overflow-y-auto p-2">
-          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">3D field — camera angles</div>
+          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">3D field — zones</div>
           <div className="grid grid-cols-2 gap-2">
-            {FIELD_PRESETS.map((p) => (
+            {FIELD_ZONES.map((z, i) => (
               <button
-                key={p.id}
+                key={z.id}
                 type="button"
-                title={p.name}
-                onClick={() => setBackground({ field3d: p.camera, fieldSvg: null })}
+                title={z.label}
+                onClick={() => setBackground({ field3d: z.camera, fieldSvg: null })}
                 className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
               >
-                <img src={p.thumb} alt={p.name} loading="lazy" className="aspect-4/3 w-full rounded object-cover" />
-                <span className="text-[11px]">{p.name}</span>
+                <span className="flex aspect-4/3 w-full items-center justify-center rounded bg-muted text-lg font-semibold text-muted-foreground">{i}</span>
+                <span className="text-[11px]">{z.label}</span>
               </button>
             ))}
           </div>

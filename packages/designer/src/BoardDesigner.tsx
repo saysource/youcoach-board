@@ -7,7 +7,7 @@ import type { ThemeSetting } from './lib/use-theme'
 // TEMPORARY default field background. Will be replaced once asset locations are
 // defined/loaded dynamically (the URL just feeds the doc's background.image).
 import defaultFieldImage from './assets/field0.jpg'
-import { DEFAULT_FIELD_PRESET } from './lib/field-presets'
+import { DEFAULT_ZONE } from './lib/field-zones'
 
 // Base image kept for legacy (fieldSvg) docs; figure scale for the default field.
 const DEFAULT_FIELD_FIGURE_SCALE = 0.3
@@ -43,7 +43,7 @@ export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeContro
       ...bg,
       image: bg?.image ?? (legacy ? defaultFieldImage : null),
       fieldSvg: bg?.fieldSvg ?? null,
-      field3d: bg?.field3d ?? (legacy ? null : DEFAULT_FIELD_PRESET.camera),
+      field3d: bg?.field3d ?? (legacy ? null : DEFAULT_ZONE.camera),
       figureScale: bg?.figureScale ?? DEFAULT_FIELD_FIGURE_SCALE,
     },
   }
