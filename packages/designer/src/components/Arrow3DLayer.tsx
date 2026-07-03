@@ -1,7 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type Arrow3DElement } from '@youcoach-board/core'
-import { createArrowGeometry, makeArrow3DCamera } from '../lib/arrow3d'
+import { createArrowGeometry, makeArrow3DCamera, arrow3DWorldHandles } from '../lib/arrow3d'
+import { buildProjectionMatrix, worldToBoard, DEFAULT_HEIGHT } from '../lib/homography-camera'
 
 /** Imperative API the InteractiveBoard uses to hit-test 3D arrows (which aren't
  *  SVG, so they can't be clicked through the normal element handlers). */
@@ -14,6 +15,9 @@ interface Props {
   elements: Arrow3DElement[]
   selectedIds: string[]
   viewport: { zoom: number; panX: number; panY: number }
+  /** The active field's homography (metric→board px). When set, arrows render in
+   *  the field's perspective via a custom projection; otherwise the fixed camera. */
+  homography: number[] | null
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
 }
@@ -23,7 +27,19 @@ interface Ctx {
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
   pickCamera: THREE.PerspectiveCamera
+  customCam: THREE.Camera
   meshes: Map<string, THREE.Mesh>
+}
+
+// 2D point-in-triangle (for hit-testing arrows under the custom projection).
+function pointInTri(px: number, py: number, a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): boolean {
+  const d = (p1: { x: number; y: number }, p2: { x: number; y: number }, p3: { x: number; y: number }) => (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
+  const d1 = d({ x: px, y: py }, a, b)
+  const d2 = d({ x: px, y: py }, b, c)
+  const d3 = d({ x: px, y: py }, c, a)
+  const neg = d1 < 0 || d2 < 0 || d3 < 0
+  const pos = d1 > 0 || d2 > 0 || d3 > 0
+  return !(neg && pos)
 }
 
 // Track the geometry inputs so we only rebuild the (expensive) mesh when a shape
@@ -63,7 +79,7 @@ function hexColor(fill: string): { color: number; alpha: number } {
   return { color: parseInt(hex, 16), alpha: 1 }
 }
 
-export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow3DLayer({ elements, selectedIds, viewport, svgRef, containerRef }, ref) {
+export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow3DLayer({ elements, selectedIds, viewport, homography, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -81,27 +97,32 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     const camera = makeArrow3DCamera()
     scene.add(camera)
 
+    // Lit from above the pitch. The frustum/plane are sized for the metric pitch
+    // (x∈0..105, z∈0..68) used under the homography projection; it also covers the
+    // small near-origin world of the default fixed camera.
     const dir = new THREE.DirectionalLight(0xffffff, 3)
-    dir.position.set(0, 20, 6).normalize()
+    dir.position.set(72, 120, 44)
+    dir.target.position.set(52, 0, 34)
     dir.castShadow = true
-    const d = 40
+    const d = 80
     dir.shadow.camera.left = -d
     dir.shadow.camera.right = d
     dir.shadow.camera.top = d
     dir.shadow.camera.bottom = -d
-    dir.shadow.camera.near = 0.01
-    dir.shadow.camera.far = 1000
+    dir.shadow.camera.near = 1
+    dir.shadow.camera.far = 400
     dir.shadow.mapSize.set(2048, 2048)
     scene.add(dir)
+    scene.add(dir.target)
     scene.add(new THREE.AmbientLight(0x909090))
 
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ opacity: 0.28 }))
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.ShadowMaterial({ opacity: 0.28 }))
     plane.rotation.set(-0.5 * Math.PI, 0, 0)
     plane.receiveShadow = true
     plane.name = 'ground'
     scene.add(plane)
 
-    ctxRef.current = { renderer, scene, camera, pickCamera: makeArrow3DCamera(), meshes: new Map() }
+    ctxRef.current = { renderer, scene, camera, pickCamera: makeArrow3DCamera(), customCam: new THREE.Camera(), meshes: new Map() }
     return ctxRef.current
   }
 
@@ -173,19 +194,28 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     canvas.style.width = `${rect.width}px`
     canvas.style.height = `${rect.height}px`
     ctx.renderer.setSize(rect.width, rect.height, false)
-    // Zoom/pan: render the visible board sub-rect (matches the SVG viewBox), so
-    // the arrows track pan/zoom exactly like the 2D layer.
-    const zoom = viewport.zoom || 1
-    ctx.camera.setViewOffset(BOARD_WIDTH, BOARD_HEIGHT, viewport.panX, viewport.panY, BOARD_WIDTH / zoom, BOARD_HEIGHT / zoom)
-    ctx.camera.updateProjectionMatrix()
-    ctx.renderer.render(ctx.scene, ctx.camera)
+    if (homography) {
+      // Custom projection built from the field homography: the ground plane (+
+      // shadow) reproduces the field perspective exactly; height lifts screen-up.
+      const m = buildProjectionMatrix(homography, viewport, DEFAULT_HEIGHT)
+      ctx.customCam.projectionMatrix.set(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15])
+      ctx.customCam.projectionMatrixInverse.copy(ctx.customCam.projectionMatrix).invert()
+      ctx.customCam.updateMatrixWorld()
+      ctx.renderer.render(ctx.scene, ctx.customCam)
+    } else {
+      // Default fixed camera: render the visible board sub-rect (tracks pan/zoom).
+      const zoom = viewport.zoom || 1
+      ctx.camera.setViewOffset(BOARD_WIDTH, BOARD_HEIGHT, viewport.panX, viewport.panY, BOARD_WIDTH / zoom, BOARD_HEIGHT / zoom)
+      ctx.camera.updateProjectionMatrix()
+      ctx.renderer.render(ctx.scene, ctx.camera)
+    }
   }
 
-  // Re-render whenever the document/selection/viewport change.
+  // Re-render whenever the document/selection/viewport/field change.
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, selectedIds, viewport])
+  }, [elements, selectedIds, viewport, homography])
 
   // Re-render on container resize (the letterbox rect moves/scales).
   useEffect(() => {
@@ -201,6 +231,19 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
     pick(boardX: number, boardY: number): string | null {
       const ctx = ctxRef.current
       if (!ctx) return null
+      if (homography) {
+        // Custom projection: THREE's raycaster only supports std cameras, so hit-test
+        // the arrow's projected triangle (tail–apex–head) in board space, top first.
+        for (let i = elements.length - 1; i >= 0; i--) {
+          const e = elements[i]
+          const [t, h, a] = arrow3DWorldHandles(e.x, e.y, e.z, e.splineWidth, e.splineHeight)
+          const T = worldToBoard(homography, t.x, t.y, t.z)
+          const H = worldToBoard(homography, h.x, h.y, h.z)
+          const A = worldToBoard(homography, a.x, a.y, a.z)
+          if (pointInTri(boardX, boardY, T, H, A)) return e.id
+        }
+        return null
+      }
       // Raycast with the full-board (no view-offset) camera so board coords from
       // clientToBoard map directly — pan/zoom is already baked into those coords.
       const ndc = new THREE.Vector2((boardX / BOARD_WIDTH) * 2 - 1, -(boardY / BOARD_HEIGHT) * 2 + 1)

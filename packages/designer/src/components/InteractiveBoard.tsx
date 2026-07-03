@@ -64,6 +64,8 @@ import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMa
 import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { arrow3DHandlePositions, arrow3DWorldHandles, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
+import { fieldHomography } from '../lib/field-reference'
+import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
 const MIN_SIZE = 6 // smallest box dimension a resize can produce (board units)
@@ -488,6 +490,24 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // it matches the projection the layer uses for full-board coordinates.
   const arrow3dLayerRef = useRef<Arrow3DLayerHandle>(null)
   const [arrow3dCam] = useState(() => makeArrow3DCamera())
+  // Active field homography (metric metres ↔ board px). When set, arrows live in
+  // metric pitch coordinates and render in the field's perspective; otherwise the
+  // default fixed camera + its world units.
+  const fieldH = fieldHomography(doc.background.fieldSvg)
+  // Board point → ground position (metric metres under a field, else fixed ground).
+  function arrow3dGround(p: Point): { x: number; z: number } | null {
+    return fieldH ? boardToMetric(fieldH, p.x, p.y) : boardToGround(p.x, p.y, arrow3dCam)
+  }
+  // The three handle board positions (tail, head, apex) for an arrow.
+  function arrow3dHandleBoard(el: Arrow3DElement): { x: number; y: number }[] {
+    if (fieldH) {
+      const [t, h, a] = arrow3DWorldHandles(el.x, el.y, el.z, el.splineWidth, el.splineHeight)
+      return [worldToBoard(fieldH, t.x, t.y, t.z), worldToBoard(fieldH, h.x, h.y, h.z), worldToBoard(fieldH, a.x, a.y, a.z)]
+    }
+    return arrow3DHandlePositions(el.x, el.y, el.z, el.splineWidth, el.splineHeight)
+  }
+  // Defaults for a new arrow — metres under a field homography, fixed-camera units otherwise.
+  const arrow3dDefaults = fieldH ? { ...ARROW3D_DEFAULTS, splineWidth: 18, splineHeight: 4, stickWidth: 1.2, thickness: 0.3, tipWidth: 3, tipLength: 5 } : ARROW3D_DEFAULTS
   // Draft while drag-creating (tail + head on the ground), preview-rendered.
   const [arrow3dDraft, setArrow3dDraft] = useState<{ tail: { x: number; z: number }; head: { x: number; z: number } } | null>(null)
   // In-progress edit of one arrow (drag a handle or the body).
@@ -503,19 +523,19 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       stroke: '#000000',
       strokeWidth: 1,
       strokeStyle: 'solid',
-      fill: ARROW3D_DEFAULTS.fill,
+      fill: arrow3dDefaults.fill,
       fillStyle: 'solid',
       x,
       z,
       y,
       splineWidth,
-      splineHeight: ARROW3D_DEFAULTS.splineHeight,
-      splineLength: ARROW3D_DEFAULTS.splineLength,
-      stickWidth: ARROW3D_DEFAULTS.stickWidth,
-      thickness: ARROW3D_DEFAULTS.thickness,
-      tipWidth: ARROW3D_DEFAULTS.tipWidth,
-      tipLength: ARROW3D_DEFAULTS.tipLength,
-      opacity: ARROW3D_DEFAULTS.opacity,
+      splineHeight: arrow3dDefaults.splineHeight,
+      splineLength: arrow3dDefaults.splineLength,
+      stickWidth: arrow3dDefaults.stickWidth,
+      thickness: arrow3dDefaults.thickness,
+      tipWidth: arrow3dDefaults.tipWidth,
+      tipLength: arrow3dDefaults.tipLength,
+      opacity: arrow3dDefaults.opacity,
     }
   }
 
@@ -537,10 +557,17 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function dragArrow3D(g: NonNullable<typeof arrow3dGesture>, p: Point) {
     if (g.kind === 'apex') {
       const apex = arrow3DWorldHandles(g.orig.x, g.orig.y, g.orig.z, g.orig.splineWidth, g.orig.splineHeight)[2]
-      editArrow3D(g, { splineHeight: boardToHeight(p.x, p.y, apex.z, arrow3dCam) })
+      if (fieldH) {
+        // Local vertical scale (board px per metre of height) about the apex.
+        const g0 = worldToBoard(fieldH, apex.x, 0, apex.z)
+        const perM = g0.y - worldToBoard(fieldH, apex.x, 1, apex.z).y
+        editArrow3D(g, { splineHeight: Math.abs(perM) > 1e-4 ? Math.max(0, (g0.y - p.y) / perM) : g.orig.splineHeight })
+      } else {
+        editArrow3D(g, { splineHeight: boardToHeight(p.x, p.y, apex.z, arrow3dCam) })
+      }
       return
     }
-    const ground = boardToGround(p.x, p.y, arrow3dCam)
+    const ground = arrow3dGround(p)
     if (!ground) return
     if (g.kind === 'body') {
       editArrow3D(g, { x: g.orig.x + (ground.x - g.grabGround.x), z: g.orig.z + (ground.z - g.grabGround.z) })
@@ -1016,7 +1043,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
     // 3D arrow: drag on the ground plane to set tail → head; created on pointer-up.
     if (arrow3dTool) {
-      const g = boardToGround(p.x, p.y, arrow3dCam)
+      const g = arrow3dGround(p)
       if (g) {
         setArrow3dDraft({ tail: g, head: g })
         try {
@@ -1096,7 +1123,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         const el = doc.elements.find((x) => x.id === hitId)
         if (el?.type === 'arrow3d') {
           setSelection(e.shiftKey ? [...new Set([...selectedIds, hitId])] : [hitId])
-          const ground = boardToGround(p.x, p.y, arrow3dCam)
+          const ground = arrow3dGround(p)
           if (ground) {
             beginTransaction()
             setArrow3dGesture({ id: hitId, kind: 'body', orig: el, grabGround: ground })
@@ -1118,7 +1145,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function onArrow3DHandleDown(el: Arrow3DElement, kind: 'tail' | 'head' | 'apex', e: React.PointerEvent) {
     e.stopPropagation()
     const p = svgRef.current ? clientToBoard(svgRef.current, e.clientX, e.clientY) : { x: 0, y: 0 }
-    const ground = boardToGround(p.x, p.y, arrow3dCam) ?? { x: el.x, z: el.z }
+    const ground = arrow3dGround(p) ?? { x: el.x, z: el.z }
     beginTransaction()
     setArrow3dGesture({ id: el.id, kind, orig: el, grabGround: ground })
     try {
@@ -1388,7 +1415,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     }
     // 3D arrow: extend the create-draft, or edit a handle / move the body.
     if (arrow3dDraft) {
-      const g = boardToGround(p.x, p.y, arrow3dCam)
+      const g = arrow3dGround(p)
       if (g) setArrow3dDraft((d) => (d ? { ...d, head: g } : d))
       return
     }
@@ -1443,7 +1470,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const { tail, head } = arrow3dDraft
       setArrow3dDraft(null)
       const dragged = Math.hypot(tail.x - head.x, tail.z - head.z) >= 0.5
-      const pl = dragged ? arrow3dPlacement(tail, head) : { x: tail.x, z: tail.z, y: 0, splineWidth: ARROW3D_DEFAULTS.splineWidth }
+      const pl = dragged ? arrow3dPlacement(tail, head) : { x: tail.x, z: tail.z, y: 0, splineWidth: arrow3dDefaults.splineWidth }
       createFigure(makeArrow3D(pl.x, pl.z, pl.y, pl.splineWidth))
     } else if (arrow3dGesture) {
       setArrow3dGesture(null)
@@ -1642,7 +1669,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     ? [...arrow3dElements, (() => {
         const d = arrow3dDraft
         const dragged = Math.hypot(d.tail.x - d.head.x, d.tail.z - d.head.z) >= 0.5
-        const pl = dragged ? arrow3dPlacement(d.tail, d.head) : { x: d.tail.x, z: d.tail.z, y: 0, splineWidth: ARROW3D_DEFAULTS.splineWidth }
+        const pl = dragged ? arrow3dPlacement(d.tail, d.head) : { x: d.tail.x, z: d.tail.z, y: 0, splineWidth: arrow3dDefaults.splineWidth }
         const el = makeArrow3D(pl.x, pl.z, pl.y, pl.splineWidth)
         el.id = 'arrow3d-draft'
         return el
@@ -1651,7 +1678,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Selected arrow's handle positions in BOARD coords (pure — projected via the
   // fixed camera). Rendered in an SVG overlay that shares the board viewBox, so
   // pan/zoom/letterbox are handled without touching a ref during render.
-  const arrow3dHandles = selectedArrow3D ? arrow3DHandlePositions(selectedArrow3D.x, selectedArrow3D.y, selectedArrow3D.z, selectedArrow3D.splineWidth, selectedArrow3D.splineHeight) : null
+  const arrow3dHandles = selectedArrow3D ? arrow3dHandleBoard(selectedArrow3D) : null
   // Group frame box (padded for display) for a multi-selection — the interactive
   // group resize/rotate chrome is drawn on it.
   const groupUnion = liveSelected2D.length >= 2 ? unionBounds(liveSelected2D) : null
@@ -1908,7 +1935,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         </g>
       </BoardCanvas>
       {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
-      <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} />
+      <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={fieldH} />
       {/* Field-homography calibration overlay (dedicated mode). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
