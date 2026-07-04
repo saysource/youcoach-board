@@ -6,12 +6,20 @@
 // Framework-free (three.js only). Extend KNOWN_OBJECTS to grow the palette.
 
 import * as THREE from 'three'
-// The cone is a real modelled asset (Blender → glTF), embedded as base64 so it
-// ships inside the bundle — no runtime fetch, so it stays embed-safe in every
-// host (App2, bare page, …) regardless of asset-serving base paths.
+// Real modelled assets (Blender → glTF), embedded as base64 so they ship inside
+// the JS bundle — no runtime fetch, so they stay embed-safe in every host (App2,
+// bare page, …) regardless of asset-serving base paths.
 import { CONE_GLB_BASE64 } from './cone-glb'
+import { HIGH_CONE_GLB_BASE64 } from './high-cone-glb'
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone'] as const
+// GLB-backed objects: embedded model bytes + toon colour. Add a row (and an
+// entry in KNOWN_OBJECTS + the catalog) to grow the palette.
+const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
+  cone: { data: CONE_GLB_BASE64, color: 0xf4611e },
+  high_cone: { data: HIGH_CONE_GLB_BASE64, color: 0xf4611e },
+}
+
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
@@ -106,14 +114,17 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
   return geom
 }
 
-// Parse + normalise the cone once, lazily. Like the procedural ball/cube, the
-// stored geometry is centered at the origin and fits a unit (1 m) box, so
-// Object3DLayer can scale it by `size` and lift it by size/2 uniformly. We
-// clone it per instance so each mesh owns disposable geometry.
-let coneGeometry: THREE.BufferGeometry | null = null
-function unitConeGeometry(): THREE.BufferGeometry {
-  if (!coneGeometry) {
-    const geom = parseGlbGeometry(base64ToArrayBuffer(CONE_GLB_BASE64))
+// Parse + normalise a GLB object once per id, lazily. Like the procedural
+// ball/cube, the stored geometry is centered at the origin and fits a unit (1 m)
+// box (its largest dimension = 1), so Object3DLayer can scale it by `size` and
+// rest it on the ground. We clone it per instance so each mesh owns disposable
+// geometry. The model's smooth normals are kept — they give a visible
+// light→dark falloff toward the silhouette that flat faceting washes out.
+const geomCache = new Map<string, THREE.BufferGeometry>()
+function unitGlbGeometry(id: string, data: string): THREE.BufferGeometry {
+  let geom = geomCache.get(id)
+  if (!geom) {
+    geom = parseGlbGeometry(base64ToArrayBuffer(data))
     geom.computeBoundingBox()
     const box = geom.boundingBox!
     const center = box.getCenter(new THREE.Vector3())
@@ -121,11 +132,9 @@ function unitConeGeometry(): THREE.BufferGeometry {
     const maxDim = Math.max(size.x, size.y, size.z) || 1
     geom.translate(-center.x, -center.y, -center.z)
     geom.scale(1 / maxDim, 1 / maxDim, 1 / maxDim)
-    // Keep the model's smooth normals: on this shallow cone they give a visible
-    // light→dark falloff toward the silhouette, which flat faceting washed out.
-    coneGeometry = geom
+    geomCache.set(id, geom)
   }
-  return coneGeometry.clone()
+  return geom.clone()
 }
 
 // A stepped grayscale ramp used as a toon gradientMap. The few, widely-spaced
@@ -174,9 +183,10 @@ function toonOutline(geometry: THREE.BufferGeometry): THREE.Mesh {
 
 /** Build the mesh for a 3D object id (unit size, centered at the origin). */
 export function buildObject3D(objectId: string): THREE.Mesh {
-  if (objectId === 'cone') {
-    const geom = unitConeGeometry()
-    const mesh = new THREE.Mesh(geom, extremeToon(0xf4611e))
+  const glb = GLB_OBJECTS[objectId]
+  if (glb) {
+    const geom = unitGlbGeometry(objectId, glb.data)
+    const mesh = new THREE.Mesh(geom, extremeToon(glb.color))
     mesh.castShadow = true
     mesh.add(toonOutline(geom)) // silhouette ink (shares the mesh geometry)
     mesh.add(creaseEdges(geom)) // internal strokes along the rim/creases

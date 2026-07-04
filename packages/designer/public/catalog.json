@@ -17546,6 +17546,12 @@
      "thumb": "materials3d/cone",
      "w": 100,
      "h": 100
+    },
+    {
+     "object3d": "high_cone",
+     "thumb": "materials3d/high_cone",
+     "w": 100,
+     "h": 100
     }
    ]
   }
