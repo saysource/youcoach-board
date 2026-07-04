@@ -17578,6 +17578,12 @@
      "h": 100
     },
     {
+     "object3d": "speed_ladder",
+     "thumb": "materials3d/speed_ladder",
+     "w": 100,
+     "h": 100
+    },
+    {
      "object3d": "goal_full",
      "thumb": "materials3d/goal_full",
      "w": 100,

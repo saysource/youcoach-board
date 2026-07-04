@@ -17,6 +17,7 @@ import { CONE_HURDLE_GLB_BASE64 } from './cone-hurdle-glb'
 import { HURDLE_LOW_GLB_BASE64 } from './hurdle-low-glb'
 import { HURDLE_GLB_BASE64 } from './hurdle-glb'
 import { HURDLE_HIGH_GLB_BASE64 } from './hurdle-high-glb'
+import { SPEED_LADDER_GLB_BASE64 } from './speed-ladder-glb'
 
 // GLB-backed objects: embedded model bytes + toon colour. Add a row (and an
 // entry in KNOWN_OBJECTS + the catalog) to grow the palette.
@@ -27,6 +28,7 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   hurdle_low: { data: HURDLE_LOW_GLB_BASE64, color: 0xf2c200 },
   hurdle: { data: HURDLE_GLB_BASE64, color: 0xf2c200 },
   hurdle_high: { data: HURDLE_HIGH_GLB_BASE64, color: 0xf2c200 },
+  speed_ladder: { data: SPEED_LADDER_GLB_BASE64, color: 0xf2c200 },
 }
 
 // Procedural goals. Built at their real metric size (feet → metres), so they're
@@ -40,7 +42,7 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
@@ -52,7 +54,7 @@ export function isKnownObject(id: string): id is Object3DKind {
 // modelled real width (metres) so they drop in at a sensible scale.
 const OBJECT3D_SIZES: Record<string, number> = {
   goal_full: 1, goal_9: 1, goal_7: 1, goal_futsal: 1, goal_small: 1,
-  cone_hurdle: 3.44, hurdle_low: 2.46, hurdle: 2.46, hurdle_high: 2.46,
+  cone_hurdle: 3.44, hurdle_low: 2.46, hurdle: 2.46, hurdle_high: 2.46, speed_ladder: 3.4,
 }
 export function defaultObject3DSize(objectId: string, fallback: number): number {
   return OBJECT3D_SIZES[objectId] ?? fallback
@@ -113,9 +115,12 @@ interface GlbJson {
   bufferViews: Array<{ byteOffset?: number; byteLength: number }>
 }
 
-/** Minimal, synchronous GLB → BufferGeometry parser for our single-primitive,
- *  un-compressed assets (POSITION + NORMAL + indices). We avoid GLTFLoader here
- *  because it resolves asynchronously, whereas `buildObject3D` must be sync. */
+/** Minimal, synchronous GLB → BufferGeometry parser for our un-compressed assets
+ *  (POSITION + NORMAL + indices). Merges ALL primitives of the first mesh into a
+ *  single geometry — models split by material (e.g. a hurdle's frame + bars, a
+ *  ladder's rails + rungs) have several primitives, and dropping the extras
+ *  would leave parts (like the legs) missing. We avoid GLTFLoader because it
+ *  resolves asynchronously, whereas `buildObject3D` must be sync. */
 function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
   const dv = new DataView(buf)
   let json: GlbJson | null = null
@@ -129,7 +134,7 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
     else if (type === 0x004e4942) bin = buf.slice(start, start + len)
     off = start + len + ((4 - (len % 4)) % 4) // chunks are 4-byte aligned
   }
-  if (!json || !bin) throw new Error('cone.glb: missing JSON or BIN chunk')
+  if (!json || !bin) throw new Error('glb: missing JSON or BIN chunk')
 
   const read = (accessorIndex: number) => {
     const acc = json!.accessors[accessorIndex]
@@ -139,11 +144,36 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
     return new comp.array(bin!, byteOffset, acc.count * NUM_COMPONENTS[acc.type])
   }
 
-  const prim = json.meshes[0].primitives[0]
+  // Gather every primitive, then concatenate into one position/normal/index set.
+  const prims = json.meshes[0].primitives.map((p) => ({
+    pos: read(p.attributes.POSITION) as Float32Array,
+    nrm: p.attributes.NORMAL != null ? (read(p.attributes.NORMAL) as Float32Array) : null,
+    idx: p.indices != null ? read(p.indices) : null,
+  }))
+  const totalVerts = prims.reduce((n, p) => n + p.pos.length / 3, 0)
+  const totalIdx = prims.reduce((n, p) => n + (p.idx ? p.idx.length : 0), 0)
+  const positions = new Float32Array(totalVerts * 3)
+  const normals = new Float32Array(totalVerts * 3)
+  const indices = new Uint32Array(totalIdx)
+  let vOff = 0
+  let iOff = 0
+  let hasNormals = true
+  for (const p of prims) {
+    positions.set(p.pos, vOff * 3)
+    if (p.nrm) normals.set(p.nrm, vOff * 3)
+    else hasNormals = false
+    if (p.idx) {
+      for (let k = 0; k < p.idx.length; k++) indices[iOff + k] = p.idx[k] + vOff
+      iOff += p.idx.length
+    }
+    vOff += p.pos.length / 3
+  }
+
   const geom = new THREE.BufferGeometry()
-  geom.setAttribute('position', new THREE.BufferAttribute(read(prim.attributes.POSITION), 3))
-  if (prim.attributes.NORMAL != null) geom.setAttribute('normal', new THREE.BufferAttribute(read(prim.attributes.NORMAL), 3))
-  if (prim.indices != null) geom.setIndex(new THREE.BufferAttribute(read(prim.indices), 1))
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  if (hasNormals) geom.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
+  if (totalIdx) geom.setIndex(new THREE.BufferAttribute(indices, 1))
+  if (!hasNormals) geom.computeVertexNormals()
   return geom
 }
 
