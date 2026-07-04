@@ -319,23 +319,15 @@ We still need to define what to show in each category, for now use an empty div.
 
 
 ## TODO
-- eraser tool
-- copy and paste
+- arrow 3D
 - JSON export/import
-- background SVG adjust
-- canvas zoom
 - laser pointer
 - presentation mode
-- Skin Editor
-- Kit Editor
 - Import image (where to save it?)
-- Text support with frame
 - export image
 - animation mode
-- snap to geometry
 - mini-tool help
 - keyboard shortcuts
-- create formation
 - i18n
 - favorites figures
 - multiline point dragging align with other points.
@@ -814,4 +806,353 @@ shift + tab	Move focus to previous object
 
 Text
 ⌘ + B	Bold
+
+
+Be sure to use the proper key shortcuts on windows, the combinations provided here are for Mac.
+The main menu item Help should show a dialog with all the combinations similar to the provided picture. Enable this menu item.
+
+
+- copy/paste style: the properties to copy and paset are all exept for geometry (position, points, scale)
+- implement, when more than a single element is selected, all the alignment tools:
+  - Align left
+  - Center horizontally
+  - Align right
+  - Distribute horizontally
+  - Align top
+  - Align vertically
+  - Align bottom
+  - Distribute vertically
+- Add the alignment items to the properties panel menu (the one open with the three dots icon)
+
+
+----
+
+
+- Add a popover description to the arrows used in some players categories in the drawer to explain what the direction means (Players facing left, upword, downword, right).
+
+When the background field is:
+ - fields/11/49 (horizontal soccer field) 
+ - fields/11/19 (vertical soccer field)
+ - fields/futsal/1 (vertical futsal field)
+ 
+ Add a menu item in the more tools that opens a submenu with all the typical game systems.
+ You can find a reference of correct positions here:
+ @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client/src/core/components/matches/pre-match/formations.ts
+
+Reference area of each field on the board:
+- fields/11/49
+<rect x="33" y="90" width="1120" height="719"></rect>
+
+- fields/11/19
+<rect x="327" y="27" width="546" height="851"></rect>
+
+- fields/futsal/1
+<rect x="409" y="85" width="376" height="732"></rect>
+
+Once the user clicks a game systems (i.e. 4-3-3), we show a window where the user can pick
+ - The direction (from left to right / right to left for horizontal fields, from bottom to top or top to bottom for vertical field)
+ - The token style: if there are tokens already in the canvas, propose them as options, if less than two, fill the options with a solid red (#e37268) and solid blue (#799eed)
+ 
+After the choice of direction and style we add the tokens to the canvas (11 for soccer, 5 for futsal) accordingly with the coordinates.
+
+Ideally, the available "Game system" should be defined at field level, so we can define not only which game systems are available, but also complex setups (typical rondos 5vs5, attack situation 3vs2, etc...)
+
+
+## Snap to Objects
+
+Snap to object should be activated by using a special combonation: ⌥ + S
+or by selecting the menu Preferences > Snap to objects from the main menu, to be added after Keyboard Shortcuts menu item.
+
+The implementation should follow the same logic implemented in Excalidraw for what concerns the snap to object: when enabled, moving an element on the page will be subject to magnetic effect on notable points: center of elements, corners of elements, equidistance from elements.
+Lines will be drawn to highlight the snap and the equality of discance between objects.
+If the user is moving multiple objects at time, the bounding box of the selection will be affected by the snap, not it's contained objects.
+
+Check the pictures for a clear idea of how the lines are drawn in Excalidraw.
+
+
+## Lasso selection
+
+Lasso selection should be added to the More Tools menu, and allows to draw the selection with a free drawing.
+All the elements that event temporarily are hit from the closed curve drawn by the user are immediately selected.
+
+
+## Arrow 3D
+
+The last element we want to add to our designer are the 3D arrows.
+This is a real 3D object shown in the designer by means of three.js
+The object is create dynamicall, so we can have full control on curve, height, thickness, color, opacity, etc..
+The arrow and the options that can be controlled is implemented in this file inside YouCoach Video Analysis, and we will take the idea for the implementation:
+@/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachvideo/client/src/presentation/canvas/Layer3D.tsx
+
+The arrow should have 3 control points: start position, end position and height handle.
+The geometry creation can be copied from this file:
+@/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachvideo/client/src/presentation/figures/arrows3Dutils.ts
+
+Properties of the arrow:
+- stickWidth: number (this is actually always )
+- thickness: number,
+- tipWidth: number,
+- tipLength: number,
+- splineWidth: number,
+- splineHeight: number,
+- splineLength: number,
+- x: number, // x Position of the arrow in the scene
+- z: number, // Vector3(x, 0, y)
+- y: number  // Rotation in Rads around y axis (fixed at x,z)  (0, y, 0)
+
+Here are some defaults we use in youcoach video analysis:
+
+rrowElement.stickWidth = 0.3;
+arrowElement.thickness = 0.05;
+arrowElement.tipWidth = 0.15;
+arrowElement.tipLength = 0.5;
+arrowElement.splineWidth = 8;
+arrowElement.splineHeight = 3;
+arrowElement.splineLength = 1;
+element.fill = '#FF0000';
+arrowElement.x = -3;
+arrowElement.z = 3;
+arrowElement.y = -Math.PI/4;
+
+
+## Homography
+
+The result of the arrows is fantastic, so fantastic that the next natural step would by to try mapping the real prospective of the plan on which the arrows sit.
+
+This is tricky because each fiels was designed by hand with simple SVG drawings.
+
+My proposal is to create a small tool to eventually calculate an homogrfic matrix so that the 3D plane matches the field prospective.
+
+We use essentially 3 type of fields:
+1. soccer 11
+2. training small field
+3. futsal
+
+How the tool works:
+
+1. we define notable points on a 2D top view image of a field, which will be the base reference
+2. we mark the points on the image
+
+With enough points, and the assumption that each points are at the same 0 quote, we can adjust the field prospective.
+
+Does this make sense?
+
+The homography matric could then be part of the field information.
+
+
+'images/optimized/fields/11/0.svg': { ref: 'area', position: [20, 45.3, -20.92], target: [20, 0, 12], fov: 36 },
+
+'images/optimized/fields/11/32.svg': { ref: 'area', position: [20, 55.99, 15.98], target: [20, 0, 15], fov: 35 },
+
+'images/optimized/fields/11/44.svg': { ref: 'area', position: [20, 48.98, 45.65], target: [20, 0, 18.5], fov: 33 },
+
+'images/optimized/fields/11/1.svg': { ref: 'soccer11', position: [52.5, 119, -63.17], target: [52.5, 0, 26.5], fov: 36 },
+
+'images/optimized/fields/11/2.svg': { ref: 'soccer11', position: [34.53, 19.08, 34], target: [4, 0, 34], fov: 23 },
+
+'images/optimized/fields/11/3.svg': { ref: 'soccer11', position: [54.74, 38.64, 34], target: [9.5, 0, 34], fov: 30 },
+
+'images/optimized/fields/11/4.svg': { ref: 'soccer11', position: [52.28, 28.28, 23], target: [24, 0, 23], fov: 49.5 },
+
+'images/optimized/fields/11/5.svg': { ref: 'soccer11', position: [53.15, 32.87, 34], target: [27, 0, 34], fov: 49.5 },
+
+'images/optimized/fields/11/6.svg': { ref: 'soccer11', position: [36.57, 29.02, 34], target: [17, 0, 34], fov: 49.5 },
+
+'images/optimized/fields/11/7.svg': { ref: 'soccer11', position: [119.74, 77.47, 34], target: [66.5, 0, 34], fov: 50.5 },
+
+'images/optimized/fields/11/8.svg': { ref: 'area', position: [20, 59.59, -9.68], target: [20, 0, 15], fov: 30 },
+
+'images/optimized/fields/11/9.svg': { ref: 'area', position: [20, 50.57, -32.46], target: [20, 0, 11.5], fov: 30.5 },
+
+'images/optimized/fields/11/10.svg': { ref: 'area', position: [20, 50.57, -32.46], target: [20, 0, 11.5], fov: 30.5 },
+
+'images/optimized/fields/11/10.svg': { ref: 'soccer11', position: [52.5, 133.08, -96.44], target: [52.5, 0, 25.5], fov: 30 },
+
+'images/optimized/fields/11/11.svg': { ref: 'area', position: [20, 49.43, -30.21], target: [20, 0, 12], fov: 31.5 },
+
+'images/optimized/fields/11/12.svg': { ref: 'soccer11', position: [72.73, 51.91, 5.62], target: [73, 0, 31.5], fov: 54 },
+
+'images/optimized/fields/11/14.svg': { ref: 'soccer11', position: [79.14, 54.7, 9.32], target: [79.5, 0, 43.5], fov: 42.5 },
+
+'images/optimized/fields/11/15.svg': { ref: 'soccer11', position: [51.86, 84.54, -36.92], target: [52.5, 0, 24.5], fov: 51.5 },
+
+'images/optimized/fields/11/46.svg': { ref: 'soccer11', position: [69.19, 60.67, 13.91], target: [69.5, 0, 43.5], fov: 52 },
+
+'images/optimized/fields/11/16.svg': { ref: 'soccer11', position: [76.08, 49.35, -9.46], target: [76.5, 0, 30.5], fov: 52 },
+
+'images/optimized/fields/11/22.svg': { ref: 'soccer11', position: [145.23, 84.52, 34], target: [78, 0, 34], fov: 30 },
+
+'images/optimized/fields/11/23.svg': { ref: 'soccer11', position: [133.43, 60.26, 34], target: [85.5, 0, 34], fov: 30 },
+
+'images/optimized/fields/11/24.svg': { ref: 'soccer11', position: [118.41, 45.29, 23], target: [89, 0, 23], fov: 37 },
+
+'images/optimized/fields/11/25.svg': { ref: 'soccer11', position: [114.61, 30.19, 34], target: [95, 0, 34], fov: 37 },
+
+'images/optimized/fields/11/26.svg': { ref: 'soccer11', position: [18.69, 41.11, 56.75], target: [17.5, 0, 34], fov: 39 },
+
+'images/optimized/fields/11/26.svg': { ref: 'soccer11', position: [20, 47.02, 76.57], target: [20, 0, 38.5], fov: 35 },
+
+'images/optimized/fields/11/27.svg': { ref: 'soccer11', position: [139.62, 104.77, 33.5], target: [63.5, 0, 33.5], fov: 37 },
+
+'images/optimized/fields/11/28.svg': { ref: 'soccer11', position: [51.23, 64.42, 33.5], target: [26.5, 0, 33.5], fov: 45.5 },
+
+'images/optimized/fields/11/29.svg': { ref: 'soccer11', position: [37.19, 57.7, 33.5], target: [19, 0, 33.5], fov: 41.5 },
+
+'images/optimized/fields/11/30.svg': { ref: 'soccer11', position: [22.89, 43.27, 33.5], target: [12.5, 0, 33.5], fov: 41.5 },
+
+'images/optimized/fields/11/31.svg': { ref: 'soccer11', position: [21.5, 29.46, 34], target: [9, 0, 34], fov: 41.5 },
+
+'images/optimized/fields/11/33.svg': { ref: 'soccer11', position: [45.26, 53.23, 25], target: [21, 0, 25], fov: 42 },
+
+'images/optimized/fields/11/34.svg': { ref: 'soccer11', position: [29.26, 34.58, 22.5], target: [13.5, 0, 22.5], fov: 46.5 },
+
+'images/optimized/fields/11/35.svg': { ref: 'soccer11', position: [162.92, 104.18, 34], target: [75.5, 0, 34], fov: 25 },
+
+'images/optimized/fields/11/36.svg': { ref: 'soccer11', position: [126.76, 86.87, 34], target: [82.5, 0, 34], fov: 27 },
+
+'images/optimized/fields/11/37.svg': { ref: 'soccer11', position: [134.46, 77.06, 26], target: [81.5, 0, 26], fov: 29 },
+
+'images/optimized/fields/11/38.svg': { ref: 'soccer11', position: [123.59, 70.84, 28.5], target: [87.5, 0, 28.5], fov: 29 },
+
+'images/optimized/fields/11/39.svg': { ref: 'soccer11', position: [110.5, 79.09, -17.7], target: [64, 0, 28], fov: 50.5 },
+
+'images/optimized/fields/11/40.svg': { ref: 'soccer11', position: [90.84, 89.5, -25.48], target: [32, 0, 27.5], fov: 31 },
+
+'images/optimized/fields/11/41.svg': { ref: 'area', position: [20, 65.33, -19.07], target: [20, 0, 13.5], fov: 26.5 },
+
+'images/optimized/fields/11/42.svg': { ref: 'area', position: [20, 54.72, -48.72], target: [20, 0, 11], fov: 26.5 },
+
+'images/optimized/fields/11/43.svg': { ref: 'area', position: [20, 54.32, -44.28], target: [20, 0, 11], fov: 26.5 },
+
+'images/optimized/fields/11/46.svg': { ref: 'soccer11', position: [28, 71.88, 91.87], target: [28, 0, 26], fov: 30 },
+
+'images/optimized/fields/11/47.svg': { ref: 'area', position: [48.93, 14.87, -15.1], target: [28, 0, 17.5], fov: 30 },
+
+
+
+Ok, good job.
+
+Now, due to compatibility, we need to keep these fields manually krafted and roughly mapped.
+The idea is to keep them, but hide them from the palette, and instead propose presets of a real 3D field managed with by three.js
+
+Here is a rought implementation of the field with the goals.
+@/Users/gtoffoli/Library/Application Support/Claude/local-agent-mode-sessions/4b7bba99-8846-4e09-843c-3fd7a009438b/0b379b57-b62e-4bf5-99e7-297d284a2f7d/local_72a1a62f-fb49-4ea3-ac54-54f322bad2fe/outputs
+
+The ball is terrible, but you can keep the field.
+
+The new rendering sandwich:
+
+- Field0 image background or solid background defined by the user
+- 3D scene with the field, which position should be editable with intuitive simple controls when edit background is enabled
+- 2D SVG layer 1
+- 3D scene for objects (we only have the arrow)
+- 2D SVG layer 2 (for elements on top of the 3D and selection figures)
+
+we would have to manage some sort of virtual z-order to tell if an items goes to layer 1 or layer 2.
+
+In the fields palette we will provide a set of available fields which are simply predefined positions of the 3D field, defined like we did earlier:
+{ ref: 'soccer11', position: [28, 71.88, 91.87], target: [28, 0, 26], fov: 30 }
+
+Controls:
+Orbit controls are good, but most user simply don't get it, especially coaches.
+Here are controls that make sense:
+
+rotate (on Y axis, on step of 15 degrees)
+tilt (45 - 90) 
+zoom in
+zoom out
+pan forward
+pan backward
+Reset
+
+FOV fixed at 50.
+
+
+
+## Field lines and background
+
+The lines are currently rasterized as texture, and the quality of the texture degrades quickly.
+What could be a viable solution? Since the field is made of a path, would the Three.js's built-in SVGLoader help? Maybe we can transform it to a 3D geometry.
+This also would help with the second requirement: the texture currently fill the field with a s a solid green background with alternate green bands. We want the field to be transparent, just the white lines, and just add semi-transparent white bands which would have the effect of shading the background. the bands should extend for an entra 20% of the field size, to cover a larger surface.
+
+
+## Elements on the 3D space
+
+Think well, since you are an expert in 3D.
+Right now, when we add an element, its references are based on the container SVG.
+We would like to store the position of the element in the 3D space as well (actually only [x,0,z])
+so that if the user change the field, we may show the shapes on the same original position in the new field space.
+Technically, the right position to use for figures would be the bottom center point.
+This may also impact the scale of the figure, and this is up to you make a proposal.
+
+Right now players and materials use a scale factor based on the field definition and are simply placed on an 
+We want to define a factor the can then be applied to drawing, i.e. 0.8 the height of the goal in the current pose.
+
+### Proposal (implemented) — ground anchor + perspective scale
+
+**Model.** Standing elements (`figure`, `token`) gain one optional field: `ground: [x, z]` — the
+element's anchor on the pitch ground plane, in world **metres** (y is always 0, so we store only the
+two ground coordinates, exactly as the spec asks). The anchor is the figure's **bottom-center** (its
+"feet"), because that is the point that actually touches the grass. `ground` is absent on shapes,
+lines, text and 3D arrows (arrows already carry their own 3D placement).
+
+**The board still owns 2D.** Elements keep their existing 2D box (`x/y/width/height` + `transform`);
+nothing about rendering, hit-testing, selection or export changes. `ground` is a *pin*: it records
+where on the pitch the element sits so we can recompute its 2D placement when the **field camera**
+(`background.field3d`) changes. The bijection board↔ground is the existing projection: a figure's
+bottom-center in board units is `projectToBoard(ground, camera)`, and `boardToGround(bottomCenter,
+camera)` recovers the anchor (both already used by the 3D-arrow tool).
+
+**Keeping it in sync.** The field camera only ever changes inside *Edit-Background* (orbit, zoom,
+zone-pick, reset — all coalesced into one undo step). So:
+  1. On **entering** Edit-Background we (re)derive each standing element's `ground` from its current
+     board bottom-center through the current camera. This self-heals any staleness from ordinary
+     (fixed-camera) editing — moves, duplicates, paste — with no per-edit bookkeeping.
+  2. On **every camera change** we reproject each pinned element: its new bottom-center is
+     `projectToBoard(ground, newCamera)`, so figures stay glued to their pitch spot as you orbit or
+     switch fields. This lives in the store's `setBackground`, the single choke point every camera
+     change flows through.
+
+**Scale.** A player standing in a zoomed-in box should look proportionally bigger than the same
+player on a full-pitch view — the figure scales with how magnified the pitch is at *its* location.
+We measure that magnification as the **ground pixels-per-metre** at the anchor: project a 1 m × 1 m
+ground quad at `ground` and take √(its projected area) — a direction-averaged, perspective-correct
+board-units-per-metre that (unlike a vertical yard-stick) stays well-defined even in a top-down view.
+On a camera change each figure's `transform.scale` is multiplied by `ppm(newCamera)/ppm(oldCamera)`.
+Because `setBackground` always sees the true previous camera, this ratio is exact and self-correcting
+(no drift, even across hundreds of orbit frames), and it naturally supersedes the legacy per-field
+`figureScale` for real 3D fields.
+
+**Metric size — now stored (was a ratio).** Each standing element also stores `sizeM`, its
+real-world height in metres, captured (alongside `ground`) from its board size and the ground-ppm at
+enter-Edit-Background. Scale is then derived ABSOLUTELY under any camera as `sizeM × ppm(camera) /
+localHeight`, rather than by multiplying a per-step ppm ratio. This was originally the deferred
+"0.8 × goal height" idea; it became necessary for correctness: the incremental ratio accumulated, and
+a single degenerate step (a figure passing behind the camera while zooming, where ppm collapses and
+hits the scale clamp) broke the telescoping and left the figure stuck tiny even after it came back
+into view. The absolute form is self-correcting — each camera recomputes size from the stable `sizeM`
+— and `ppm` itself uses the same near-plane w-clamped projection as positions, so a spot near/behind
+the camera can't produce a bogus magnification. `sizeM` is re-derived each enter so a manual resize
+heals, and it opens the door to a coach-facing "size in real-world terms" control later.
+
+### Rectangles + polylines — points stick to the field surface (implemented)
+
+Area/path shapes are pinned **per point**, not by a single anchor: `PolylineElement` gains
+`ground: [x, z][]` (one ground anchor per `points` entry). On a camera change each point is
+re-placed at `projectToBoard(ground[i], newCamera)` and baked straight into `points` (with the
+transform reset to identity, opacity kept), so the shape genuinely **warps** to lie on the grass — a
+pitch rectangle seen obliquely becomes a foreshortened trapezoid, exactly as a flat marking would.
+Because only a polygon can warp, a **rectangle is converted to an equivalent closed 4-point polyline**
+the moment it's pinned (on entering Edit-Background, id/style preserved) — after that it behaves like
+any other pinned polyline. Both the conversion and the per-element ground derivation happen in one
+undoable `pinSetup` step just before the field-edit transaction (idempotent, so re-entry is a no-op;
+staleness from ordinary fixed-camera edits heals because the anchors are re-derived from the current
+points each time).
+
+**Ovals** pin the same way: an `ellipse` is sampled into a 20-point **smooth** (`curve: true`) closed
+polyline (`ellipseToPolyline`, the ellipse analog of `rectToPolyline`) when pinned, then warps
+per-point like any polyline — an oval on the grass foreshortens into a tilted oval under an oblique
+camera, staying smooth through the warp. **Tokens** were already covered by the standing-element pin
+(single bottom-center anchor + ground-ppm scale), same as figures. `draw` (freehand) remains out of
+scope.
 

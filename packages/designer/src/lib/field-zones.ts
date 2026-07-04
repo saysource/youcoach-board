@@ -16,7 +16,7 @@ export interface Zone {
 
 // Temporary soccer-11 set (authored with the tool). Refine/extend with the tool.
 export const FIELD_ZONES: Zone[] = [
-  { id: 'centre', label: 'Centre', target: [52.69, 0, 42.31], camera: { ref: 'soccer11', position: [52.1, 90.19, 77.01], target: [52.69, 0, 42.31], fov: 50 } },
+  { id: 'centre', label: 'Centre', target: [52.69, 0, 42.31], camera: { ref: 'soccer11', position: [52, 90, 80], target: [52, 0, 42], fov: 50 } },
   { id: 'middlefield', label: 'Middlefield', target: [44.01, 0, 33.99], camera: { ref: 'soccer11', position: [75.53, 30.55, 34.54], target: [44.01, 0, 33.99], fov: 50 } },
   { id: 'box', label: 'Box', target: [88.97, 0, 34.32], camera: { ref: 'soccer11', position: [75.27, 34.64, 34.26], target: [88.97, 0, 34.32], fov: 50 } },
   { id: 'right-corner', label: 'Right Corner', target: [19.73, 0, 22.05], camera: { ref: 'soccer11', position: [37.89, 31.23, 22.25], target: [19.73, 0, 22.05], fov: 50 } },
