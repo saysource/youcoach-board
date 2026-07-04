@@ -151,6 +151,11 @@ export interface FigureElement extends BaseElement {
    *  to the pitch, so it keeps its physical spot when the 3D field camera changes.
    *  Absent = not (yet) pinned. See specs/start.md "Elements on the 3D space". */
   ground?: [number, number]
+  /** The figure's real-world height in metres at its ground spot, so its on-board
+   *  size can be derived ABSOLUTELY under any camera (`sizeM × ground-ppm`). Kept
+   *  in sync alongside `ground`; makes scaling self-correcting (a figure that
+   *  passes out of view while zooming returns to its right size). */
+  sizeM?: number
 }
 
 /** A token: an internally-managed disc/jersey badge with a configurable fill and
@@ -183,6 +188,9 @@ export interface TokenElement extends BaseElement {
   /** World-ground anchor `[x, z]` (metres, y=0) — the badge's bottom-center pinned
    *  to the pitch (see FigureElement.ground). */
   ground?: [number, number]
+  /** Real-world height in metres for absolute pinned scaling (see
+   *  FigureElement.sizeM). */
+  sizeM?: number
 }
 
 /** A multiline text label wrapped by a rounded rectangle (which may be
@@ -876,7 +884,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     const width = num(o.width)
     const height = num(o.height)
     if (!figureId || width === null || height === null) return null
-    return { ...base, type: 'figure', figureId, x: num(o.x) ?? 0, y: num(o.y) ?? 0, width, height, colors: parseColors(o.colors), mirror: o.mirror === true, ball: o.ball === true || undefined, ground: parseGround(o.ground) }
+    return { ...base, type: 'figure', figureId, x: num(o.x) ?? 0, y: num(o.y) ?? 0, width, height, colors: parseColors(o.colors), mirror: o.mirror === true, ball: o.ball === true || undefined, ground: parseGround(o.ground), sizeM: num(o.sizeM) ?? undefined }
   }
   if (o.type === 'token') {
     const width = num(o.width)
@@ -899,6 +907,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       label: typeof o.label === 'string' ? o.label : '',
       showLabel: o.showLabel === true,
       ground: parseGround(o.ground),
+      sizeM: num(o.sizeM) ?? undefined,
     }
   }
   if (o.type === 'text') {

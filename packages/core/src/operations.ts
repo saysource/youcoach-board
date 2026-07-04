@@ -49,6 +49,8 @@ export interface ElementPatch {
   // elements (figure/token = their bottom-center), or one [x, z] per point for a
   // pinned polyline (parallel to `points`, so the shape warps onto the field).
   ground?: [number, number] | Array<[number, number]>
+  // Real-world height (metres) for absolute pinned scaling (figure/token).
+  sizeM?: number
   // Token options.
   shape?: 'token' | 'jersey'
   tokenFill?: TokenFill

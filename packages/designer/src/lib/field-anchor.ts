@@ -16,7 +16,7 @@
 import * as THREE from 'three'
 import { type BoardElement, type PolylineElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
-import { projectToBoard, boardToGround } from './arrow3d'
+import { boardToGround } from './arrow3d'
 import { rectToPolyline, ellipseToPolyline } from './draw'
 
 /** Project a ground point (x, 0, z) to board units, but clamp a point that lies
@@ -86,12 +86,14 @@ function polylineGround(el: PolylineElement, cam: THREE.Camera): Array<[number, 
 
 /** Ground pixels-per-metre at (x, z): √(projected area of a 1 m × 1 m ground
  *  quad). Direction-averaged + perspective-correct, and — unlike a vertical
- *  yard-stick — well-defined even in a straight-down top view. */
+ *  yard-stick — well-defined even in a straight-down top view. Uses the
+ *  w-clamped projection so a spot near/behind the camera doesn't flip to a
+ *  bogus area. */
 function groundPPM(cam: THREE.Camera, x: number, z: number): number {
-  const o = projectToBoard(new THREE.Vector3(x, 0, z), cam)
-  const a = projectToBoard(new THREE.Vector3(x + 1, 0, z), cam)
-  const b = projectToBoard(new THREE.Vector3(x, 0, z + 1), cam)
-  const area = Math.abs((a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x))
+  const o = projectGround(cam, x, z)
+  const a = projectGround(cam, x + 1, z)
+  const b = projectGround(cam, x, z + 1)
+  const area = Math.abs((a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]))
   return Math.sqrt(area) || 1
 }
 
@@ -121,8 +123,13 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera): Operati
       const g = boardToGround(bc.x, bc.y, cam)
       if (!g) return
       const next: [number, number] = [g.x, g.z]
-      if (el.ground && closePt(el.ground, next)) return
-      updates.push({ id: el.id, before: { ground: el.ground }, after: { ground: next } })
+      // Capture the figure's real-world height (metres) at its spot, so its size
+      // can be derived absolutely under any camera (self-correcting scaling).
+      const sizeM = (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
+      const groundSame = el.ground && closePt(el.ground, next)
+      const sizeSame = el.sizeM != null && Math.abs(el.sizeM - sizeM) < 1e-4
+      if (groundSame && sizeSame) return
+      updates.push({ id: el.id, before: { ground: el.ground, sizeM: el.sizeM }, after: { ground: next, sizeM } })
     } else if (el.type === 'polyline') {
       const g = polylineGround(el, cam)
       if (!g) return
@@ -142,9 +149,12 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera): Operati
 }
 
 /** Reproject every pinned element from the `before` camera to `after`:
- *   - figure/token: reposition its bottom-center to `projectToBoard(ground)` and
- *     rescale by the ground-ppm ratio (how much more magnified the pitch is here);
- *   - polyline: reproject EACH point to `projectToBoard(ground[i])` and bake it
+ *   - figure/token: reposition its bottom-center to `projectGround(ground)` and
+ *     resize ABSOLUTELY from its stored metric height (`sizeM × ground-ppm`), so
+ *     scale is self-correcting — a figure that briefly leaves the view while
+ *     zooming returns to its right size (older docs with no `sizeM` fall back to
+ *     the ground-ppm ratio);
+ *   - polyline: reproject EACH point to `projectGround(ground[i])` and bake it
  *     into `points` (resetting translate/rotate/scale, keeping opacity), so the
  *     shape warps to stay on the field surface.
  *  Elements without a ground anchor are skipped. Returns the `update` changes. */
@@ -160,11 +170,18 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
     }
     if (!isGroundElement(el) || !el.ground) continue
     const [gx, gz] = el.ground
-    const ratio = groundPPM(newCam, gx, gz) / groundPPM(oldCam, gx, gz)
-    if (!Number.isFinite(ratio) || ratio <= 0) continue
-    const scale = clamp(el.transform.scale * ratio, 0.05, 20)
-    const [bcx, bcy] = projectGround(newCam, gx, gz)
     const { cx, cy, h } = localCenter(el)
+    let scale: number
+    if (el.sizeM != null) {
+      // Absolute: size follows the pitch magnification here, independent of the
+      // current (possibly out-of-view, collapsed) scale — so it never gets stuck.
+      scale = clamp((el.sizeM * groundPPM(newCam, gx, gz)) / (h || 1), 0.05, 30)
+    } else {
+      const ratio = groundPPM(newCam, gx, gz) / groundPPM(oldCam, gx, gz)
+      if (!Number.isFinite(ratio) || ratio <= 0) continue
+      scale = clamp(el.transform.scale * ratio, 0.05, 30)
+    }
+    const [bcx, bcy] = projectGround(newCam, gx, gz)
     const after2 = { ...el.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }
     changes.push({ id: el.id, before: { transform: el.transform }, after: { transform: after2 } })
   }
