@@ -73,7 +73,7 @@ import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles,
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -537,6 +537,21 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     return () => commitTransaction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing3d])
+
+  // Toggling a token preference (perspective / sync) re-sizes all tokens at once
+  // for the current camera — so the change is visible immediately, not only on the
+  // next camera move. Fires only on an actual pref change (not mount), in normal
+  // mode (Edit-Background handles it via reprojection on the next camera move).
+  const tokenPrefsRef = useRef({ tokenPerspective, syncTokenSizes })
+  useEffect(() => {
+    const prev = tokenPrefsRef.current
+    tokenPrefsRef.current = { tokenPerspective, syncTokenSizes }
+    if (prev.tokenPerspective === tokenPerspective && prev.syncTokenSizes === syncTokenSizes) return
+    if (editing3d || !field3d) return
+    const refTokenId = selectedIds.find((id) => doc.elements.find((e) => e.id === id)?.type === 'token')
+    updateElements(tokenSizeChanges(doc.elements, field3d, { syncTokenSizes, tokenPerspective, refTokenId }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenPerspective, syncTokenSizes])
 
   // Edit-Background camera nudges for the 3D field (coach-friendly, discrete steps;
   // fov stays 50). Each is one undo step.

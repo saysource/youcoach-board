@@ -115,6 +115,18 @@ export function anchorPPM(el: GroundElement, cfg: PosedCamera): number | null {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 const closePt = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 1e-4 && Math.abs(a[1] - b[1]) < 1e-4
+
+/** Pitch centre (metres, corner-origin frame) — the neutral depth used to size
+ *  tokens uniformly when perspective is off. */
+const PITCH_CENTRE: [number, number] = [52.5, 34]
+
+/** On-board height (px) for a token of metric height `m` at ground `g`: sized at
+ *  its own depth when perspective is on (so near tokens read bigger), or at the
+ *  pitch-centre depth when off (uniform, still tracking overall camera scale). */
+function tokenBoardH(cam: THREE.Camera, m: number, g: [number, number], perspective: boolean): number {
+  const ref = perspective ? g : PITCH_CENTRE
+  return m * groundPPM(cam, ref[0], ref[1])
+}
 function sameGround(a: Array<[number, number]>, b: Array<[number, number]>): boolean {
   return a.length === b.length && a.every((p, i) => closePt(p, b[i]))
 }
@@ -209,13 +221,15 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
     const [gx, gz] = el.ground
     const { cx, cy, h } = localCenter(el)
     let scale: number
-    if (el.type === 'token' && !tokenPerspective) {
-      // Token-perspective off: keep a constant on-board size (still repositioned).
-      scale = el.transform.scale
+    if (el.type === 'token' && el.sizeM != null) {
+      // Absolute from the token's metric height: at its own depth (perspective) or
+      // uniform (perspective off). Self-correcting — never gets stuck.
+      scale = clamp(tokenBoardH(newCam, el.sizeM, [gx, gz], tokenPerspective) / (h || 1), 0.05, 30)
     } else if (el.sizeM != null) {
-      // Absolute: size follows the pitch magnification here, independent of the
-      // current (possibly out-of-view, collapsed) scale — so it never gets stuck.
+      // Figure: always perspective-sized from its metric height.
       scale = clamp((el.sizeM * groundPPM(newCam, gx, gz)) / (h || 1), 0.05, 30)
+    } else if (el.type === 'token' && !tokenPerspective) {
+      scale = el.transform.scale // legacy (no sizeM): keep constant when off
     } else {
       const ratio = groundPPM(newCam, gx, gz) / groundPPM(oldCam, gx, gz)
       if (!Number.isFinite(ratio) || ratio <= 0) continue
@@ -224,6 +238,42 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
     const [bcx, bcy] = projectGround(newCam, gx, gz)
     const after2 = { ...el.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }
     changes.push({ id: el.id, before: { transform: el.transform }, after: { transform: after2 } })
+  }
+  return changes
+}
+
+/** Re-size all tokens at the CURRENT camera for the given prefs — used when a
+ *  token preference is toggled (not a camera move), so tokens update at once:
+ *  perspective on → each at its depth; off → uniform (pitch-centre depth); sync
+ *  on → all share one metric size. Derives a token's ground/`sizeM` on the fly if
+ *  it isn't pinned yet, keeps its feet on the ground, and skips no-op changes. */
+export function tokenSizeChanges(elements: BoardElement[], cfg: PosedCamera, opts: { syncTokenSizes?: boolean; tokenPerspective?: boolean; refTokenId?: string }): ElementChange[] {
+  const cam = makeCalibratedCamera(cfg)
+  const tokens = elements.filter((e): e is GroundElement => e.type === 'token')
+  if (!tokens.length) return []
+  const perspective = opts.tokenPerspective !== false
+  // A display toggle must NOT change physical size: prefer the reference token's
+  // STORED metric height (invariant), deriving from its board size only if unset.
+  const refTok = tokens.find((t) => t.id === opts.refTokenId) ?? tokens[0]
+  const shared = opts.syncTokenSizes ? refTok.sizeM ?? sharedTokenSizeM(elements, cam, opts.refTokenId) : null
+  const changes: ElementChange[] = []
+  for (const t of tokens) {
+    let g = t.ground
+    if (!g) {
+      const bc = bottomCenterBoard(t)
+      const hit = boardToGround(bc.x, bc.y, cam)
+      if (!hit) continue
+      g = [hit.x, hit.z]
+    }
+    const { cx, cy, h } = localCenter(t)
+    const m = shared ?? t.sizeM ?? (h * t.transform.scale) / groundPPM(cam, g[0], g[1])
+    const scale = clamp(tokenBoardH(cam, m, g, perspective) / (h || 1), 0.05, 30)
+    const [bcx, bcy] = projectGround(cam, g[0], g[1])
+    const after = { transform: { ...t.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }, ground: g, sizeM: m }
+    const t0 = t.transform
+    const unchanged = Math.abs(scale - t0.scale) < 1e-4 && Math.abs(after.transform.x - t0.x) < 1e-2 && Math.abs(after.transform.y - t0.y) < 1e-2 && t.ground != null && t.sizeM != null
+    if (unchanged) continue
+    changes.push({ id: t.id, before: { transform: t0, ground: t.ground, sizeM: t.sizeM }, after })
   }
   return changes
 }
