@@ -19,9 +19,12 @@ const GOAL_W = 7.32
 const GOAL_H = 2.44
 const GOAL_D = 2.0
 const POST_R = 0.06
-const LINE_W = 0.16 // pitch line width (metres) — crisp flat geometry, not texture
+const LINE_W = 0.3 // pitch line width (metres) — crisp flat geometry, not texture
 const BAND_OVERFLOW = 0.2 // stripe bands extend this fraction of the pitch beyond each edge
-const BAND_OPACITY = 0.08 // semi-transparent white "shading" bands
+const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
+// Stack heights (metres) so the ground / bands / lines never z-fight.
+const BAND_Y = 0.05
+const LINE_Y = 0.15
 
 // One shared sun so the field and the arrow scene cast agreeing shadows.
 export const SUN_POSITION = new THREE.Vector3(120, 165, 70)
@@ -220,13 +223,13 @@ export function buildFieldGroup(opts: { flags?: boolean } = {}): THREE.Group {
 
   // Translucent white shading bands (extended past the pitch), then crisp lines.
   const bands = new THREE.Mesh(bandsGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
-  bands.position.y = 0.003
+  bands.position.y = BAND_Y
   bands.renderOrder = 1
   group.add(bands)
 
-  const lines = new THREE.Mesh(markingsGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, depthWrite: false }))
-  lines.position.y = 0.02
-  lines.renderOrder = 2
+  // Opaque so they depth-test cleanly above the bands (no transparency sorting).
+  const lines = new THREE.Mesh(markingsGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }))
+  lines.position.y = LINE_Y
   group.add(lines)
 
   const netTex = makeNetTexture()
