@@ -23,16 +23,16 @@ export interface GoalOpts {
   postR?: number
 }
 
-// A repeating white net grid on transparent ground. Cell ~ constant metric size
-// (UVs are computed per-metre by the callers), so nets read the same at any goal
-// size. repeat is left at (1,1) — the per-vertex UVs carry the tiling.
+// A repeating white net grid. Cell ~ constant metric size (UVs are computed
+// per-metre by the callers) so nets read the same at any goal size. Solid white
+// cords on transparent gaps — bright and clearly visible.
 function netTexture(): THREE.Texture {
   const cv = document.createElement('canvas')
   cv.width = cv.height = 64
   const g = cv.getContext('2d')!
   g.clearRect(0, 0, 64, 64)
-  g.strokeStyle = 'rgba(255,255,255,0.85)'
-  g.lineWidth = 4
+  g.strokeStyle = '#ffffff'
+  g.lineWidth = 7
   g.strokeRect(0, 0, 64, 64)
   const tex = new THREE.CanvasTexture(cv)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
@@ -49,7 +49,9 @@ export function buildGoal(opts: GoalOpts): THREE.Group {
 
   const frameMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradientMap() })
   const inkMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide })
-  const netMat = new THREE.MeshStandardMaterial({ map: netTexture(), transparent: true, side: THREE.DoubleSide, alphaTest: 0.02, opacity: 0.9, depthWrite: false, roughness: 1 })
+  // Unlit pure-white net so it stays bright (not darkened by shading); alphaTest
+  // keeps the cords crisp and opaque with see-through gaps.
+  const netMat = new THREE.MeshBasicMaterial({ color: 0xffffff, map: netTexture(), side: THREE.DoubleSide, alphaTest: 0.45 })
 
   const goal = new THREE.Group()
   const hw = W / 2
@@ -107,15 +109,19 @@ export function buildGoal(opts: GoalOpts): THREE.Group {
     goal.add(new THREE.Mesh(geo, netMat))
   }
 
-  // ── Front frame (shared by both styles) ──────────────────────────────────
+  // ── Front frame + ground base (shared by both styles) ────────────────────
   bar(v(fx, 0, -hw), v(fx, H, -hw), postR) // left post
   bar(v(fx, 0, hw), v(fx, H, hw), postR) // right post
   bar(v(fx, H, -hw), v(fx, H, hw), postR) // crossbar
+  bar(v(fx, 0, -hw), v(bx, 0, -hw), br) // lateral base pipes (front → back, on the ground)
+  bar(v(fx, 0, hw), v(bx, 0, hw), br)
+  for (const z of [-hw, hw]) joint(v(fx, 0, z), postR) // front-bottom corners
 
   if (style === 'box') {
     bar(v(bx, 0, -hw), v(bx, H, -hw), br) // back posts
     bar(v(bx, 0, hw), v(bx, H, hw), br)
     bar(v(bx, H, -hw), v(bx, H, hw), br) // back bar
+    bar(v(bx, 0, -hw), v(bx, 0, hw), br) // back base pipe (completes the ground frame)
     bar(v(fx, H, -hw), v(bx, H, -hw), br) // top rails
     bar(v(fx, H, hw), v(bx, H, hw), br)
     for (const z of [-hw, hw]) {
