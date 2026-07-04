@@ -73,7 +73,7 @@ import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles,
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -318,6 +318,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const updateElements = useEditorStore((s) => s.updateElements)
   const pinSetup = useEditorStore((s) => s.pinSetup)
   const syncTokenSizes = useEditorStore((s) => s.syncTokenSizes)
+  const tokenPerspective = useEditorStore((s) => s.tokenPerspective)
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
@@ -1640,7 +1641,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // "Sync token sizes": after resizing one token, make every OTHER token match a
   // reference token's size (the first selected token, else the first in the doc —
   // which in a single-token resize is the token just dragged), keeping each
-  // centered. Returns the resize + the sync as ONE undoable batch.
+  // centered. With token-perspective on over a 3D field, the tokens KEEP their
+  // relative perspective sizes: all share one physical size (from the reference),
+  // rendered per-depth (else they all take the same board size). Returns the
+  // resize + the sync as ONE undoable batch.
   function tokenSizeSyncChanges(resizeChange: ElementChange): ElementChange[] {
     const tokens = doc.elements.filter((e): e is Extract<BoardElement, { type: 'token' }> => e.type === 'token')
     const ref = tokens.find((t) => selectedIds.includes(t.id)) ?? tokens[0]
@@ -1649,14 +1653,30 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const tw = (refIsResized ? resizeChange.after.width : ref.width) as number
     const th = (refIsResized ? resizeChange.after.height : ref.height) as number
     const tscale = (refIsResized ? resizeChange.after.transform?.scale : ref.transform.scale) ?? 1
-    const changes: ElementChange[] = refIsResized ? [resizeChange] : []
+    const eRef = th * tscale // reference's effective board height
+    // One shared physical size (metres) when perspective applies; else null → all
+    // tokens take the same board size (uniform).
+    const perspective = tokenPerspective && !!field3d
+    const refPPM = perspective && field3d ? anchorPPM(ref, field3d) : null
+    const sizeM = refPPM ? eRef / refPPM : null
+    const changes: ElementChange[] = []
+    // The resized (reference) token keeps its dragged size; record the shared sizeM.
+    if (refIsResized) changes.push({ ...resizeChange, before: { ...resizeChange.before, sizeM: ref.sizeM }, after: { ...resizeChange.after, sizeM: sizeM ?? ref.sizeM } })
     for (const t of tokens) {
       if (t.id === ref.id) continue
+      // Target effective height: shared physical size at THIS token's depth (keeps
+      // perspective), else the reference's size (uniform).
+      let eT = eRef
+      if (sizeM != null && field3d) {
+        const ppmT = anchorPPM(t, field3d)
+        if (ppmT) eT = sizeM * ppmT
+      }
       changes.push({
         id: t.id,
-        before: { x: t.x, y: t.y, width: t.width, height: t.height, transform: t.transform },
-        // Grow/shrink about the token's local center so it doesn't jump.
-        after: { x: t.x + (t.width - tw) / 2, y: t.y + (t.height - th) / 2, width: tw, height: th, transform: { ...t.transform, scale: tscale } },
+        before: { x: t.x, y: t.y, width: t.width, height: t.height, transform: t.transform, sizeM: t.sizeM },
+        // Same base box as the reference, scale encoding the per-depth size; grow/
+        // shrink about the token's local center so it doesn't jump.
+        after: { x: t.x + (t.width - tw) / 2, y: t.y + (t.height - th) / 2, width: tw, height: th, transform: { ...t.transform, scale: eT / th }, sizeM: sizeM ?? t.sizeM },
       })
     }
     return changes.length ? changes : [resizeChange]

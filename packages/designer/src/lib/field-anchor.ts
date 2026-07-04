@@ -97,6 +97,22 @@ function groundPPM(cam: THREE.Camera, x: number, z: number): number {
   return Math.sqrt(area) || 1
 }
 
+/** Ground pixels-per-metre at a standing element's pitch anchor under `cfg` (its
+ *  stored ground, else derived from its current bottom-center), or null if it
+ *  can't be projected. Lets the designer compute perspective-correct token sizes
+ *  at resize time (in normal mode, where no reprojection runs). */
+export function anchorPPM(el: GroundElement, cfg: PosedCamera): number | null {
+  const cam = makeCalibratedCamera(cfg)
+  let g = el.ground
+  if (!g) {
+    const bc = bottomCenterBoard(el)
+    const hit = boardToGround(bc.x, bc.y, cam)
+    if (!hit) return null
+    g = [hit.x, hit.z]
+  }
+  return groundPPM(cam, g[0], g[1])
+}
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 const closePt = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 1e-4 && Math.abs(a[1] - b[1]) < 1e-4
 function sameGround(a: Array<[number, number]>, b: Array<[number, number]>): boolean {
