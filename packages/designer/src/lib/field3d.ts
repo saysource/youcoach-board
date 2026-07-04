@@ -20,7 +20,7 @@ const GOAL_H = 2.44
 const GOAL_D = 2.0
 const POST_R = 0.06
 const LINE_W = 0.3 // pitch line width (metres) — crisp flat geometry, not texture
-const BAND_OVERFLOW = 0.2 // stripe bands extend this fraction of the pitch beyond each edge
+const BAND_OVERFLOW = 0 // stripe bands stay within the pitch
 const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
 // Stack heights (metres) so the ground / bands / lines never z-fight.
 const BAND_Y = 0.05

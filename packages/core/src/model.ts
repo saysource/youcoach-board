@@ -74,7 +74,7 @@ export interface BoardDoc {
 }
 
 export const DEFAULT_BACKGROUND: BoardBackground = {
-  color: '#2f8a3e',
+  color: 'transparent',
   image: null,
   fieldSvg: null,
   field3d: null,
