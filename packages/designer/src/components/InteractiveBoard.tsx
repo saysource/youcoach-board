@@ -73,7 +73,7 @@ import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles,
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -1669,20 +1669,22 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const th = (refIsResized ? resizeChange.after.height : ref.height) as number
     const tscale = (refIsResized ? resizeChange.after.transform?.scale : ref.transform.scale) ?? 1
     const eRef = th * tscale // reference's effective board height
-    // One shared physical size (metres) when perspective applies; else null → all
-    // tokens take the same board size (uniform).
+    // The shared physical size (metres): from the reference's depth when
+    // perspective is on (so other tokens render per-depth), or from the FIXED
+    // reference scale when off (so the stored size stays consistent and a later
+    // camera move won't jump). Kept on every token so reprojection agrees.
     const perspective = tokenPerspective && !!field3d
     const refPPM = perspective && field3d ? anchorPPM(ref, field3d) : null
-    const sizeM = refPPM ? eRef / refPPM : null
+    const sizeM = perspective ? (refPPM ? eRef / refPPM : null) : eRef / referencePPM()
     const changes: ElementChange[] = []
     // The resized (reference) token keeps its dragged size; record the shared sizeM.
     if (refIsResized) changes.push({ ...resizeChange, before: { ...resizeChange.before, sizeM: ref.sizeM }, after: { ...resizeChange.after, sizeM: sizeM ?? ref.sizeM } })
     for (const t of tokens) {
       if (t.id === ref.id) continue
-      // Target effective height: shared physical size at THIS token's depth (keeps
-      // perspective), else the reference's size (uniform).
+      // Target effective height: shared physical size at THIS token's depth
+      // (perspective), else the reference's size (uniform).
       let eT = eRef
-      if (sizeM != null && field3d) {
+      if (perspective && sizeM != null && field3d) {
         const ppmT = anchorPPM(t, field3d)
         if (ppmT) eT = sizeM * ppmT
       }

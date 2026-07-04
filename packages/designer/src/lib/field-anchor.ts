@@ -18,6 +18,7 @@ import { type BoardElement, type PolylineElement, type ElementChange, type Opera
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { rectToPolyline, ellipseToPolyline } from './draw'
+import { DEFAULT_ZONE } from './field-zones'
 
 /** Project a ground point (x, 0, z) to board units, but clamp a point that lies
  *  BEHIND the camera to just in front of the near plane (w ≥ ε). Plain
@@ -116,16 +117,26 @@ export function anchorPPM(el: GroundElement, cfg: PosedCamera): number | null {
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 const closePt = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 1e-4 && Math.abs(a[1] - b[1]) < 1e-4
 
-/** Pitch centre (metres, corner-origin frame) — the neutral depth used to size
- *  tokens uniformly when perspective is off. */
+/** Pitch centre (metres, corner-origin frame) — the neutral depth for the fixed
+ *  reference scale below. */
 const PITCH_CENTRE: [number, number] = [52.5, 34]
 
+/** A FIXED board-units-per-metre — the ground-ppm at pitch centre in the default
+ *  view — used to size tokens when perspective is off, so their size is constant
+ *  (independent of the field camera's zoom/pan), like the pose-number markers.
+ *  Computed once (lazily) from the default pose. */
+let ppmRefCache: number | null = null
+export function referencePPM(): number {
+  if (ppmRefCache == null) ppmRefCache = groundPPM(makeCalibratedCamera(DEFAULT_ZONE.camera), PITCH_CENTRE[0], PITCH_CENTRE[1])
+  return ppmRefCache
+}
+
 /** On-board height (px) for a token of metric height `m` at ground `g`: sized at
- *  its own depth when perspective is on (so near tokens read bigger), or at the
- *  pitch-centre depth when off (uniform, still tracking overall camera scale). */
-function tokenBoardH(cam: THREE.Camera, m: number, g: [number, number], perspective: boolean): number {
-  const ref = perspective ? g : PITCH_CENTRE
-  return m * groundPPM(cam, ref[0], ref[1])
+ *  its own depth when perspective is on (near tokens read bigger, follows the
+ *  camera), or at a FIXED reference scale when off (constant board size — doesn't
+ *  change with the scene's zoom/pan). */
+export function tokenBoardH(cam: THREE.Camera, m: number, g: [number, number], perspective: boolean): number {
+  return perspective ? m * groundPPM(cam, g[0], g[1]) : m * referencePPM()
 }
 function sameGround(a: Array<[number, number]>, b: Array<[number, number]>): boolean {
   return a.length === b.length && a.every((p, i) => closePt(p, b[i]))
