@@ -17540,6 +17540,12 @@
      "thumb": "materials3d/cube",
      "w": 100,
      "h": 100
+    },
+    {
+     "object3d": "cone",
+     "thumb": "materials3d/cone",
+     "w": 100,
+     "h": 100
     }
    ]
   }

@@ -77,8 +77,11 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   function syncMeshes(ctx: Ctx) {
     const dispose = (mesh: THREE.Mesh) => {
       ctx.scene.remove(mesh)
-      const o = mesh.getObjectByName('outline') as THREE.Mesh | null
-      if (o) (o.material as THREE.Material).dispose()
+      // Dispose any child materials (selection outline + a builder's own toon
+      // outline). Their geometry is the parent's, disposed once below.
+      mesh.traverse((o) => {
+        if (o !== mesh && (o as THREE.Mesh).isMesh) (((o as THREE.Mesh).material) as THREE.Material).dispose()
+      })
       mesh.geometry.dispose()
       ;(mesh.material as THREE.Material).dispose()
     }
