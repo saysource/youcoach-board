@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { RotateCcw, RotateCw, ChevronsUp, ChevronsDown, ZoomIn, ZoomOut, Hand, RefreshCw, RectangleVertical, RectangleHorizontal, Rotate3d } from 'lucide-react'
+import { ZoomIn, ZoomOut, Hand, RefreshCw, RectangleVertical, RectangleHorizontal, Rotate3d } from 'lucide-react'
 import {
   BoardCanvas,
   BOARD_WIDTH,
@@ -2008,14 +2008,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
       {backgroundMode && field3d && (
         <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">
-          <FieldCtl label="Rotate left" onClick={() => nudgeField3d((o) => ({ ...o, azimuth: o.azimuth - 15 }))}><RotateCcw /></FieldCtl>
-          <FieldCtl label="Rotate right" onClick={() => nudgeField3d((o) => ({ ...o, azimuth: o.azimuth + 15 }))}><RotateCw /></FieldCtl>
-          <span className="mx-0.5 h-6 w-px bg-border" />
-          <FieldCtl label="Tilt up" onClick={() => nudgeField3d((o) => ({ ...o, elevation: clamp(o.elevation + 5, 20, 88) }))}><ChevronsUp /></FieldCtl>
-          <FieldCtl label="Tilt down" onClick={() => nudgeField3d((o) => ({ ...o, elevation: clamp(o.elevation - 5, 20, 88) }))}><ChevronsDown /></FieldCtl>
-          <span className="mx-0.5 h-6 w-px bg-border" />
-          <FieldCtl label="Zoom in" onClick={() => nudgeField3d((o) => ({ ...o, distance: clamp(o.distance - 12, 40, 400) }))}><ZoomIn /></FieldCtl>
-          <FieldCtl label="Zoom out" onClick={() => nudgeField3d((o) => ({ ...o, distance: clamp(o.distance + 12, 40, 400) }))}><ZoomOut /></FieldCtl>
+          <FieldCtl label="Zoom in" onClick={() => nudgeField3d((o) => ({ ...o, distance: clamp(o.distance - 12, 4, 400) }))}><ZoomIn /></FieldCtl>
+          <FieldCtl label="Zoom out" onClick={() => nudgeField3d((o) => ({ ...o, distance: clamp(o.distance + 12, 4, 400) }))}><ZoomOut /></FieldCtl>
           <span className="mx-0.5 h-6 w-px bg-border" />
           <FieldCtl label="Pan tool (disable orbit)" active={view === 'pan'} onClick={() => setView('pan')}><Hand /></FieldCtl>
           <span className="mx-0.5 h-6 w-px bg-border" />

@@ -63,8 +63,9 @@ export function FieldEditOverlay({ field3d, viewBox, panMode, onPose, onExitPan 
     controls.dampingFactor = 0.09
     controls.rotateSpeed = 0.45
     controls.zoomSpeed = 0.9
-    controls.minDistance = 8
+    controls.minDistance = 2
     controls.maxDistance = 400
+    controls.screenSpacePanning = true
     controls.maxPolarAngle = Math.PI / 2 - 0.04 // stay above the grass
     controls.target.set(field3d.target[0], field3d.target[1], field3d.target[2])
     cam.lookAt(controls.target)
@@ -123,14 +124,14 @@ export function FieldEditOverlay({ field3d, viewBox, panMode, onPose, onExitPan 
     flyTo(field3d.position, field3d.target)
   }, [field3d])
 
-  // Pan mode (hand / top views): disable rotation, left-drag pans (screen-space),
-  // wheel zooms. Orbit mode re-enables rotation and restores left-drag = rotate.
+  // Pan mode (hand / top views): rotation off, left-drag pans. Orbit mode:
+  // left-drag rotates; pan stays enabled so Shift+drag pans (OrbitControls maps
+  // Shift+Left to pan). Wheel zooms in both.
   useEffect(() => {
     const controls = controlsRef.current
     if (!controls) return
     controls.enableRotate = !panMode
-    controls.enablePan = panMode
-    controls.screenSpacePanning = true
+    controls.enablePan = true
     controls.mouseButtons.LEFT = panMode ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
   }, [panMode])
 

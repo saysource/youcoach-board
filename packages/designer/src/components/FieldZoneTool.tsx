@@ -84,8 +84,9 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     controls.enableDamping = true
     controls.dampingFactor = 0.09
     controls.rotateSpeed = 0.45
+    controls.screenSpacePanning = true
     controls.maxPolarAngle = Math.PI / 2 - 0.04
-    controls.minDistance = 6
+    controls.minDistance = 2
     controls.maxDistance = 400
     controls.target.set(field3d.target[0], field3d.target[1], field3d.target[2])
     cam.lookAt(controls.target)
@@ -150,8 +151,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     const controls = controlsRef.current
     if (!controls) return
     controls.enableRotate = !topView
-    controls.enablePan = !!topView
-    controls.screenSpacePanning = true
+    controls.enablePan = true // Shift+drag pans in orbit; left-drag pans in top view
     controls.mouseButtons.LEFT = topView ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
   }, [topView])
 
