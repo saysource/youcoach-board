@@ -121,12 +121,9 @@ function unitConeGeometry(): THREE.BufferGeometry {
     const maxDim = Math.max(size.x, size.y, size.z) || 1
     geom.translate(-center.x, -center.y, -center.z)
     geom.scale(1 / maxDim, 1 / maxDim, 1 / maxDim)
-    // De-index + per-face normals → flat (faceted) shading: each triangle reads
-    // as one flat tone under the toon ramp, giving the low-poly cel look.
-    const flat = geom.toNonIndexed()
-    flat.computeVertexNormals()
-    geom.dispose()
-    coneGeometry = flat
+    // Keep the model's smooth normals: on this shallow cone they give a visible
+    // light→dark falloff toward the silhouette, which flat faceting washed out.
+    coneGeometry = geom
   }
   return coneGeometry.clone()
 }
@@ -137,7 +134,10 @@ function unitConeGeometry(): THREE.BufferGeometry {
 let toonRamp: THREE.DataTexture | null = null
 function toonGradientMap(): THREE.DataTexture {
   if (!toonRamp) {
-    const steps = new Uint8Array([30, 120, 255]) // deep shadow → mid → full light
+    // A hard, high-contrast ramp: three tones (deep shadow / mid / full light)
+    // with big jumps, placed so the cone's ~0.6–0.95 lighting range straddles
+    // the mid↔light step — a bold cel split rather than a subtle gradient.
+    const steps = new Uint8Array([75, 75, 75, 150, 150, 150, 255, 255])
     const tex = new THREE.DataTexture(steps, steps.length, 1, THREE.RedFormat)
     tex.minFilter = tex.magFilter = THREE.NearestFilter
     tex.needsUpdate = true
@@ -146,8 +146,8 @@ function toonGradientMap(): THREE.DataTexture {
   return toonRamp
 }
 
-/** An extreme cel-shaded toon material: a hard 3-band gradient. Paired with the
- *  cone's flat-normal geometry, each facet reads as a distinct flat tone. */
+/** An extreme cel-shaded toon material: a hard, high-contrast 3-tone gradient
+ *  that splits the surface into bold light/mid/shadow bands. */
 function extremeToon(color: number): THREE.MeshToonMaterial {
   return new THREE.MeshToonMaterial({ color, gradientMap: toonGradientMap() })
 }
