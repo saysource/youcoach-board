@@ -420,6 +420,48 @@ export function rectToPolyline(rect: Extract<BoardElement, { type: 'rect' }>): B
   }
 }
 
+/** How many points to sample an ellipse into when converting it to a curve. 20
+ *  points through a smooth (curved) closed polyline hug the oval closely and,
+ *  once each point is pinned to the pitch, reproduce the warped oval smoothly. */
+const ELLIPSE_SAMPLES = 20
+
+/** Convert an ellipse into an equivalent CLOSED SMOOTH polyline (points sampled
+ *  around its perimeter, `curve: true`), preserving id, transform and style — the
+ *  ellipse analog of {@link rectToPolyline}, so a pinned oval can warp onto the
+ *  field surface (only a point-defined shape can). */
+export function ellipseToPolyline(ellipse: Extract<BoardElement, { type: 'ellipse' }>): BoardElement {
+  const { x, y, width, height } = ellipse
+  const cx = x + width / 2
+  const cy = y + height / 2
+  const rx = width / 2
+  const ry = height / 2
+  const points: Array<[number, number]> = []
+  for (let i = 0; i < ELLIPSE_SAMPLES; i++) {
+    const a = (2 * Math.PI * i) / ELLIPSE_SAMPLES
+    points.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)])
+  }
+  return {
+    id: ellipse.id,
+    type: 'polyline',
+    points,
+    closed: true,
+    curve: true,
+    zigzag: false,
+    waveLength: DEFAULT_WAVE_LENGTH,
+    waveAmplitude: DEFAULT_WAVE_AMPLITUDE,
+    double: false,
+    linesOffset: DEFAULT_LINES_OFFSET,
+    startTip: 'none',
+    endTip: 'none',
+    transform: ellipse.transform,
+    stroke: ellipse.stroke,
+    strokeWidth: ellipse.strokeWidth,
+    strokeStyle: ellipse.strokeStyle,
+    fill: ellipse.fill,
+    fillStyle: ellipse.fillStyle,
+  }
+}
+
 /** Build a freehand stroke from captured points (board coords). */
 export function makeDraw(id: string, points: Point[]): BoardElement {
   return {

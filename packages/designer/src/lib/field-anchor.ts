@@ -17,7 +17,7 @@ import * as THREE from 'three'
 import { type BoardElement, type PolylineElement, type ElementChange, type Operation, getLocalBounds } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
 import { projectToBoard, boardToGround } from './arrow3d'
-import { rectToPolyline } from './draw'
+import { rectToPolyline, ellipseToPolyline } from './draw'
 
 /** Elements that stand on the pitch and carry a single ground anchor. */
 export type GroundElement = Extract<BoardElement, { type: 'figure' | 'token' }>
@@ -113,8 +113,10 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera): Operati
       if (!g) return
       if (el.ground && sameGround(el.ground, g)) return
       updates.push({ id: el.id, before: { ground: el.ground }, after: { ground: g } })
-    } else if (el.type === 'rect') {
-      const poly = rectToPolyline(el) as PolylineElement
+    } else if (el.type === 'rect' || el.type === 'ellipse') {
+      // Only a point-defined shape can warp onto the pitch, so a rectangle / oval
+      // becomes its polyline equivalent (closed; smooth for the oval) when pinned.
+      const poly = (el.type === 'rect' ? rectToPolyline(el) : ellipseToPolyline(el)) as PolylineElement
       const g = polylineGround(poly, cam)
       ops.push({ kind: 'remove', element: el, index })
       ops.push({ kind: 'add', element: g ? { ...poly, ground: g } : poly, index })
