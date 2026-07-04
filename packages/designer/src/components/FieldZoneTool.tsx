@@ -18,6 +18,7 @@ import { Button } from './ui/button'
 // FIELD_ZONES array is shown copyable to paste into lib/field-zones.ts.
 
 const FOV = 50
+const MIN_CAM_Y = 0.5 // keep the camera a little above the grass (metres)
 const round = (n: number) => Math.round(n * 100) / 100
 const v3 = (a: [number, number, number]) => new THREE.Vector3(a[0], a[1], a[2])
 const storageKey = 'ycb.fieldZones.wip'
@@ -100,6 +101,12 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     const loop = () => {
       raf = requestAnimationFrame(loop)
       controls.update()
+      // Never let the camera reach/cross the grass (see FieldEditOverlay).
+      if (controls.target.y < 0) controls.target.y = 0
+      if (cam.position.y < MIN_CAM_Y) {
+        cam.position.y = MIN_CAM_Y
+        cam.lookAt(controls.target)
+      }
       setMarkers(
         zonesRef.current.map((z) => {
           tmp.set(z.target[0], z.target[1], z.target[2])

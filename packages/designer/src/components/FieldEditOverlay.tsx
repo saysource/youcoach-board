@@ -13,6 +13,9 @@ import { FIELD_ZONES } from '../lib/field-zones'
 
 const FOV = 50
 const DUR = 500 // fly-to tween (ms)
+// The camera must never reach/cross the grass — keep it a little above y=0
+// (metres). Pan/dolly/near-horizon orbit can all push it down, so we clamp.
+const MIN_CAM_Y = 0.5
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
 
 interface Pose {
@@ -91,6 +94,14 @@ export function FieldEditOverlay({ field3d, viewBox, panMode, onPose, onExitPan 
         }
       } else {
         controls.update() // damped orbit
+      }
+      // Keep the pivot on/above the ground and the camera a little above it, so it
+      // can never be posed at or under the grass (update() re-reads the spherical
+      // from position−target next frame, so clamping here is stable).
+      if (controls.target.y < 0) controls.target.y = 0
+      if (cam.position.y < MIN_CAM_Y) {
+        cam.position.y = MIN_CAM_Y
+        cam.lookAt(controls.target)
       }
       // Project the zone targets to board coords; flag ones behind the camera.
       setMarkers(
