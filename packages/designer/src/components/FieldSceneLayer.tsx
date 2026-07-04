@@ -13,6 +13,9 @@ import { applyViewCamera } from '../lib/field-camera'
 interface Props {
   camera: FieldView
   viewport: { zoom: number; panX: number; panY: number }
+  /** The board background (image wins over color); confined to the board rect. */
+  image: string | null
+  color: string
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
 }
@@ -23,8 +26,9 @@ interface Ctx {
   cam: THREE.PerspectiveCamera
 }
 
-export function FieldSceneLayer({ camera, viewport, svgRef, containerRef }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
   function ensureCtx(): Ctx | null {
@@ -88,10 +92,13 @@ export function FieldSceneLayer({ camera, viewport, svgRef, containerRef }: Prop
     const rect = boardRect()
     if (!ctx || !canvas || !rect || rect.width < 1) return
     const { camera: cam, viewport: vp } = propsRef.current
-    canvas.style.left = `${rect.left}px`
-    canvas.style.top = `${rect.top}px`
-    canvas.style.width = `${rect.width}px`
-    canvas.style.height = `${rect.height}px`
+    for (const el of [canvas, bgRef.current]) {
+      if (!el) continue
+      el.style.left = `${rect.left}px`
+      el.style.top = `${rect.top}px`
+      el.style.width = `${rect.width}px`
+      el.style.height = `${rect.height}px`
+    }
     ctx.renderer.setSize(rect.width, rect.height, false)
     applyViewCamera(ctx.cam, cam, vp)
     ctx.renderer.render(ctx.scene, ctx.cam)
@@ -111,6 +118,15 @@ export function FieldSceneLayer({ camera, viewport, svgRef, containerRef }: Prop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // zIndex -1 keeps the pitch below the 2D SVG (static) but above the bottom bg.
-  return <canvas ref={canvasRef} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', zIndex: -1 }} />
+  return (
+    <>
+      {/* The board background (image or solid), confined to the board rect (zIndex
+          -2, behind the transparent pitch canvas). */}
+      <div ref={bgRef} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', zIndex: -2, overflow: 'hidden', backgroundColor: image ? undefined : color }}>
+        {image && <img src={image} alt="" className="h-full w-full object-cover" />}
+      </div>
+      {/* zIndex -1 keeps the pitch below the 2D SVG (static) but above the bg. */}
+      <canvas ref={canvasRef} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', zIndex: -1 }} />
+    </>
+  )
 }

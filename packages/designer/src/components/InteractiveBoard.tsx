@@ -1761,16 +1761,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {/* Real 3D field: a bottom image/solid layer + the pitch scene, both BELOW
-          the 2D SVG (negative z within this isolated stacking context). */}
-      {field3d && (
-        <>
-          <div className="absolute inset-0" style={{ zIndex: -2, backgroundColor: doc.background.image ? undefined : doc.background.color }}>
-            {doc.background.image && <img src={doc.background.image} alt="" className="h-full w-full object-cover" />}
-          </div>
-          <FieldSceneLayer camera={field3d} viewport={viewport} svgRef={svgRef} containerRef={containerRef} />
-        </>
-      )}
+      {/* Real 3D field: the board background (image/solid) + the pitch scene, both
+          confined to the board rect and BELOW the 2D SVG (negative z). */}
+      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} />}
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
