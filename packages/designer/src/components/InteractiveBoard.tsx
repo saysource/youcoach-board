@@ -72,6 +72,7 @@ import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles,
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
+import { groundSyncChanges } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -519,9 +520,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const [view, setView] = useState<'orbit' | 'portrait' | 'landscape' | 'pan'>('orbit')
   const panMode = view !== 'orbit'
   useEffect(() => {
-    if (!editing3d) return
+    if (!editing3d || !field3d) return
     zoomReset()
     beginTransaction()
+    // Re-derive each standing element's pitch anchor from its CURRENT board spot
+    // through the live camera, so reprojection (as the camera then moves) is
+    // anchored correctly — healing any staleness from ordinary fixed-camera edits.
+    updateElements(groundSyncChanges(doc.elements, field3d))
     return () => commitTransaction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing3d])

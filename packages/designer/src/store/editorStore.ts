@@ -15,6 +15,7 @@ import {
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
 import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox, nextTokenText } from '../lib/draw'
+import { reprojectChanges } from '../lib/field-anchor'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -449,13 +450,39 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       setBackground: (patch) => {
         const { doc } = get()
         const next = { ...doc.background, ...patch }
+        // When the 3D field camera moves, reproject pitch-pinned figures/tokens so
+        // they keep their physical ground spot (and scale with the pitch). See
+        // lib/field-anchor + specs/start.md "Elements on the 3D space".
+        const before3d = doc.background.field3d
+        const after3d = next.field3d
+        const reproj =
+          'field3d' in patch && before3d && after3d && JSON.stringify(before3d) !== JSON.stringify(after3d)
+            ? reprojectChanges(doc.elements, before3d, after3d)
+            : []
         if (txn) {
           // Capture the pre-transaction background once; apply live (no stack push).
           if (txn.bgBefore === null) txn.bgBefore = doc.background
-          set({ doc: { ...doc, background: next } })
+          let d = { ...doc, background: next }
+          if (reproj.length) {
+            d = applyOperation(d, { kind: 'update', changes: reproj })
+            // Accumulate like updateElements: keep each field's earliest before /
+            // latest after, so the whole session commits as one net move.
+            for (const ch of reproj) {
+              const prev = txn.changes[ch.id]
+              txn.changes[ch.id] = prev
+                ? { id: ch.id, before: { ...ch.before, ...prev.before }, after: { ...prev.after, ...ch.after } }
+                : { ...ch }
+            }
+          }
+          set({ doc: d })
           return
         }
-        push({ kind: 'background', before: doc.background, after: next })
+        // No transaction: keep the background + reprojection atomic (one undo step).
+        if (reproj.length) {
+          push({ kind: 'transaction', label: 'field', ops: [{ kind: 'background', before: doc.background, after: next }, { kind: 'update', changes: reproj }] })
+        } else {
+          push({ kind: 'background', before: doc.background, after: next })
+        }
       },
 
       resetBackground: () => {

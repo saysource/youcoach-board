@@ -45,6 +45,8 @@ export interface ElementPatch {
   figureId?: string
   colors?: Record<string, string>
   mirror?: boolean
+  // World-ground anchor [x, z] for pitch-pinned standing elements (figure/token).
+  ground?: [number, number]
   // Token options.
   shape?: 'token' | 'jersey'
   tokenFill?: TokenFill

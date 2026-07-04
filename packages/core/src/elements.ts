@@ -142,6 +142,10 @@ export interface FigureElement extends BaseElement {
   mirror?: boolean
   /** Marks this figure as a ball — special-cased later (e.g. animation). */
   ball?: boolean
+  /** World-ground anchor `[x, z]` (metres, y=0) — the figure's bottom-center pinned
+   *  to the pitch, so it keeps its physical spot when the 3D field camera changes.
+   *  Absent = not (yet) pinned. See specs/start.md "Elements on the 3D space". */
+  ground?: [number, number]
 }
 
 /** A token: an internally-managed disc/jersey badge with a configurable fill and
@@ -171,6 +175,9 @@ export interface TokenElement extends BaseElement {
   label: string
   /** Whether the under-badge caption is shown. */
   showLabel: boolean
+  /** World-ground anchor `[x, z]` (metres, y=0) — the badge's bottom-center pinned
+   *  to the pitch (see FigureElement.ground). */
+  ground?: [number, number]
 }
 
 /** A multiline text label wrapped by a rounded rectangle (which may be
@@ -742,6 +749,14 @@ function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
+/** A finite `[x, z]` ground anchor, or undefined (dropped) if malformed. */
+function parseGround(v: unknown): [number, number] | undefined {
+  if (!Array.isArray(v) || v.length !== 2) return undefined
+  const x = num(v[0])
+  const z = num(v[1])
+  return x === null || z === null ? undefined : [x, z]
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v))
 }
@@ -841,7 +856,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     const width = num(o.width)
     const height = num(o.height)
     if (!figureId || width === null || height === null) return null
-    return { ...base, type: 'figure', figureId, x: num(o.x) ?? 0, y: num(o.y) ?? 0, width, height, colors: parseColors(o.colors), mirror: o.mirror === true, ball: o.ball === true || undefined }
+    return { ...base, type: 'figure', figureId, x: num(o.x) ?? 0, y: num(o.y) ?? 0, width, height, colors: parseColors(o.colors), mirror: o.mirror === true, ball: o.ball === true || undefined, ground: parseGround(o.ground) }
   }
   if (o.type === 'token') {
     const width = num(o.width)
@@ -863,6 +878,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       text: typeof o.text === 'string' ? o.text : '',
       label: typeof o.label === 'string' ? o.label : '',
       showLabel: o.showLabel === true,
+      ground: parseGround(o.ground),
     }
   }
   if (o.type === 'text') {
