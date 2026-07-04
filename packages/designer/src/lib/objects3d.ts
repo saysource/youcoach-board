@@ -126,6 +126,21 @@ function unitConeGeometry(): THREE.BufferGeometry {
   return coneGeometry.clone()
 }
 
+// A stepped grayscale ramp used as a toon gradientMap. Without it MeshToonMaterial
+// is a near-flat 2-tone; the discrete steps give crisp cel bands that make a
+// curved surface's form read clearly. Cached (one texture shared by all cones).
+let toonRamp: THREE.DataTexture | null = null
+function toonGradientMap(): THREE.DataTexture {
+  if (!toonRamp) {
+    const steps = new Uint8Array([90, 150, 205, 255]) // dark → light bands
+    const tex = new THREE.DataTexture(steps, steps.length, 1, THREE.RedFormat)
+    tex.minFilter = tex.magFilter = THREE.NearestFilter
+    tex.needsUpdate = true
+    toonRamp = tex
+  }
+  return toonRamp
+}
+
 /** A slightly-inflated, back-faces-only black shell of the same geometry — the
  *  classic toon "ink" outline. Added as a child so it scales/moves with the
  *  object; a small factor keeps the line thin. */
@@ -140,7 +155,7 @@ function toonOutline(geometry: THREE.BufferGeometry): THREE.Mesh {
 export function buildObject3D(objectId: string): THREE.Mesh {
   if (objectId === 'cone') {
     const geom = unitConeGeometry()
-    const mesh = new THREE.Mesh(geom, new THREE.MeshToonMaterial({ color: 0xf4611e }))
+    const mesh = new THREE.Mesh(geom, new THREE.MeshToonMaterial({ color: 0xf4611e, gradientMap: toonGradientMap() }))
     mesh.castShadow = true
     mesh.add(toonOutline(geom)) // small black outline (shares the mesh geometry)
     return mesh

@@ -103,9 +103,13 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         ctx.scene.add(mesh)
         ctx.meshes.set(e.id, mesh)
       }
-      // Unit mesh centered at origin → scale by size, lift so it rests on ground.
+      // Scale by size, then lift by the geometry's actual base so it rests on
+      // the ground. Objects vary in height (the cone is short, not a full unit
+      // cube), so a fixed size/2 lift would leave short ones floating.
       mesh.scale.setScalar(e.size)
-      mesh.position.set(e.x, e.size / 2, e.z)
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+      const baseY = mesh.geometry.boundingBox ? -mesh.geometry.boundingBox.min.y : 0.5
+      mesh.position.set(e.x, baseY * e.size, e.z)
       mesh.rotation.set(0, e.rotation, 0)
       const outline = mesh.getObjectByName('outline')
       if (outline) outline.visible = selectedIds.includes(e.id)
