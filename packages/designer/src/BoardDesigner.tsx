@@ -33,15 +33,15 @@ export interface BoardDesignerProps {
 // The editor's public entry point: a per-instance editor store wrapping the
 // floating-chrome shell + interactive board.
 export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, assets, onChange }: BoardDesignerProps) {
-  // A fresh board opens on the real 3D field (a default preset pose). Legacy docs
-  // that carry a hand-drawn `fieldSvg` keep the old base-image + SVG rendering.
+  // A fresh board opens on the real 3D field (a default preset pose) over the base
+  // grass image. Legacy docs that carry a hand-drawn `fieldSvg` keep the old SVG.
   const bg = initialDoc?.background
   const legacy = !!bg?.fieldSvg
   const docWithBackground = {
     ...initialDoc,
     background: {
       ...bg,
-      image: bg?.image ?? (legacy ? defaultFieldImage : null),
+      image: bg?.image ?? defaultFieldImage,
       fieldSvg: bg?.fieldSvg ?? null,
       field3d: bg?.field3d ?? (legacy ? null : DEFAULT_ZONE.camera),
       figureScale: bg?.figureScale ?? DEFAULT_FIELD_FIGURE_SCALE,
