@@ -14,10 +14,25 @@
 // See specs/start.md "Elements on the 3D space". Framework-free (three.js only).
 
 import * as THREE from 'three'
-import { type BoardElement, type PolylineElement, type ElementChange, type Operation, getLocalBounds } from '@youcoach-board/core'
+import { type BoardElement, type PolylineElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
 import { projectToBoard, boardToGround } from './arrow3d'
 import { rectToPolyline, ellipseToPolyline } from './draw'
+
+/** Project a ground point (x, 0, z) to board units, but clamp a point that lies
+ *  BEHIND the camera to just in front of the near plane (w ≥ ε). Plain
+ *  `.project()` divides by a negative w for behind-camera points, which flips
+ *  their sign and wraps a vertex to the OPPOSITE side of the screen — so a filled
+ *  polygon straddling the camera (e.g. a pitch rectangle when zoomed in low)
+ *  inverts and covers everything. Clamping w keeps a behind vertex flying off in
+ *  its true direction, so the shape just extends off-screen. */
+function projectGround(cam: THREE.Camera, x: number, z: number): [number, number] {
+  const v = new THREE.Vector4(x, 0, z, 1)
+  v.applyMatrix4(cam.matrixWorldInverse)
+  v.applyMatrix4(cam.projectionMatrix)
+  const w = v.w > 1e-4 ? v.w : 1e-4
+  return [((v.x / w + 1) * BOARD_WIDTH) / 2, ((1 - v.y / w) * BOARD_HEIGHT) / 2]
+}
 
 /** Elements that stand on the pitch and carry a single ground anchor. */
 export type GroundElement = Extract<BoardElement, { type: 'figure' | 'token' }>
@@ -139,10 +154,7 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
   const changes: ElementChange[] = []
   for (const el of elements) {
     if (el.type === 'polyline' && el.ground) {
-      const pts: Array<[number, number]> = el.ground.map(([x, z]) => {
-        const b = projectToBoard(new THREE.Vector3(x, 0, z), newCam)
-        return [b.x, b.y]
-      })
+      const pts: Array<[number, number]> = el.ground.map(([x, z]) => projectGround(newCam, x, z))
       changes.push({ id: el.id, before: { points: el.points, transform: el.transform }, after: { points: pts, transform: { ...el.transform, x: 0, y: 0, rotate: 0, scale: 1 } } })
       continue
     }
@@ -151,9 +163,9 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
     const ratio = groundPPM(newCam, gx, gz) / groundPPM(oldCam, gx, gz)
     if (!Number.isFinite(ratio) || ratio <= 0) continue
     const scale = clamp(el.transform.scale * ratio, 0.05, 20)
-    const bc = projectToBoard(new THREE.Vector3(gx, 0, gz), newCam)
+    const [bcx, bcy] = projectGround(newCam, gx, gz)
     const { cx, cy, h } = localCenter(el)
-    const after2 = { ...el.transform, x: bc.x - cx, y: bc.y - cy - (h * scale) / 2, scale }
+    const after2 = { ...el.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }
     changes.push({ id: el.id, before: { transform: el.transform }, after: { transform: after2 } })
   }
   return changes
