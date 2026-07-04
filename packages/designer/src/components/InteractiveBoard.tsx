@@ -72,7 +72,7 @@ import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles,
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { groundSyncChanges } from '../lib/field-anchor'
+import { buildPinOps } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -315,6 +315,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const commitTransaction = useEditorStore((s) => s.commitTransaction)
   const zoomReset = useEditorStore((s) => s.zoomReset)
   const updateElements = useEditorStore((s) => s.updateElements)
+  const pinSetup = useEditorStore((s) => s.pinSetup)
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
@@ -522,11 +523,12 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   useEffect(() => {
     if (!editing3d || !field3d) return
     zoomReset()
+    // Prepare pitch pins (ONE undoable step, before the field-edit transaction):
+    // (re)derive every element's ground anchor from its CURRENT board placement —
+    // healing staleness from ordinary fixed-camera edits — and convert rectangles
+    // to closed polylines so they can warp onto the field surface.
+    pinSetup(buildPinOps(doc.elements, field3d))
     beginTransaction()
-    // Re-derive each standing element's pitch anchor from its CURRENT board spot
-    // through the live camera, so reprojection (as the camera then moves) is
-    // anchored correctly — healing any staleness from ordinary fixed-camera edits.
-    updateElements(groundSyncChanges(doc.elements, field3d))
     return () => commitTransaction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing3d])

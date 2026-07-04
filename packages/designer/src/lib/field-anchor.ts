@@ -1,28 +1,32 @@
-// Pinning standing elements (figures + tokens) to the 3D pitch.
+// Pinning board elements to the 3D pitch.
 //
-// A figure lives as a 2D box on the board, but it also stands on a physical spot
-// of the grass. We record that spot as `ground = [x, z]` (world metres, y=0 — the
-// figure's BOTTOM-CENTER, its "feet"). When the field camera (background.field3d)
-// changes, we reproject each pinned element so it keeps its pitch spot: the new
-// bottom-center is `projectToBoard(ground, newCamera)`, and its scale follows how
-// magnified the pitch is at that spot (ground pixels-per-metre). See
-// specs/start.md "Elements on the 3D space".
+// Two kinds of pin, both recording where an element sits on the grass so we can
+// recompute its 2D placement when the field camera (background.field3d) changes:
 //
-// Framework-free (three.js only) so the store/board just call these pure helpers.
+//   - STANDING elements (figure, token): one `ground = [x, z]` (world metres,
+//     y=0) — the element's BOTTOM-CENTER ("feet"). On a camera change it keeps
+//     that spot and scales with the pitch magnification there.
+//   - AREA/PATH elements (polyline, and rectangles converted to closed
+//     polylines): one `ground` per point, parallel to `points`. Each defining
+//     point sticks to its own grass spot, so the shape genuinely WARPS onto the
+//     field surface (a pitch rectangle becomes a trapezoid from another angle).
+//
+// See specs/start.md "Elements on the 3D space". Framework-free (three.js only).
 
 import * as THREE from 'three'
-import { type BoardElement, type ElementChange, getLocalBounds } from '@youcoach-board/core'
+import { type BoardElement, type PolylineElement, type ElementChange, type Operation, getLocalBounds } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
 import { projectToBoard, boardToGround } from './arrow3d'
+import { rectToPolyline } from './draw'
 
-/** Elements that stand on the pitch and carry a ground anchor. */
+/** Elements that stand on the pitch and carry a single ground anchor. */
 export type GroundElement = Extract<BoardElement, { type: 'figure' | 'token' }>
 export function isGroundElement(el: BoardElement): el is GroundElement {
   return el.type === 'figure' || el.type === 'token'
 }
 
-/** The element's local (transform-free) center — the axis the transform scales
- *  about — and its local height. */
+/** The element's local (transform-free) center — the axis the transform scales/
+ *  rotates about — and its local height. */
 function localCenter(el: GroundElement): { cx: number; cy: number; h: number } {
   const lb = getLocalBounds(el)
   return { cx: lb.x + lb.width / 2, cy: lb.y + lb.height / 2, h: lb.height }
@@ -33,6 +37,36 @@ export function bottomCenterBoard(el: GroundElement): { x: number; y: number } {
   const { cx, cy, h } = localCenter(el)
   const t = el.transform
   return { x: cx + t.x, y: cy + (h * t.scale) / 2 + t.y }
+}
+
+/** A polyline's points in board units, with its transform applied EXACTLY as
+ *  ElementView renders it: `board = c + R·s·(p − c) + (x, y)` (translate, then
+ *  rotate + scale about the local center). */
+function polyBoardPoints(el: PolylineElement): [number, number][] {
+  const lb = getLocalBounds(el)
+  const cx = lb.x + lb.width / 2
+  const cy = lb.y + lb.height / 2
+  const { x, y, rotate, scale } = el.transform
+  const rad = (rotate * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  return el.points.map(([px, py]) => {
+    const sx = (px - cx) * scale
+    const sy = (py - cy) * scale
+    return [cx + (sx * cos - sy * sin) + x, cy + (sx * sin + sy * cos) + y]
+  })
+}
+
+/** Each polyline point's ground anchor under `cam`, or null if ANY point doesn't
+ *  hit the ground plane (the array must stay parallel to `points`). */
+function polylineGround(el: PolylineElement, cam: THREE.Camera): Array<[number, number]> | null {
+  const out: Array<[number, number]> = []
+  for (const [bx, by] of polyBoardPoints(el)) {
+    const g = boardToGround(bx, by, cam)
+    if (!g) return null
+    out.push([g.x, g.z])
+  }
+  return out
 }
 
 /** Ground pixels-per-metre at (x, z): √(projected area of a 1 m × 1 m ground
@@ -47,44 +81,74 @@ function groundPPM(cam: THREE.Camera, x: number, z: number): number {
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
-
-/** (Re)derive the ground anchor of every standing element from its CURRENT board
- *  bottom-center through `cam`, returning the `update` changes (only where the
- *  anchor actually moved). Run on entering Edit-Background so ordinary
- *  fixed-camera edits (move/duplicate/paste) heal before any reprojection.
- *  A bottom-center that doesn't hit the ground plane (behind/parallel to camera)
- *  is left untouched. */
-export function groundSyncChanges(elements: BoardElement[], cfg: PosedCamera): ElementChange[] {
-  const cam = makeCalibratedCamera(cfg)
-  const changes: ElementChange[] = []
-  for (const el of elements) {
-    if (!isGroundElement(el)) continue
-    const bc = bottomCenterBoard(el)
-    const g = boardToGround(bc.x, bc.y, cam)
-    if (!g) continue
-    const next: [number, number] = [g.x, g.z]
-    if (el.ground && Math.abs(el.ground[0] - next[0]) < 1e-4 && Math.abs(el.ground[1] - next[1]) < 1e-4) continue
-    changes.push({ id: el.id, before: { ground: el.ground }, after: { ground: next } })
-  }
-  return changes
+const closePt = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 1e-4 && Math.abs(a[1] - b[1]) < 1e-4
+function sameGround(a: Array<[number, number]>, b: Array<[number, number]>): boolean {
+  return a.length === b.length && a.every((p, i) => closePt(p, b[i]))
 }
 
-/** Reproject every pinned standing element from the `before` camera to `after`:
- *  reposition its bottom-center to `projectToBoard(ground, after)` and rescale by
- *  the ground-ppm ratio, as one `update`'s worth of changes. Elements without a
- *  ground anchor (not pinned) are skipped. */
+/** Prepare pins on entering Edit-Background (a single undoable step, run BEFORE
+ *  the field-edit transaction). For every pinnable element it (re)derives the
+ *  ground anchor from the element's CURRENT board placement through `cfg` — which
+ *  heals any staleness from ordinary fixed-camera edits — and, because only a
+ *  polygon can warp, CONVERTS each rectangle into an equivalent closed polyline
+ *  first. Returns:
+ *   - `remove` + `add` ops (same index, id preserved) per rectangle, the added
+ *     polyline already carrying its per-point ground, and
+ *   - one `update` op setting `ground` on figures/tokens/polylines whose anchor
+ *     changed (already-synced elements are skipped, so it's idempotent). */
+export function buildPinOps(elements: BoardElement[], cfg: PosedCamera): Operation[] {
+  const cam = makeCalibratedCamera(cfg)
+  const ops: Operation[] = []
+  const updates: ElementChange[] = []
+  elements.forEach((el, index) => {
+    if (el.type === 'figure' || el.type === 'token') {
+      const bc = bottomCenterBoard(el)
+      const g = boardToGround(bc.x, bc.y, cam)
+      if (!g) return
+      const next: [number, number] = [g.x, g.z]
+      if (el.ground && closePt(el.ground, next)) return
+      updates.push({ id: el.id, before: { ground: el.ground }, after: { ground: next } })
+    } else if (el.type === 'polyline') {
+      const g = polylineGround(el, cam)
+      if (!g) return
+      if (el.ground && sameGround(el.ground, g)) return
+      updates.push({ id: el.id, before: { ground: el.ground }, after: { ground: g } })
+    } else if (el.type === 'rect') {
+      const poly = rectToPolyline(el) as PolylineElement
+      const g = polylineGround(poly, cam)
+      ops.push({ kind: 'remove', element: el, index })
+      ops.push({ kind: 'add', element: g ? { ...poly, ground: g } : poly, index })
+    }
+  })
+  if (updates.length) ops.push({ kind: 'update', changes: updates })
+  return ops
+}
+
+/** Reproject every pinned element from the `before` camera to `after`:
+ *   - figure/token: reposition its bottom-center to `projectToBoard(ground)` and
+ *     rescale by the ground-ppm ratio (how much more magnified the pitch is here);
+ *   - polyline: reproject EACH point to `projectToBoard(ground[i])` and bake it
+ *     into `points` (resetting translate/rotate/scale, keeping opacity), so the
+ *     shape warps to stay on the field surface.
+ *  Elements without a ground anchor are skipped. Returns the `update` changes. */
 export function reprojectChanges(elements: BoardElement[], before: PosedCamera, after: PosedCamera): ElementChange[] {
   const oldCam = makeCalibratedCamera(before)
   const newCam = makeCalibratedCamera(after)
   const changes: ElementChange[] = []
   for (const el of elements) {
+    if (el.type === 'polyline' && el.ground) {
+      const pts: Array<[number, number]> = el.ground.map(([x, z]) => {
+        const b = projectToBoard(new THREE.Vector3(x, 0, z), newCam)
+        return [b.x, b.y]
+      })
+      changes.push({ id: el.id, before: { points: el.points, transform: el.transform }, after: { points: pts, transform: { ...el.transform, x: 0, y: 0, rotate: 0, scale: 1 } } })
+      continue
+    }
     if (!isGroundElement(el) || !el.ground) continue
     const [gx, gz] = el.ground
-    // New scale: how much more/less magnified the pitch is here now.
     const ratio = groundPPM(newCam, gx, gz) / groundPPM(oldCam, gx, gz)
     if (!Number.isFinite(ratio) || ratio <= 0) continue
     const scale = clamp(el.transform.scale * ratio, 0.05, 20)
-    // New bottom-center on the board, and the transform that lands it there.
     const bc = projectToBoard(new THREE.Vector3(gx, 0, gz), newCam)
     const { cx, cy, h } = localCenter(el)
     const after2 = { ...el.transform, x: bc.x - cx, y: bc.y - cy - (h * scale) / 2, scale }

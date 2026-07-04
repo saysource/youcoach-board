@@ -167,6 +167,9 @@ export interface EditorState {
   /** Apply a set of element attribute changes as one undoable operation — the
    *  workhorse for move (and later resize / restyle). */
   updateElements: (changes: ElementChange[]) => void
+  /** Apply prebuilt operations (rect→polyline conversions + ground anchors) as ONE
+   *  undoable step — the pitch-pin setup run when entering Edit-Background. */
+  pinSetup: (ops: Operation[]) => void
   /** Merge changes into the document background (not on the undo stack for now). */
   setBackground: (patch: Partial<BoardBackground>) => void
   /** Restore the background to its default (one undoable op). */
@@ -445,6 +448,11 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         // applyOperation re-applies absolute 'after' values — a no-op since the doc
         // already reflects them — so this just records the reversible op(s).
         push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'edit', ops })
+      },
+
+      pinSetup: (ops) => {
+        if (ops.length === 0) return
+        push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'pin', ops })
       },
 
       setBackground: (patch) => {

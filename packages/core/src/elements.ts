@@ -110,6 +110,11 @@ export interface PolylineElement extends BaseElement {
   linesOffset: number
   startTip: ArrowTip
   endTip: ArrowTip
+  /** Per-point world-ground anchors `[x, z]` (metres, y=0), parallel to `points` —
+   *  each defining point pinned to the pitch, so the shape warps to stay on the
+   *  field surface when the 3D field camera changes. Absent = not pinned. See
+   *  specs/start.md "Elements on the 3D space". */
+  ground?: Array<[number, number]>
 }
 
 /** A freehand stroke: a dense point path, always open and unfilled, rendered
@@ -757,6 +762,20 @@ function parseGround(v: unknown): [number, number] | undefined {
   return x === null || z === null ? undefined : [x, z]
 }
 
+/** An array of `[x, z]` ground anchors (one per polyline point), or undefined if
+ *  malformed/empty — any bad entry drops the whole array (it must stay parallel
+ *  to `points`). */
+function parseGroundArray(v: unknown): Array<[number, number]> | undefined {
+  if (!Array.isArray(v) || v.length === 0) return undefined
+  const out: Array<[number, number]> = []
+  for (const p of v) {
+    const g = parseGround(p)
+    if (!g) return undefined
+    out.push(g)
+  }
+  return out
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v))
 }
@@ -836,6 +855,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       linesOffset: lo === null ? DEFAULT_LINES_OFFSET : clamp(lo, LINES_OFFSET_MIN, LINES_OFFSET_MAX),
       startTip: parseTip(o.startTip),
       endTip: parseTip(o.endTip),
+      ground: parseGroundArray(o.ground),
     }
   }
   if (o.type === 'draw') {
