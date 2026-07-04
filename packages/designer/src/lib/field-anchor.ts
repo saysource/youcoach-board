@@ -158,7 +158,8 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera): Operati
  *     into `points` (resetting translate/rotate/scale, keeping opacity), so the
  *     shape warps to stay on the field surface.
  *  Elements without a ground anchor are skipped. Returns the `update` changes. */
-export function reprojectChanges(elements: BoardElement[], before: PosedCamera, after: PosedCamera): ElementChange[] {
+export function reprojectChanges(elements: BoardElement[], before: PosedCamera, after: PosedCamera, opts?: { tokenPerspective?: boolean }): ElementChange[] {
+  const tokenPerspective = opts?.tokenPerspective !== false
   const oldCam = makeCalibratedCamera(before)
   const newCam = makeCalibratedCamera(after)
   const changes: ElementChange[] = []
@@ -172,7 +173,10 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
     const [gx, gz] = el.ground
     const { cx, cy, h } = localCenter(el)
     let scale: number
-    if (el.sizeM != null) {
+    if (el.type === 'token' && !tokenPerspective) {
+      // Token-perspective off: keep a constant on-board size (still repositioned).
+      scale = el.transform.scale
+    } else if (el.sizeM != null) {
       // Absolute: size follows the pitch magnification here, independent of the
       // current (possibly out-of-view, collapsed) scale — so it never gets stuck.
       scale = clamp((el.sizeM * groundPPM(newCam, gx, gz)) / (h || 1), 0.05, 30)

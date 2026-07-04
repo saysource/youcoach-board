@@ -113,6 +113,14 @@ export interface EditorState {
   /** When true, dragging a selection snaps its bounding box to other elements'
    *  edges/centers and draws alignment guides. Toggled with ⌥S or the menu. */
   snapToObjects: boolean
+  /** Preference: when true, resizing one token resizes every other token to
+   *  match (the reference token = first selected token, else first in the doc).
+   *  Coaches usually want a single uniform token size. */
+  syncTokenSizes: boolean
+  /** Preference: when true, tokens scale with the 3D field perspective (bigger
+   *  when the pitch is more magnified where they stand); when false they keep a
+   *  constant on-board size but still stay pinned to their pitch spot. */
+  tokenPerspective: boolean
 
   /** Style for the next element to be created — editable in the properties panel
    *  before anything is selected (so the user can pre-set stroke/fill/… ), and
@@ -142,6 +150,8 @@ export interface EditorState {
   setActiveTool: (tool: ToolId) => void
   toggleKeepTool: () => void
   toggleSnapToObjects: () => void
+  toggleSyncTokenSizes: () => void
+  toggleTokenPerspective: () => void
   /** Merge changes into the next-element style defaults. */
   setToolDefaults: (patch: Partial<FigureStyle>) => void
   /** Merge changes into the next-token defaults (style/text/label). */
@@ -278,6 +288,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       kitHistory: [],
       keepToolActive: false,
       snapToObjects: false,
+      syncTokenSizes: true,
+      tokenPerspective: true,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
       styleClipboard: null,
@@ -296,6 +308,10 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       toggleKeepTool: () => set((s) => ({ keepToolActive: !s.keepToolActive })),
 
       toggleSnapToObjects: () => set((s) => ({ snapToObjects: !s.snapToObjects })),
+
+      toggleSyncTokenSizes: () => set((s) => ({ syncTokenSizes: !s.syncTokenSizes })),
+
+      toggleTokenPerspective: () => set((s) => ({ tokenPerspective: !s.tokenPerspective })),
 
       setToolDefaults: (patch) => set((s) => ({ toolDefaults: { ...s.toolDefaults, ...patch } })),
 
@@ -465,7 +481,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         const after3d = next.field3d
         const reproj =
           'field3d' in patch && before3d && after3d && JSON.stringify(before3d) !== JSON.stringify(after3d)
-            ? reprojectChanges(doc.elements, before3d, after3d)
+            ? reprojectChanges(doc.elements, before3d, after3d, { tokenPerspective: get().tokenPerspective })
             : []
         if (txn) {
           // Capture the pre-transaction background once; apply live (no stack push).

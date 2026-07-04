@@ -12,6 +12,8 @@ import {
   Monitor,
   SlidersHorizontal,
   Magnet,
+  Ruler,
+  Boxes,
   Check,
   type LucideIcon,
 } from 'lucide-react'
@@ -46,6 +48,10 @@ interface MainMenuProps {
 export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts }: MainMenuProps) {
   const snapToObjects = useEditorStore((s) => s.snapToObjects)
   const toggleSnapToObjects = useEditorStore((s) => s.toggleSnapToObjects)
+  const syncTokenSizes = useEditorStore((s) => s.syncTokenSizes)
+  const toggleSyncTokenSizes = useEditorStore((s) => s.toggleSyncTokenSizes)
+  const tokenPerspective = useEditorStore((s) => s.tokenPerspective)
+  const toggleTokenPerspective = useEditorStore((s) => s.toggleTokenPerspective)
   return (
     <DropdownMenu>
       <Tooltip>
@@ -93,8 +99,16 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
           <DropdownMenuSubContent>
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toggleSnapToObjects() }}>
               <Magnet /> Snap to objects
-              {snapToObjects && <Check className="size-4" />}
+              {snapToObjects && <Check className="ml-auto size-4" />}
               <DropdownMenuShortcut>⌥S</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toggleSyncTokenSizes() }}>
+              <Ruler /> Sync token sizes
+              {syncTokenSizes && <Check className="ml-auto size-4" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toggleTokenPerspective() }}>
+              <Boxes /> Token perspective
+              {tokenPerspective && <Check className="ml-auto size-4" />}
             </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>

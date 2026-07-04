@@ -23,6 +23,7 @@ import {
   TEXT_MAX_FONT,
   type ArrowTip,
   type BoardElement,
+  type ElementChange,
   type ElementTransform,
   type Box,
   type Arrow3DElement,
@@ -316,6 +317,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const zoomReset = useEditorStore((s) => s.zoomReset)
   const updateElements = useEditorStore((s) => s.updateElements)
   const pinSetup = useEditorStore((s) => s.pinSetup)
+  const syncTokenSizes = useEditorStore((s) => s.syncTokenSizes)
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
@@ -1633,6 +1635,31 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     }
   }
 
+  // "Sync token sizes": after resizing one token, make every OTHER token match a
+  // reference token's size (the first selected token, else the first in the doc —
+  // which in a single-token resize is the token just dragged), keeping each
+  // centered. Returns the resize + the sync as ONE undoable batch.
+  function tokenSizeSyncChanges(resizeChange: ElementChange): ElementChange[] {
+    const tokens = doc.elements.filter((e): e is Extract<BoardElement, { type: 'token' }> => e.type === 'token')
+    const ref = tokens.find((t) => selectedIds.includes(t.id)) ?? tokens[0]
+    if (!ref) return [resizeChange]
+    const refIsResized = ref.id === resizeChange.id
+    const tw = (refIsResized ? resizeChange.after.width : ref.width) as number
+    const th = (refIsResized ? resizeChange.after.height : ref.height) as number
+    const tscale = (refIsResized ? resizeChange.after.transform?.scale : ref.transform.scale) ?? 1
+    const changes: ElementChange[] = refIsResized ? [resizeChange] : []
+    for (const t of tokens) {
+      if (t.id === ref.id) continue
+      changes.push({
+        id: t.id,
+        before: { x: t.x, y: t.y, width: t.width, height: t.height, transform: t.transform },
+        // Grow/shrink about the token's local center so it doesn't jump.
+        after: { x: t.x + (t.width - tw) / 2, y: t.y + (t.height - th) / 2, width: tw, height: th, transform: { ...t.transform, scale: tscale } },
+      })
+    }
+    return changes.length ? changes : [resizeChange]
+  }
+
   function commitGesture(g: Gesture) {
     // Ignore a handle click with no real drag (avoids empty undo entries).
     if (Math.hypot(g.current.x - g.start.x, g.current.y - g.start.y) < 1) return
@@ -1661,13 +1688,12 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           },
         ])
       } else {
-        updateElements([
-          {
-            id: g.id,
-            before: { x: g.box0.x, y: g.box0.y, width: g.box0.width, height: g.box0.height, transform: g.t0 },
-            after: { x: box.x, y: box.y, width: box.width, height: box.height, transform },
-          },
-        ])
+        const resizeChange = {
+          id: g.id,
+          before: { x: g.box0.x, y: g.box0.y, width: g.box0.width, height: g.box0.height, transform: g.t0 },
+          after: { x: box.x, y: box.y, width: box.width, height: box.height, transform },
+        }
+        updateElements(el.type === 'token' && syncTokenSizes ? tokenSizeSyncChanges(resizeChange) : [resizeChange])
       }
     } else if (g.kind === 'point' && el.type === 'polyline') {
       const i = Number(g.handle.slice('point-'.length))
