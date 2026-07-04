@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- low hurdle: a wide low bar on two feet, seen at a slight angle -->
+  <path d="M8 40 L52 32 L60 36 L16 44 Z" fill="#f2c200" stroke="#1a1a1a" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M12 42 L12 50 M56 34 L56 42" fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round"/>
+  <path d="M14 43 L18 41 M14 51 L18 49" fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round"/>
+</svg>

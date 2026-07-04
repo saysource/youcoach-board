@@ -13,12 +13,14 @@ import { buildGoal, type GoalStyle } from './goal'
 // bare page, …) regardless of asset-serving base paths.
 import { CONE_GLB_BASE64 } from './cone-glb'
 import { HIGH_CONE_GLB_BASE64 } from './high-cone-glb'
+import { LOW_HURDLE_GLB_BASE64 } from './low-hurdle-glb'
 
 // GLB-backed objects: embedded model bytes + toon colour. Add a row (and an
 // entry in KNOWN_OBJECTS + the catalog) to grow the palette.
 const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   cone: { data: CONE_GLB_BASE64, color: 0xf4611e },
   high_cone: { data: HIGH_CONE_GLB_BASE64, color: 0xf4611e },
+  low_hurdle: { data: LOW_HURDLE_GLB_BASE64, color: 0xf2c200 },
 }
 
 // Procedural goals. Built at their real metric size (feet → metres), so they're
@@ -32,7 +34,7 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'low_hurdle', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
@@ -40,7 +42,7 @@ export function isKnownObject(id: string): id is Object3DKind {
 
 // Per-kind default `size` (metres). Goals are modelled at real size → placed at
 // ×1; other objects fall back to the caller's default (a nominal 1 m unit mesh).
-const OBJECT3D_SIZES: Record<string, number> = { goal_full: 1, goal_9: 1, goal_7: 1, goal_futsal: 1, goal_small: 1 }
+const OBJECT3D_SIZES: Record<string, number> = { goal_full: 1, goal_9: 1, goal_7: 1, goal_futsal: 1, goal_small: 1, low_hurdle: 2 }
 export function defaultObject3DSize(objectId: string, fallback: number): number {
   return OBJECT3D_SIZES[objectId] ?? fallback
 }

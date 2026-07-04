@@ -17554,6 +17554,12 @@
      "h": 100
     },
     {
+     "object3d": "low_hurdle",
+     "thumb": "materials3d/low_hurdle",
+     "w": 100,
+     "h": 100
+    },
+    {
      "object3d": "goal_full",
      "thumb": "materials3d/goal_full",
      "w": 100,
