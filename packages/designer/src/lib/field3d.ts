@@ -195,6 +195,28 @@ function makeGoal(sign: number, netTex: THREE.Texture): THREE.Group {
   backBar.position.set(bx, GOAL_H, 0)
   goal.add(backBar)
 
+  // Top depth rails (front-top corner → back-top corner) so the frame is closed,
+  // and rounded spheres at every top corner so the posts meet cleanly (no notches
+  // where the cylinders cross).
+  const rail = (z: number) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(br, br, GOAL_D, 12), mat)
+    m.rotation.z = Math.PI / 2
+    m.position.set(gx + (sign * GOAL_D) / 2, GOAL_H, z)
+    m.castShadow = true
+    return m
+  }
+  const joint = (x: number, z: number, r: number) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat)
+    m.position.set(x, GOAL_H, z)
+    m.castShadow = true
+    return m
+  }
+  for (const z of [-half, half]) {
+    goal.add(rail(z))
+    goal.add(joint(gx, z, POST_R)) // front-top: upright ∩ crossbar ∩ rail
+    goal.add(joint(bx, z, br)) // back-top: back upright ∩ back bar ∩ rail
+  }
+
   const back = new THREE.Mesh(new THREE.PlaneGeometry(GOAL_W, GOAL_H), netMat)
   back.rotation.y = Math.PI / 2
   back.position.set(bx, GOAL_H / 2, 0)
