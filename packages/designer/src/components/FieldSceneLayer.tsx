@@ -18,6 +18,10 @@ interface Props {
   color: string
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
+  /** Bump/flip to force an on-demand redraw when neither camera nor viewport
+   *  changed but the layout might have (e.g. entering/leaving Edit-Background) —
+   *  avoids a stale pitch until the next camera move. */
+  renderTick?: unknown
 }
 
 interface Ctx {
@@ -28,7 +32,7 @@ interface Ctx {
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -119,8 +123,13 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
 
   useEffect(() => {
     render()
+    // Re-render once more after layout settles (e.g. the drawer opening on
+    // Edit-Background resizes the board rect a frame later), so the pitch never
+    // lingers stale until the next camera move.
+    const raf = requestAnimationFrame(render)
+    return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport])
+  }, [camera, viewport, renderTick])
 
   useEffect(() => {
     const container = containerRef.current

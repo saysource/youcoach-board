@@ -547,7 +547,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const prev = tokenPrefsRef.current
     tokenPrefsRef.current = { tokenPerspective, syncTokenSizes }
     if (prev.tokenPerspective === tokenPerspective && prev.syncTokenSizes === syncTokenSizes) return
-    if (editing3d || !field3d) return
+    if (!field3d) return
     const refTokenId = selectedIds.find((id) => doc.elements.find((e) => e.id === id)?.type === 'token')
     updateElements(tokenSizeChanges(doc.elements, field3d, { syncTokenSizes, tokenPerspective, refTokenId }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1835,7 +1835,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     >
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
-      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} />}
+      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} renderTick={editing3d} />}
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
