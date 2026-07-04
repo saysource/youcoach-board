@@ -678,6 +678,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // `start`/`engaged` add a small drag threshold (resistance) before a move takes;
   // `alt` (Option held on press) duplicates the object once the drag engages.
   const [object3dGesture, setObject3dGesture] = useState<{ id: string; kind: 'move' | 'rotate'; orig: Object3DElement; grabGround: { x: number; z: number }; start: Point; engaged: boolean; alt: boolean } | null>(null)
+  // Snap guides shown while dragging a 3D object (its base centre → other elements).
+  const [object3dSnapGuides, setObject3dSnapGuides] = useState<SnapLine[]>([])
   const object3dElements = doc.elements.filter((e): e is Object3DElement => e.type === 'object3d')
 
   function editObject3D(g: NonNullable<typeof object3dGesture>, patch: Partial<Object3DElement>) {
@@ -686,12 +688,37 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     updateElements([{ id: g.id, before, after: patch }])
   }
 
+  // Snap a 3D object's new base centre (ground x/z) to other elements' notable
+  // points (2D boxes + other objects' base centres), in board space. Returns the
+  // snapped ground x/z + the alignment guides to draw.
+  function snapObject3DGround(nx: number, nz: number, selfId: string): { x: number; z: number; guides: SnapLine[] } {
+    const c = object3dToBoard(nx, 0, nz)
+    const targets = doc.elements
+      .filter((e) => e.id !== selfId && e.type !== 'arrow3d')
+      .map(snapElementOf)
+      .filter((t): t is SnapElement => t !== null)
+    const res = computeSnap({ box: { x: c.x, y: c.y, width: 0, height: 0 }, points: [c] }, targets, SNAP_PX / (scale || 1))
+    if (res.dx || res.dy) {
+      const gr = arrow3dGround({ x: c.x + res.dx, y: c.y + res.dy })
+      if (gr) return { x: gr.x, z: gr.z, guides: res.guides }
+    }
+    return { x: nx, z: nz, guides: res.guides }
+  }
+
   // Move (x/z only) or rotate (about Y only) the dragged object to board point p.
   function dragObject3D(g: NonNullable<typeof object3dGesture>, p: Point) {
     const ground = arrow3dGround(p)
     if (!ground) return
     if (g.kind === 'move') {
-      editObject3D(g, { x: g.orig.x + (ground.x - g.grabGround.x), z: g.orig.z + (ground.z - g.grabGround.z) })
+      let nx = g.orig.x + (ground.x - g.grabGround.x)
+      let nz = g.orig.z + (ground.z - g.grabGround.z)
+      if (snapToObjects) {
+        const sn = snapObject3DGround(nx, nz, g.id)
+        nx = sn.x
+        nz = sn.z
+        setObject3dSnapGuides(sn.guides)
+      } else if (object3dSnapGuides.length) setObject3dSnapGuides([])
+      editObject3D(g, { x: nx, z: nz })
     } else {
       // Rotate: the handle points toward the pointer's ground direction from the center.
       editObject3D(g, { rotation: Math.atan2(ground.x - g.orig.x, ground.z - g.orig.z) })
@@ -832,11 +859,24 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // An element's notable snap points (rotation-aware): the four corners + centre
   // for boxes, or the four axis-extremes (side midpoints) + centre for ellipses.
   function notablePoints(el: BoardElement): SnapMark[] {
+    // A 3D object snaps by the centre of its base (x, y=0, z) projected to board.
+    if (el.type === 'object3d') return [object3dToBoard(el.x, 0, el.z)]
+    if (el.type === 'arrow3d') return []
     const [nw, ne, se, sw] = boardCorners(el)
     const center = { x: (nw.x + se.x) / 2, y: (nw.y + se.y) / 2 }
     const mid = (a: SnapMark, b: SnapMark): SnapMark => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
     if (el.type === 'ellipse') return [mid(nw, ne), mid(ne, se), mid(se, sw), mid(sw, nw), center]
     return [nw, ne, se, sw, center]
+  }
+  // A snap TARGET for one element: its box + notable points. A 3D object is a
+  // zero-size box at its base centre (so it aligns without adding spurious edges).
+  function snapElementOf(e: BoardElement): SnapElement | null {
+    if (e.type === 'object3d') {
+      const c = object3dToBoard(e.x, 0, e.z)
+      return { box: { x: c.x, y: c.y, width: 0, height: 0 }, points: [c] }
+    }
+    const b = unionBounds([e])
+    return b ? { box: b, points: notablePoints(e) } : null
   }
   // Notable points of an axis-aligned box (used for a multi-selection's bbox).
   function boxPoints(b: Box): SnapMark[] {
@@ -864,11 +904,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const movingPts = (originEls.length === 1 ? notablePoints(originEls[0]) : boxPoints(u)).map((p) => ({ x: p.x + raw.x, y: p.y + raw.y }))
     const moving: SnapElement = { box: movingBox, points: movingPts }
     const targets = doc.elements
-      .filter((e) => !m.ids.includes(e.id) && e.type !== 'arrow3d' && e.type !== 'object3d')
-      .map((e): SnapElement | null => {
-        const b = unionBounds([e])
-        return b ? { box: b, points: notablePoints(e) } : null
-      })
+      .filter((e) => !m.ids.includes(e.id) && e.type !== 'arrow3d')
+      .map(snapElementOf)
       .filter((t): t is SnapElement => t !== null)
     return computeSnap(moving, targets, SNAP_PX / (scale || 1))
   }
@@ -917,7 +954,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const edgeY = g.handle.includes('s') ? box.y + box.height : g.handle.includes('n') ? box.y : null
     const xPts = edgeX != null ? pts.filter((p) => Math.abs(p.x - edgeX) < 0.5) : []
     const yPts = edgeY != null ? pts.filter((p) => Math.abs(p.y - edgeY) < 0.5) : []
-    const targetPts = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d' && e.type !== 'object3d').flatMap((e) => notablePoints(e))
+    const targetPts = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d').flatMap((e) => notablePoints(e))
     const { dx, dy, guides } = snapResize(xPts, yPts, targetPts, SNAP_PX / (scale || 1))
     return { pointer: clampToCanvas({ x: base.x + dx, y: base.y + dy }), guides }
   }
@@ -995,7 +1032,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function snapVertexBoard(g: Gesture, board: Point, excludeIdx: number): { board: Point; guides: SnapLine[] } {
     const el = doc.elements.find((e) => e.id === g.id)
     if (!snapToObjects || !el) return { board, guides: [] }
-    const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d' && e.type !== 'object3d').flatMap((e) => notablePoints(e))
+    const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d').flatMap((e) => notablePoints(e))
     if (el.type === 'polyline') {
       el.points.forEach((pt, idx) => {
         if (idx !== excludeIdx) targetPts.push(elementToBoard({ x: pt[0], y: pt[1] }, g.box0, g.t0))
@@ -1663,6 +1700,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       commitTransaction()
     } else if (object3dGesture) {
       setObject3dGesture(null)
+      if (object3dSnapGuides.length) setObject3dSnapGuides([])
       commitTransaction()
     } else if (bgPan) {
       setBgPan(null)
@@ -1893,7 +1931,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     return el ? resizePointer(el, gesture).guides : []
   })()
   const pointGuides = gesture?.kind === 'point' ? resolvePointDrag(gesture).guides : gesture?.kind === 'anchor' ? resolveAnchorDrag(gesture).guides : []
-  const alignGuides = [...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides]
+  const alignGuides = [...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides, ...object3dSnapGuides]
   const gapGuides = objectSnap?.gaps ?? []
 
   // 2D selection chrome excludes 3D arrows (they have no SVG box; their own
