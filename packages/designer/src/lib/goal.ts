@@ -32,7 +32,7 @@ function netTexture(): THREE.Texture {
   const g = cv.getContext('2d')!
   g.clearRect(0, 0, 64, 64)
   g.strokeStyle = '#ffffff'
-  g.lineWidth = 7
+  g.lineWidth = 14 // thick net cords
   g.strokeRect(0, 0, 64, 64)
   const tex = new THREE.CanvasTexture(cv)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
