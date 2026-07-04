@@ -103,29 +103,49 @@ function sameGround(a: Array<[number, number]>, b: Array<[number, number]>): boo
   return a.length === b.length && a.every((p, i) => closePt(p, b[i]))
 }
 
+/** The one metric height (metres) all tokens share when "sync token sizes" is on
+ *  — taken from the reference token (first selected, else first in the doc) at its
+ *  ground spot. Storing ONE size (rather than deriving each token's from its own
+ *  depth) is what keeps synced tokens equal in flat views: without it, entering
+ *  from a perspective view gives near/far tokens different `sizeM` for the same
+ *  board size, so they'd render at different sizes in a later top view. */
+function sharedTokenSizeM(elements: BoardElement[], cam: THREE.Camera, refId?: string): number | null {
+  const tokens = elements.filter((e): e is GroundElement => e.type === 'token')
+  const ref = tokens.find((t) => t.id === refId) ?? tokens[0]
+  if (!ref) return null
+  const bc = bottomCenterBoard(ref)
+  const g = boardToGround(bc.x, bc.y, cam)
+  if (!g) return null
+  return (localCenter(ref).h * ref.transform.scale) / groundPPM(cam, g.x, g.z)
+}
+
 /** Prepare pins on entering Edit-Background (a single undoable step, run BEFORE
  *  the field-edit transaction). For every pinnable element it (re)derives the
  *  ground anchor from the element's CURRENT board placement through `cfg` — which
  *  heals any staleness from ordinary fixed-camera edits — and, because only a
  *  polygon can warp, CONVERTS each rectangle into an equivalent closed polyline
- *  first. Returns:
+ *  first. When `syncTokenSizes` is on, ALL tokens are given one shared metric
+ *  height (so they stay equal-sized in flat views regardless of perspective).
+ *  Returns:
  *   - `remove` + `add` ops (same index, id preserved) per rectangle, the added
  *     polyline already carrying its per-point ground, and
- *   - one `update` op setting `ground` on figures/tokens/polylines whose anchor
+ *   - one `update` op setting `ground`/`sizeM` on standing elements whose anchor
  *     changed (already-synced elements are skipped, so it's idempotent). */
-export function buildPinOps(elements: BoardElement[], cfg: PosedCamera): Operation[] {
+export function buildPinOps(elements: BoardElement[], cfg: PosedCamera, opts?: { syncTokenSizes?: boolean; refTokenId?: string }): Operation[] {
   const cam = makeCalibratedCamera(cfg)
   const ops: Operation[] = []
   const updates: ElementChange[] = []
+  const shared = opts?.syncTokenSizes ? sharedTokenSizeM(elements, cam, opts.refTokenId) : null
   elements.forEach((el, index) => {
     if (el.type === 'figure' || el.type === 'token') {
       const bc = bottomCenterBoard(el)
       const g = boardToGround(bc.x, bc.y, cam)
       if (!g) return
       const next: [number, number] = [g.x, g.z]
-      // Capture the figure's real-world height (metres) at its spot, so its size
+      // Capture the element's real-world height (metres) at its spot, so its size
       // can be derived absolutely under any camera (self-correcting scaling).
-      const sizeM = (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
+      // Synced tokens all take the ONE shared size instead of their own depth's.
+      const sizeM = el.type === 'token' && shared != null ? shared : (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
       const groundSame = el.ground && closePt(el.ground, next)
       const sizeSame = el.sizeM != null && Math.abs(el.sizeM - sizeM) < 1e-4
       if (groundSame && sizeSame) return

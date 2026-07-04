@@ -527,9 +527,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     zoomReset()
     // Prepare pitch pins (ONE undoable step, before the field-edit transaction):
     // (re)derive every element's ground anchor from its CURRENT board placement —
-    // healing staleness from ordinary fixed-camera edits — and convert rectangles
-    // to closed polylines so they can warp onto the field surface.
-    pinSetup(buildPinOps(doc.elements, field3d))
+    // healing staleness from ordinary fixed-camera edits — convert rectangles to
+    // closed polylines so they can warp onto the field surface, and (when syncing
+    // token sizes) give all tokens one shared metric size so they stay equal.
+    const refTokenId = selectedIds.find((id) => doc.elements.find((e) => e.id === id)?.type === 'token')
+    pinSetup(buildPinOps(doc.elements, field3d, { syncTokenSizes, refTokenId }))
     beginTransaction()
     return () => commitTransaction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
