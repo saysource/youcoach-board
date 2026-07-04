@@ -86,6 +86,7 @@ const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-ca
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
 const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
 const MOVE_THRESHOLD_PX = 4 // on-screen drag distance before a move engages
+const OBJECT3D_MOVE_PX = 9 // firmer drag threshold for 3D objects (more resistance)
 const SNAP_PX = 6 // on-screen distance within which a move snaps to another object
 const BG_MOVE_HANDLE_PX = 72 // on-screen size of the background pan handle (icon viewBox 46×46)
 // 4-way move arrows (assets/move_background.svg), centered in a 46×46 viewBox.
@@ -674,7 +675,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // ── 3D objects (balls, cubes … the "3D materials" palette) ─────────────────
   // In-progress edit of one object: drag its body (move on the ground) or its
   // rotate handle (spin about Y). Placement is intrinsic (x/z ground + rotation).
-  const [object3dGesture, setObject3dGesture] = useState<{ id: string; kind: 'move' | 'rotate'; orig: Object3DElement; grabGround: { x: number; z: number } } | null>(null)
+  // `start`/`engaged` add a small drag threshold (resistance) before a move takes;
+  // `alt` (Option held on press) duplicates the object once the drag engages.
+  const [object3dGesture, setObject3dGesture] = useState<{ id: string; kind: 'move' | 'rotate'; orig: Object3DElement; grabGround: { x: number; z: number }; start: Point; engaged: boolean; alt: boolean } | null>(null)
   const object3dElements = doc.elements.filter((e): e is Object3DElement => e.type === 'object3d')
 
   function editObject3D(g: NonNullable<typeof object3dGesture>, patch: Partial<Object3DElement>) {
@@ -1271,10 +1274,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         if (el?.type === 'object3d') {
           setSelection(e.shiftKey ? [...new Set([...selectedIds, objId])] : [objId])
           const ground = arrow3dGround(p)
-          if (ground) {
-            beginTransaction()
-            setObject3dGesture({ id: objId, kind: 'move', orig: el, grabGround: ground })
-          }
+          // The transaction begins on engagement (past the drag threshold), not
+          // here — so a bare click doesn't create an empty edit / duplicate.
+          if (ground) setObject3dGesture({ id: objId, kind: 'move', orig: el, grabGround: ground, start: p, engaged: false, alt: e.altKey })
           try {
             containerRef.current?.setPointerCapture(e.pointerId)
           } catch {
@@ -1294,7 +1296,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const p = svgRef.current ? clientToBoard(svgRef.current, e.clientX, e.clientY) : { x: 0, y: 0 }
     const ground = arrow3dGround(p) ?? { x: el.x, z: el.z }
     beginTransaction()
-    setObject3dGesture({ id: el.id, kind: 'rotate', orig: el, grabGround: ground })
+    setObject3dGesture({ id: el.id, kind: 'rotate', orig: el, grabGround: ground, start: p, engaged: true, alt: false })
     try {
       containerRef.current?.setPointerCapture(e.pointerId)
     } catch {
@@ -1585,7 +1587,26 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       return
     }
     if (object3dGesture) {
-      dragObject3D(object3dGesture, p)
+      const g = object3dGesture
+      if (!g.engaged) {
+        // Movement resistance: ignore until the pointer has moved past the
+        // threshold, so a click doesn't nudge (or Option-click duplicate) it.
+        if (Math.hypot(p.x - g.start.x, p.y - g.start.y) * scale < OBJECT3D_MOVE_PX) return
+        const ground = arrow3dGround(p) ?? g.grabGround
+        if (g.alt) {
+          // Option+drag: drop a copy at the original spot and drag THAT (the
+          // original stays put); one 'add' undo step + the move on release.
+          const copy = { ...g.orig, id: crypto.randomUUID() }
+          createFigure(copy)
+          beginTransaction()
+          setObject3dGesture({ id: copy.id, kind: 'move', orig: copy, grabGround: ground, start: g.start, engaged: true, alt: true })
+        } else {
+          beginTransaction()
+          setObject3dGesture({ ...g, engaged: true, grabGround: ground })
+        }
+        return
+      }
+      dragObject3D(g, p)
       return
     }
     if (bgPan) {
