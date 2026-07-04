@@ -6,6 +6,8 @@
 // Framework-free (three.js only). Extend KNOWN_OBJECTS to grow the palette.
 
 import * as THREE from 'three'
+import { toonGradientMap } from './toon'
+import { buildGoal, type GoalStyle } from './goal'
 // Real modelled assets (Blender → glTF), embedded as base64 so they ship inside
 // the JS bundle — no runtime fetch, so they stay embed-safe in every host (App2,
 // bare page, …) regardless of asset-serving base paths.
@@ -19,10 +21,28 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   high_cone: { data: HIGH_CONE_GLB_BASE64, color: 0xf4611e },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone'] as const
+// Procedural goals. Built at their real metric size (feet → metres), so they're
+// placed with `size` = 1 (see OBJECT3D_SIZES) rather than the unit-scaled default.
+const FT = 0.3048
+const GOALS: Record<string, { width: number; height: number; style: GoalStyle }> = {
+  goal_full: { width: 24 * FT, height: 8 * FT, style: 'box' }, // regulation 11-a-side (matches the pitch)
+  goal_9: { width: 16 * FT, height: 7 * FT, style: 'angled' },
+  goal_7: { width: 12 * FT, height: 6 * FT, style: 'angled' },
+  goal_futsal: { width: 9.8 * FT, height: 6.5 * FT, style: 'angled' },
+  goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
+}
+
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
+}
+
+// Per-kind default `size` (metres). Goals are modelled at real size → placed at
+// ×1; other objects fall back to the caller's default (a nominal 1 m unit mesh).
+const OBJECT3D_SIZES: Record<string, number> = { goal_full: 1, goal_9: 1, goal_7: 1, goal_futsal: 1, goal_small: 1 }
+export function defaultObject3DSize(objectId: string, fallback: number): number {
+  return OBJECT3D_SIZES[objectId] ?? fallback
 }
 
 /** A simple soccer-ball texture: white with scattered black pentagons. */
@@ -137,23 +157,6 @@ function unitGlbGeometry(id: string, data: string): THREE.BufferGeometry {
   return geom.clone()
 }
 
-// A stepped grayscale ramp used as a toon gradientMap. The few, widely-spaced
-// steps give hard, high-contrast cel bands (a very dark shadow tone up to full
-// light) for the extreme flat-shaded look. Cached (one texture, shared).
-let toonRamp: THREE.DataTexture | null = null
-export function toonGradientMap(): THREE.DataTexture {
-  if (!toonRamp) {
-    // A hard, high-contrast ramp: three tones (deep shadow / mid / full light)
-    // with big jumps, placed so the cone's ~0.6–0.95 lighting range straddles
-    // the mid↔light step — a bold cel split rather than a subtle gradient.
-    const steps = new Uint8Array([75, 75, 75, 150, 150, 150, 255, 255])
-    const tex = new THREE.DataTexture(steps, steps.length, 1, THREE.RedFormat)
-    tex.minFilter = tex.magFilter = THREE.NearestFilter
-    tex.needsUpdate = true
-    toonRamp = tex
-  }
-  return toonRamp
-}
 
 /** An extreme cel-shaded toon material: a hard, high-contrast 3-tone gradient
  *  that splits the surface into bold light/mid/shadow bands. */
@@ -181,8 +184,17 @@ function toonOutline(geometry: THREE.BufferGeometry): THREE.Mesh {
   return outline
 }
 
-/** Build the mesh for a 3D object id (unit size, centered at the origin). */
-export function buildObject3D(objectId: string): THREE.Mesh {
+/** Build the renderable for a 3D object id. GLB/primitive kinds are a single
+ *  unit-sized Mesh centered at the origin; goals are a real-size Group (centered
+ *  in x/z, base on the ground). Object3DLayer handles either. */
+export function buildObject3D(objectId: string): THREE.Object3D {
+  const goal = GOALS[objectId]
+  if (goal) {
+    // Depth (how far the frame runs back): the box goal keeps the pitch's ratio;
+    // the sloped-back goals run back ~0.9× their height.
+    const depth = goal.height * (goal.style === 'box' ? 0.82 : 0.9)
+    return buildGoal({ width: goal.width, height: goal.height, depth, style: goal.style })
+  }
   const glb = GLB_OBJECTS[objectId]
   if (glb) {
     const geom = unitGlbGeometry(objectId, glb.data)

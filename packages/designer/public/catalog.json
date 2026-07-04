@@ -17552,6 +17552,36 @@
      "thumb": "materials3d/high_cone",
      "w": 100,
      "h": 100
+    },
+    {
+     "object3d": "goal_full",
+     "thumb": "materials3d/goal_full",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "goal_9",
+     "thumb": "materials3d/goal_9",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "goal_7",
+     "thumb": "materials3d/goal_7",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "goal_futsal",
+     "thumb": "materials3d/goal_futsal",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "goal_small",
+     "thumb": "materials3d/goal_small",
+     "w": 100,
+     "h": 100
     }
    ]
   }

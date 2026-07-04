@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import { IDENTITY_TRANSFORM, BOARD_WIDTH, OBJECT3D_DEFAULTS, type BoardElement } from '@youcoach-board/core'
+import { defaultObject3DSize } from './objects3d'
 
 // Host-provided asset access (see specs/catalog.md). The board never hardcodes a
 // backend: the embedder says where figures/thumbnails/catalog live, and we
@@ -207,7 +208,7 @@ export function buildObject3DElement(objectId: string, x: number, z: number): Bo
     x,
     z,
     rotation: OBJECT3D_DEFAULTS.rotation,
-    size: OBJECT3D_DEFAULTS.size,
+    size: defaultObject3DSize(objectId, OBJECT3D_DEFAULTS.size),
     transform: { ...IDENTITY_TRANSFORM },
     stroke: '#1e1e1e',
     strokeWidth: 3,

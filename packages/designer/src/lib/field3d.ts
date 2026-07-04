@@ -9,7 +9,7 @@
 // the pitch spans 0..105 × 0..68 — the same frame arrows + camera poses use.
 
 import * as THREE from 'three'
-import { toonGradientMap } from './objects3d'
+import { buildGoal } from './goal'
 
 // Pitch dims (metres, ~FIFA), matching field-reference.ts.
 const L = 105
@@ -136,114 +136,15 @@ function bandsGeometry(): THREE.BufferGeometry {
   return geo
 }
 
-/* ---- goal net texture (transparent grid) ----------------------------------- */
-function makeNetTexture(): THREE.Texture {
-  const cv = document.createElement('canvas')
-  cv.width = cv.height = 256
-  const g = cv.getContext('2d')!
-  g.clearRect(0, 0, 256, 256)
-  g.strokeStyle = 'rgba(255,255,255,0.85)'
-  g.lineWidth = 3
-  for (let i = 0; i <= 256; i += 22) {
-    g.beginPath()
-    g.moveTo(i, 0)
-    g.lineTo(i, 256)
-    g.stroke()
-    g.beginPath()
-    g.moveTo(0, i)
-    g.lineTo(256, i)
-    g.stroke()
-  }
-  const tex = new THREE.CanvasTexture(cv)
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  tex.repeat.set(6, 4)
-  return tex
-}
-
-// Toon-shaded goal frame: the same cel look as the 3D objects — a hard cel
-// gradient on the white frame plus a black ink outline. The outline is a fixed
-// world-space offset shell (BackSide), not a uniform scale, so it stays a even
-// thickness on the thin posts (a proportional scale would vanish on them).
-const OUTLINE = 0.02 // metres of black ink around the frame
-const postMat = () => new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradientMap() })
-
-function makeGoal(sign: number, netTex: THREE.Texture): THREE.Group {
-  const mat = postMat()
-  const inkMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide })
-  const netMat = new THREE.MeshStandardMaterial({ map: netTex, transparent: true, side: THREE.DoubleSide, alphaTest: 0.05, opacity: 0.9, depthWrite: false, roughness: 1 })
-  const goal = new THREE.Group()
-  const gx = sign * HALF_L
-  const half = GOAL_W / 2
-
-  // A frame part + its enlarged black outline shell, grouped so callers can
-  // position/rotate both together exactly as before.
-  const inked = (shape: THREE.BufferGeometry, outline: THREE.BufferGeometry) => {
-    const g = new THREE.Group()
-    const m = new THREE.Mesh(shape, mat)
-    m.castShadow = true
-    g.add(m, new THREE.Mesh(outline, inkMat))
-    return g
-  }
-
-  const post = (len: number, horizontal: boolean, r = POST_R) => {
-    const g = inked(new THREE.CylinderGeometry(r, r, len, 16), new THREE.CylinderGeometry(r + OUTLINE, r + OUTLINE, len + 2 * OUTLINE, 16))
-    if (horizontal) g.rotation.x = Math.PI / 2
-    return g
-  }
-  for (const z of [-half, half]) {
-    const p = post(GOAL_H, false)
-    p.position.set(gx, GOAL_H / 2, z)
-    goal.add(p)
-  }
-  const cb = post(GOAL_W, true)
-  cb.position.set(gx, GOAL_H, 0)
-  goal.add(cb)
-
-  const bx = gx + sign * GOAL_D
-  const br = POST_R * 0.7
-  for (const z of [-half, half]) {
-    const p = post(GOAL_H, false, br)
-    p.position.set(bx, GOAL_H / 2, z)
-    goal.add(p)
-  }
-  const backBar = post(GOAL_W, true, br)
-  backBar.position.set(bx, GOAL_H, 0)
-  goal.add(backBar)
-
-  // Top depth rails (front-top corner → back-top corner) so the frame is closed,
-  // and rounded spheres at every top corner so the posts meet cleanly (no notches
-  // where the cylinders cross).
-  const rail = (z: number) => {
-    const g = inked(new THREE.CylinderGeometry(br, br, GOAL_D, 12), new THREE.CylinderGeometry(br + OUTLINE, br + OUTLINE, GOAL_D + 2 * OUTLINE, 12))
-    g.rotation.z = Math.PI / 2
-    g.position.set(gx + (sign * GOAL_D) / 2, GOAL_H, z)
-    return g
-  }
-  const joint = (x: number, z: number, r: number) => {
-    const g = inked(new THREE.SphereGeometry(r, 16, 12), new THREE.SphereGeometry(r + OUTLINE, 16, 12))
-    g.position.set(x, GOAL_H, z)
-    return g
-  }
-  for (const z of [-half, half]) {
-    goal.add(rail(z))
-    goal.add(joint(gx, z, POST_R)) // front-top: upright ∩ crossbar ∩ rail
-    goal.add(joint(bx, z, br)) // back-top: back upright ∩ back bar ∩ rail
-  }
-
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(GOAL_W, GOAL_H), netMat)
-  back.rotation.y = Math.PI / 2
-  back.position.set(bx, GOAL_H / 2, 0)
-  goal.add(back)
-  const top = new THREE.Mesh(new THREE.PlaneGeometry(GOAL_D, GOAL_W), netMat)
-  top.rotation.x = Math.PI / 2
-  top.position.set(gx + (sign * GOAL_D) / 2, GOAL_H, 0)
-  goal.add(top)
-  for (const z of [-half, half]) {
-    const side = new THREE.Mesh(new THREE.PlaneGeometry(GOAL_D, GOAL_H), netMat)
-    side.position.set(gx + (sign * GOAL_D) / 2, GOAL_H / 2, z)
-    goal.add(side)
-  }
-  return goal
+// A regulation goal at one end of the pitch, built from the shared parametric
+// goal. The canonical goal opens toward +X with its back behind; the far-end
+// goal is turned 180° so both mouths face the field. Centered between the goal
+// line (front) and its back (GOAL_D outside), just above the lines (GOAL_Y).
+function makeGoal(sign: number): THREE.Group {
+  const g = buildGoal({ width: GOAL_W, height: GOAL_H, depth: GOAL_D, style: 'box', postR: POST_R })
+  g.position.set(sign * (HALF_L + GOAL_D / 2), GOAL_Y, 0)
+  if (sign > 0) g.rotation.y = Math.PI
+  return g
 }
 
 function makeFlag(x: number, z: number): THREE.Group {
@@ -284,11 +185,7 @@ export function buildFieldGroup(opts: { flags?: boolean } = {}): THREE.Group {
   lines.position.y = LINE_Y
   group.add(lines)
 
-  const netTex = makeNetTexture()
-  for (const goal of [makeGoal(-1, netTex), makeGoal(1, netTex)]) {
-    goal.position.y = GOAL_Y // sit just above the lines so posts don't collide
-    group.add(goal)
-  }
+  group.add(makeGoal(-1), makeGoal(1))
 
   if (opts.flags ?? true) {
     for (const x of [-HALF_L, HALF_L]) for (const z of [-HALF_W, HALF_W]) group.add(makeFlag(x, z))

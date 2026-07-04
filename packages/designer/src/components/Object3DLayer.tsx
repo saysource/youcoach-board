@@ -29,7 +29,27 @@ interface Ctx {
   scene: THREE.Scene
   fixedCam: THREE.PerspectiveCamera
   calibCam: THREE.PerspectiveCamera
-  meshes: Map<string, THREE.Mesh>
+  meshes: Map<string, THREE.Object3D>
+}
+
+// The selection highlight, added as a hidden child named 'outline'. A single
+// Mesh gets a back-faces-only inflated silhouette (a clean coloured ring); a
+// Group (goal) gets a wireframe bounding box, since it has no single geometry.
+const SELECT_COLOR = 0x2a6cff
+function selectionOutline(obj: THREE.Object3D, box: THREE.Box3): THREE.Object3D {
+  const asMesh = obj as THREE.Mesh
+  let outline: THREE.Object3D
+  if (asMesh.isMesh && asMesh.geometry) {
+    outline = new THREE.Mesh(asMesh.geometry, new THREE.MeshBasicMaterial({ color: SELECT_COLOR, side: THREE.BackSide }))
+    outline.scale.setScalar(1.09)
+  } else {
+    const size = box.getSize(new THREE.Vector3())
+    outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x, size.y, size.z)), new THREE.LineBasicMaterial({ color: SELECT_COLOR }))
+    outline.position.copy(box.getCenter(new THREE.Vector3()))
+  }
+  outline.name = 'outline'
+  outline.visible = false
+  return outline
 }
 
 export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, viewport, camera, svgRef, containerRef }, ref) {
@@ -73,51 +93,47 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     return ctxRef.current
   }
 
-  // Add / update / remove meshes to mirror `elements`.
+  // Add / update / remove objects to mirror `elements`. An object is either a
+  // single Mesh (ball/cube/cone…) or a Group (the multi-part goals).
   function syncMeshes(ctx: Ctx) {
-    const dispose = (mesh: THREE.Mesh) => {
-      ctx.scene.remove(mesh)
-      // Dispose every child's material, and any child geometry that isn't the
-      // parent's (e.g. a builder's crease-edge LineSegments own an EdgesGeometry;
-      // the outline shells share the parent geometry, disposed once below).
-      mesh.traverse((o) => {
-        if (o === mesh) return
-        const c = o as THREE.Mesh | THREE.LineSegments
-        if (c.material) (c.material as THREE.Material).dispose()
-        if (c.geometry && c.geometry !== mesh.geometry) c.geometry.dispose()
+    const dispose = (obj: THREE.Object3D) => {
+      ctx.scene.remove(obj)
+      // Free geometry + material of every descendant (Group has no geometry of
+      // its own, so we can't rely on obj.geometry). Shared/singleton textures
+      // (the toon ramp) aren't touched by Material.dispose(), so they survive.
+      obj.traverse((o) => {
+        const m = o as Partial<THREE.Mesh>
+        m.geometry?.dispose()
+        const mat = (o as THREE.Mesh).material
+        if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((x) => x.dispose())
       })
-      mesh.geometry.dispose()
-      ;(mesh.material as THREE.Material).dispose()
     }
     const seen = new Set<string>()
     for (const e of elements) {
       seen.add(e.id)
-      let mesh = ctx.meshes.get(e.id)
-      if (!mesh || mesh.userData.objectId !== e.objectId) {
-        if (mesh) dispose(mesh)
-        mesh = buildObject3D(e.objectId)
-        // Selection outline: an enlarged, back-faces-only silhouette of the same
-        // geometry in the selection colour — a clean coloured ring around the
-        // object with no post-processing. Toggled visible when selected.
-        const outline = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ color: 0x2a6cff, side: THREE.BackSide }))
-        outline.name = 'outline'
-        outline.scale.setScalar(1.09)
-        outline.visible = false
-        mesh.add(outline)
-        ctx.scene.add(mesh)
-        ctx.meshes.set(e.id, mesh)
+      let obj = ctx.meshes.get(e.id)
+      if (!obj || obj.userData.objectId !== e.objectId) {
+        if (obj) dispose(obj)
+        obj = buildObject3D(e.objectId)
+        // Local-space bounds (object is untransformed here): used to lift it onto
+        // the ground and to size a Group's selection box.
+        obj.updateMatrixWorld(true)
+        const box = new THREE.Box3().setFromObject(obj)
+        obj.userData.baseMinY = box.min.y
+        obj.add(selectionOutline(obj, box))
+        ctx.scene.add(obj)
+        ctx.meshes.set(e.id, obj)
       }
-      // Scale by size, then lift by the geometry's actual base so it rests on
-      // the ground. Objects vary in height (the cone is short, not a full unit
-      // cube), so a fixed size/2 lift would leave short ones floating.
-      mesh.scale.setScalar(e.size)
-      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
-      const baseY = mesh.geometry.boundingBox ? -mesh.geometry.boundingBox.min.y : 0.5
-      mesh.position.set(e.x, baseY * e.size, e.z)
-      mesh.rotation.set(0, e.rotation, 0)
-      const outline = mesh.getObjectByName('outline')
+      // Scale by size, then lift by the actual base so it rests on the ground
+      // (objects vary in height — a fixed size/2 lift would float short ones).
+      obj.scale.setScalar(e.size)
+      const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
+      obj.position.set(e.x, -baseMinY * e.size, e.z)
+      obj.rotation.set(0, e.rotation, 0)
+      const outline = obj.getObjectByName('outline')
       if (outline) outline.visible = selectedIds.includes(e.id)
-      mesh.userData = { id: e.id, objectId: e.objectId }
+      obj.userData.id = e.id
+      obj.userData.objectId = e.objectId
     }
     for (const [id, mesh] of ctx.meshes) {
       if (seen.has(id)) continue
@@ -191,9 +207,13 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       const ndc = new THREE.Vector2((boardX / BOARD_WIDTH) * 2 - 1, -(boardY / BOARD_HEIGHT) * 2 + 1)
       const ray = new THREE.Raycaster()
       ray.setFromCamera(ndc, cam)
-      const hits = ray.intersectObjects([...ctx.meshes.values()], false)
+      // Recursive: goals are Groups, so hits land on child parts (posts, net…).
+      // Walk up to the root that carries the element id.
+      const hits = ray.intersectObjects([...ctx.meshes.values()], true)
       for (const h of hits) {
-        const id = (h.object.userData as { id?: string }).id
+        let o: THREE.Object3D | null = h.object
+        while (o && !(o.userData as { id?: string }).id) o = o.parent
+        const id = o && (o.userData as { id?: string }).id
         if (id) return id
       }
       return null
