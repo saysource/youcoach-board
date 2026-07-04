@@ -62,6 +62,10 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     if (!canvas) return null
     const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true })
     renderer.setPixelRatio(window.devicePixelRatio)
+    // Clip anything below the pitch (y < 0): the toon outline / selection shells
+    // extend slightly past a mesh in every direction, so their underside would
+    // otherwise poke below the grass and read as the object being "under" it.
+    renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)]
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
     renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -119,7 +123,17 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         // the ground and to size a Group's selection box.
         obj.updateMatrixWorld(true)
         const box = new THREE.Box3().setFromObject(obj)
-        obj.userData.baseMinY = box.min.y
+        // Rest the VISIBLE mesh on the ground. For a single mesh use its own
+        // geometry (the box also includes the slightly-larger outline/crease
+        // shells, which would otherwise lift it a few cm and leave a floating
+        // gap). Groups (goals) have no single geometry → use the full box.
+        const asMesh = obj as THREE.Mesh
+        if (asMesh.isMesh && asMesh.geometry) {
+          if (!asMesh.geometry.boundingBox) asMesh.geometry.computeBoundingBox()
+          obj.userData.baseMinY = asMesh.geometry.boundingBox!.min.y
+        } else {
+          obj.userData.baseMinY = box.min.y
+        }
         obj.add(selectionOutline(obj, box))
         ctx.scene.add(obj)
         ctx.meshes.set(e.id, obj)
