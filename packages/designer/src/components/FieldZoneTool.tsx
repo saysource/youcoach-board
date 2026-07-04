@@ -85,6 +85,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
     controls.dampingFactor = 0.09
     controls.rotateSpeed = 0.45
     controls.screenSpacePanning = true
+    controls.zoomToCursor = true // wheel zooms toward the mouse, not the target
     controls.maxPolarAngle = Math.PI / 2 - 0.04
     controls.minDistance = 2
     controls.maxDistance = 400

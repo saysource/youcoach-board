@@ -66,6 +66,7 @@ export function FieldEditOverlay({ field3d, viewBox, panMode, onPose, onExitPan 
     controls.minDistance = 2
     controls.maxDistance = 400
     controls.screenSpacePanning = true
+    controls.zoomToCursor = true // wheel zooms toward the mouse, not the target
     controls.maxPolarAngle = Math.PI / 2 - 0.04 // stay above the grass
     controls.target.set(field3d.target[0], field3d.target[1], field3d.target[2])
     cam.lookAt(controls.target)
