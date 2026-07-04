@@ -9,6 +9,7 @@
 // the pitch spans 0..105 × 0..68 — the same frame arrows + camera poses use.
 
 import * as THREE from 'three'
+import { toonGradientMap } from './objects3d'
 
 // Pitch dims (metres, ~FIFA), matching field-reference.ts.
 const L = 105
@@ -159,21 +160,35 @@ function makeNetTexture(): THREE.Texture {
   return tex
 }
 
-// Toon-shaded goal frame (banded, slightly stylized) per design direction.
-const postMat = () => new THREE.MeshToonMaterial({ color: 0xffffff })
+// Toon-shaded goal frame: the same cel look as the 3D objects — a hard cel
+// gradient on the white frame plus a black ink outline. The outline is a fixed
+// world-space offset shell (BackSide), not a uniform scale, so it stays a even
+// thickness on the thin posts (a proportional scale would vanish on them).
+const OUTLINE = 0.02 // metres of black ink around the frame
+const postMat = () => new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradientMap() })
 
 function makeGoal(sign: number, netTex: THREE.Texture): THREE.Group {
   const mat = postMat()
+  const inkMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide })
   const netMat = new THREE.MeshStandardMaterial({ map: netTex, transparent: true, side: THREE.DoubleSide, alphaTest: 0.05, opacity: 0.9, depthWrite: false, roughness: 1 })
   const goal = new THREE.Group()
   const gx = sign * HALF_L
   const half = GOAL_W / 2
 
-  const post = (len: number, horizontal: boolean, r = POST_R) => {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 16), mat)
-    if (horizontal) m.rotation.x = Math.PI / 2
+  // A frame part + its enlarged black outline shell, grouped so callers can
+  // position/rotate both together exactly as before.
+  const inked = (shape: THREE.BufferGeometry, outline: THREE.BufferGeometry) => {
+    const g = new THREE.Group()
+    const m = new THREE.Mesh(shape, mat)
     m.castShadow = true
-    return m
+    g.add(m, new THREE.Mesh(outline, inkMat))
+    return g
+  }
+
+  const post = (len: number, horizontal: boolean, r = POST_R) => {
+    const g = inked(new THREE.CylinderGeometry(r, r, len, 16), new THREE.CylinderGeometry(r + OUTLINE, r + OUTLINE, len + 2 * OUTLINE, 16))
+    if (horizontal) g.rotation.x = Math.PI / 2
+    return g
   }
   for (const z of [-half, half]) {
     const p = post(GOAL_H, false)
@@ -199,17 +214,15 @@ function makeGoal(sign: number, netTex: THREE.Texture): THREE.Group {
   // and rounded spheres at every top corner so the posts meet cleanly (no notches
   // where the cylinders cross).
   const rail = (z: number) => {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(br, br, GOAL_D, 12), mat)
-    m.rotation.z = Math.PI / 2
-    m.position.set(gx + (sign * GOAL_D) / 2, GOAL_H, z)
-    m.castShadow = true
-    return m
+    const g = inked(new THREE.CylinderGeometry(br, br, GOAL_D, 12), new THREE.CylinderGeometry(br + OUTLINE, br + OUTLINE, GOAL_D + 2 * OUTLINE, 12))
+    g.rotation.z = Math.PI / 2
+    g.position.set(gx + (sign * GOAL_D) / 2, GOAL_H, z)
+    return g
   }
   const joint = (x: number, z: number, r: number) => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat)
-    m.position.set(x, GOAL_H, z)
-    m.castShadow = true
-    return m
+    const g = inked(new THREE.SphereGeometry(r, 16, 12), new THREE.SphereGeometry(r + OUTLINE, 16, 12))
+    g.position.set(x, GOAL_H, z)
+    return g
   }
   for (const z of [-half, half]) {
     goal.add(rail(z))

@@ -141,7 +141,7 @@ function unitGlbGeometry(id: string, data: string): THREE.BufferGeometry {
 // steps give hard, high-contrast cel bands (a very dark shadow tone up to full
 // light) for the extreme flat-shaded look. Cached (one texture, shared).
 let toonRamp: THREE.DataTexture | null = null
-function toonGradientMap(): THREE.DataTexture {
+export function toonGradientMap(): THREE.DataTexture {
   if (!toonRamp) {
     // A hard, high-contrast ramp: three tones (deep shadow / mid / full light)
     // with big jumps, placed so the cone's ~0.6–0.95 lighting range straddles
