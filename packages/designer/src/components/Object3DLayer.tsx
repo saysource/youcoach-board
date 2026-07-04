@@ -75,17 +75,28 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
 
   // Add / update / remove meshes to mirror `elements`.
   function syncMeshes(ctx: Ctx) {
+    const dispose = (mesh: THREE.Mesh) => {
+      ctx.scene.remove(mesh)
+      const o = mesh.getObjectByName('outline') as THREE.Mesh | null
+      if (o) (o.material as THREE.Material).dispose()
+      mesh.geometry.dispose()
+      ;(mesh.material as THREE.Material).dispose()
+    }
     const seen = new Set<string>()
     for (const e of elements) {
       seen.add(e.id)
       let mesh = ctx.meshes.get(e.id)
       if (!mesh || mesh.userData.objectId !== e.objectId) {
-        if (mesh) {
-          ctx.scene.remove(mesh)
-          mesh.geometry.dispose()
-          ;(mesh.material as THREE.Material).dispose()
-        }
+        if (mesh) dispose(mesh)
         mesh = buildObject3D(e.objectId)
+        // Selection outline: an enlarged, back-faces-only silhouette of the same
+        // geometry in the selection colour — a clean coloured ring around the
+        // object with no post-processing. Toggled visible when selected.
+        const outline = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ color: 0x2a6cff, side: THREE.BackSide }))
+        outline.name = 'outline'
+        outline.scale.setScalar(1.09)
+        outline.visible = false
+        mesh.add(outline)
         ctx.scene.add(mesh)
         ctx.meshes.set(e.id, mesh)
       }
@@ -93,18 +104,13 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       mesh.scale.setScalar(e.size)
       mesh.position.set(e.x, e.size / 2, e.z)
       mesh.rotation.set(0, e.rotation, 0)
-      // Selection: a subtle glow (the main selection UI is the 2D rotate handle).
-      const mat = mesh.material as THREE.MeshToonMaterial
-      const sel = selectedIds.includes(e.id)
-      mat.emissive.setHex(sel ? 0x3b82f6 : 0x000000)
-      mat.emissiveIntensity = sel ? 0.28 : 0
+      const outline = mesh.getObjectByName('outline')
+      if (outline) outline.visible = selectedIds.includes(e.id)
       mesh.userData = { id: e.id, objectId: e.objectId }
     }
     for (const [id, mesh] of ctx.meshes) {
       if (seen.has(id)) continue
-      ctx.scene.remove(mesh)
-      mesh.geometry.dispose()
-      ;(mesh.material as THREE.Material).dispose()
+      dispose(mesh)
       ctx.meshes.delete(id)
     }
   }
