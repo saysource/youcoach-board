@@ -845,7 +845,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // extremes, else corners) + its AABB, for a given handle pointer.
   function resizedNotable(el: BoardElement, g: Gesture, pointer: Point): { pts: SnapMark[]; box: Box } {
     const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, pointer, MIN_SIZE, {
-      fromCenter: g.alt,
+      // Tokens always resize about their center (symmetric), so their pinned
+      // ground spot doesn't shift; others do so only with the alt modifier.
+      fromCenter: g.alt || el.type === 'token',
       proportional: g.snap || el.type === 'figure' || el.type === 'token',
     })
     const c = localCorners(box)
@@ -1027,7 +1029,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       }
       if (gesture.kind === 'resize') {
         const { box, transform } = computeResize(gesture.box0, gesture.t0, gesture.handle as CornerId, resizePointer(el, gesture).pointer, MIN_SIZE, {
-          fromCenter: gesture.alt,
+          // Tokens always resize symmetrically about their center (see commit).
+          fromCenter: gesture.alt || el.type === 'token',
           // Figures + tokens keep their aspect ratio, so the frame always matches it.
           proportional: gesture.snap || el.type === 'figure' || el.type === 'token',
         })
@@ -1708,7 +1711,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       updateElements([{ id: g.id, before: { transform: g.t0 }, after: { transform: { ...g.t0, rotate: rotationFor(g.box0, g.t0, g.current, g.snap) } } }])
     } else if (g.kind === 'resize') {
       const { box, transform } = computeResize(g.box0, g.t0, g.handle as CornerId, resizePointer(el, g).pointer, MIN_SIZE, {
-        fromCenter: g.alt,
+        // Tokens always resize symmetrically about their center, so a resize
+        // doesn't shift the token's (pinned) position.
+        fromCenter: g.alt || el.type === 'token',
         // Figures + tokens keep their aspect ratio, so the frame always matches it.
         proportional: g.snap || el.type === 'figure' || el.type === 'token',
       })
