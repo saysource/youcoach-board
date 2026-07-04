@@ -19,16 +19,24 @@ const GOAL_W = 7.32
 const GOAL_H = 2.44
 const GOAL_D = 2.0
 const POST_R = 0.06
-const LINE_W = 0.3 // pitch line width (metres) — crisp flat geometry, not texture
+const LINE_W = 0.3 // base pitch line width (metres); scaled down when zoomed in
+const LINE_W_MIN = 0.06 // thinnest line (very close zoom)
 const BAND_OVERFLOW = 0 // stripe bands stay within the pitch
 const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
 // Stack heights (metres) so the ground / bands / lines never z-fight.
 const BAND_Y = 0.05
 const LINE_Y = 0.15
+const GOAL_Y = 0.18 // lift the goals just above the lines so posts don't collide
 
 // One shared sun so the field and the arrow scene cast agreeing shadows.
 export const SUN_POSITION = new THREE.Vector3(120, 165, 70)
 export const SUN_TARGET = new THREE.Vector3(HALF_L, 0, HALF_W)
+
+/** Line width for a given camera→target distance: roughly constant on-screen
+ *  thickness, so lines thin down as you zoom in (clamped). */
+export function lineWidthForDistance(distance: number): number {
+  return Math.max(LINE_W_MIN, Math.min(LINE_W, (distance * LINE_W) / 100))
+}
 
 /* ---- field markings as flat ground geometry (crisp at any zoom) ------------- *
  * Everything is built in the centred frame (x −52.5..52.5, z −34..34) in the
@@ -47,10 +55,13 @@ function seg(pos: number[], x0: number, z0: number, x1: number, z1: number, w = 
   const nz = (dx / len) * (w / 2)
   quad(pos, x0 + nx, z0 + nz, x1 + nx, z1 + nz, x1 - nx, z1 - nz, x0 - nx, z0 - nz)
 }
-// A polyline (closed if `close`) as connected ribbons.
-function poly(pos: number[], pts: [number, number][], close = false) {
-  for (let i = 1; i < pts.length; i++) seg(pos, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1])
-  if (close && pts.length > 2) seg(pos, pts[pts.length - 1][0], pts[pts.length - 1][1], pts[0][0], pts[0][1])
+// A polyline (closed if `close`) as connected ribbons, with a small disc at each
+// vertex so the corners join cleanly (no gap/notch where ribbons meet).
+function poly(pos: number[], pts: [number, number][], close = false, w = LINE_W) {
+  for (let i = 1; i < pts.length; i++) seg(pos, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], w)
+  if (close && pts.length > 2) seg(pos, pts[pts.length - 1][0], pts[pts.length - 1][1], pts[0][0], pts[0][1], w)
+  const skip = close ? -1 : pts.length - 1 // open ends need no join
+  for (let i = 0; i < pts.length; i++) if (i !== 0 || close) if (i !== skip) disc(pos, pts[i][0], pts[i][1], w / 2, 10)
 }
 // An arc/circle as a width-w annulus strip.
 function arc(pos: number[], cx: number, cz: number, r: number, a0: number, a1: number, steps: number, w = LINE_W) {
@@ -71,30 +82,33 @@ function disc(pos: number[], cx: number, cz: number, r: number, steps = 16) {
   }
 }
 
-function markingsGeometry(): THREE.BufferGeometry {
+export function markingsGeometry(w = LINE_W): THREE.BufferGeometry {
   const p: number[] = []
-  // Outer boundary + halfway.
-  poly(p, [[-HALF_L, -HALF_W], [HALF_L, -HALF_W], [HALF_L, HALF_W], [-HALF_L, HALF_W]], true)
-  seg(p, 0, -HALF_W, 0, HALF_W)
+  const jn = (x: number, z: number) => disc(p, x, z, w / 2, 10) // fill a join
+  // Outer boundary + halfway (disc the halfway's T-junctions with the touchlines).
+  poly(p, [[-HALF_L, -HALF_W], [HALF_L, -HALF_W], [HALF_L, HALF_W], [-HALF_L, HALF_W]], true, w)
+  seg(p, 0, -HALF_W, 0, HALF_W, w)
   // Centre circle + spot.
-  arc(p, 0, 0, 9.15, 0, 2 * Math.PI, 96)
+  arc(p, 0, 0, 9.15, 0, 2 * Math.PI, 96, w)
   disc(p, 0, 0, 0.18)
   const penAngle = Math.acos(5.5 / 9.15)
   for (const s of [-1, 1]) {
     const gl = s * HALF_L
     // Penalty + goal areas (open on the goal line, which is the boundary).
-    poly(p, [[gl, -20.16], [gl - s * 16.5, -20.16], [gl - s * 16.5, 20.16], [gl, 20.16]])
-    poly(p, [[gl, -9.16], [gl - s * 5.5, -9.16], [gl - s * 5.5, 9.16], [gl, 9.16]])
+    poly(p, [[gl, -20.16], [gl - s * 16.5, -20.16], [gl - s * 16.5, 20.16], [gl, 20.16]], false, w)
+    poly(p, [[gl, -9.16], [gl - s * 5.5, -9.16], [gl - s * 5.5, 9.16], [gl, 9.16]], false, w)
     const spotX = gl - s * 11
     disc(p, spotX, 0, 0.18)
-    if (s < 0) arc(p, spotX, 0, 9.15, -penAngle, penAngle, 24)
-    else arc(p, spotX, 0, 9.15, Math.PI - penAngle, Math.PI + penAngle, 24)
+    const [a0, a1] = s < 0 ? [-penAngle, penAngle] : [Math.PI - penAngle, Math.PI + penAngle]
+    arc(p, spotX, 0, 9.15, a0, a1, 24, w)
+    jn(spotX + 9.15 * Math.cos(a0), 9.15 * Math.sin(a0)) // "D" meets the box edge
+    jn(spotX + 9.15 * Math.cos(a1), 9.15 * Math.sin(a1))
   }
   // Corner arcs.
-  arc(p, -HALF_L, -HALF_W, 1, 0, Math.PI / 2, 12)
-  arc(p, HALF_L, -HALF_W, 1, Math.PI / 2, Math.PI, 12)
-  arc(p, -HALF_L, HALF_W, 1, -Math.PI / 2, 0, 12)
-  arc(p, HALF_L, HALF_W, 1, Math.PI, Math.PI * 1.5, 12)
+  arc(p, -HALF_L, -HALF_W, 1, 0, Math.PI / 2, 12, w)
+  arc(p, HALF_L, -HALF_W, 1, Math.PI / 2, Math.PI, 12, w)
+  arc(p, -HALF_L, HALF_W, 1, -Math.PI / 2, 0, 12, w)
+  arc(p, HALF_L, HALF_W, 1, Math.PI, Math.PI * 1.5, 12, w)
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
   return geo
@@ -228,13 +242,17 @@ export function buildFieldGroup(opts: { flags?: boolean } = {}): THREE.Group {
   group.add(bands)
 
   // Opaque so they depth-test cleanly above the bands (no transparency sorting).
+  // Named so the layer can rebuild the geometry at a zoom-dependent width.
   const lines = new THREE.Mesh(markingsGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }))
+  lines.name = 'field-lines'
   lines.position.y = LINE_Y
   group.add(lines)
 
   const netTex = makeNetTexture()
-  group.add(makeGoal(-1, netTex))
-  group.add(makeGoal(1, netTex))
+  for (const goal of [makeGoal(-1, netTex), makeGoal(1, netTex)]) {
+    goal.position.y = GOAL_Y // sit just above the lines so posts don't collide
+    group.add(goal)
+  }
 
   if (opts.flags ?? true) {
     for (const x of [-HALF_L, HALF_L]) for (const z of [-HALF_W, HALF_W]) group.add(makeFlag(x, z))

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView } from '@youcoach-board/core'
-import { buildFieldGroup, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
+import { buildFieldGroup, markingsGeometry, lineWidthForDistance, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
 import { applyViewCamera } from '../lib/field-camera'
 
 // A WebGL layer rendering the real 3D pitch, viewed through the board's field
@@ -24,6 +24,8 @@ interface Ctx {
   renderer: THREE.WebGLRenderer
   scene: THREE.Scene
   cam: THREE.PerspectiveCamera
+  lines: THREE.Mesh | null
+  lineW: number
 }
 
 export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef }: Props) {
@@ -58,9 +60,10 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     sun.shadow.bias = -0.0004
     scene.add(sun)
     scene.add(sun.target)
-    scene.add(buildFieldGroup())
+    const group = buildFieldGroup()
+    scene.add(group)
 
-    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera() }
+    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, lineW: 0 }
     return ctxRef.current
   }
 
@@ -100,6 +103,16 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       el.style.height = `${rect.height}px`
     }
     ctx.renderer.setSize(rect.width, rect.height, false)
+    // Thin the lines as the camera moves in (keeps ~constant on-screen thickness).
+    if (ctx.lines) {
+      const dist = Math.hypot(cam.position[0] - cam.target[0], cam.position[1] - cam.target[1], cam.position[2] - cam.target[2])
+      const w = lineWidthForDistance(dist)
+      if (Math.abs(w - ctx.lineW) > 0.004) {
+        ctx.lines.geometry.dispose()
+        ctx.lines.geometry = markingsGeometry(w)
+        ctx.lineW = w
+      }
+    }
     applyViewCamera(ctx.cam, cam, vp)
     ctx.renderer.render(ctx.scene, ctx.cam)
   }
