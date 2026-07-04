@@ -252,6 +252,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     storeApi: store,
     bgEditing,
     finishBackground,
+    editBackground,
     openPlayers: () => playersCat && openCategory(playersCat),
     openMaterials: () => materialsCat && openCategory(materialsCat),
     addBall: () => addBall(catalog, store),

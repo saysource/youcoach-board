@@ -25,6 +25,8 @@ export interface HotkeyDeps {
   /** In background-edit mode ESC finishes it (before other ESC behavior). */
   bgEditing: boolean
   finishBackground: () => void
+  /** Enter the background / field editor (bound to F, which also finishes it). */
+  editBackground: () => void
   /** Open the players / materials library drawer. */
   openPlayers: () => void
   openMaterials: () => void
@@ -125,6 +127,8 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       }
 
       if (lower === 'q') { s.toggleKeepTool(); return }
+      // F: enter the background / field editor (and finish it when already in).
+      if (lower === 'f') { e.preventDefault(); if (deps.bgEditing) deps.finishBackground(); else deps.editBackground(); return }
       if (lower === 'g' && deps.toggleGrid) { e.preventDefault(); deps.toggleGrid(); return }
       if (lower === 'b') { deps.addBall(); return }
       if (lower === 'p') { deps.openPlayers(); return }

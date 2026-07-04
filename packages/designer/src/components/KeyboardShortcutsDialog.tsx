@@ -34,6 +34,7 @@ const TOOLS: Section = {
     { label: 'Players drawer', combos: [['P']] },
     { label: 'Materials drawer', combos: [['M']] },
     { label: 'Add ball', combos: [['B']] },
+    { label: 'Edit background (field)', combos: [['F']] },
     { label: 'Keep tool active', combos: [['Q']] },
   ],
 }
