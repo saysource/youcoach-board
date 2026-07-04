@@ -159,7 +159,8 @@ function makeNetTexture(): THREE.Texture {
   return tex
 }
 
-const postMat = () => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.05 })
+// Toon-shaded goal frame (banded, slightly stylized) per design direction.
+const postMat = () => new THREE.MeshToonMaterial({ color: 0xffffff })
 
 function makeGoal(sign: number, netTex: THREE.Texture): THREE.Group {
   const mat = postMat()

@@ -27,6 +27,7 @@ import {
   type ElementTransform,
   type Box,
   type Arrow3DElement,
+  type Object3DElement,
   ARROW3D_DEFAULTS,
   IDENTITY_TRANSFORM,
 } from '@youcoach-board/core'
@@ -64,12 +65,13 @@ import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
 import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMark, type SnapLine } from '../lib/snapping'
 import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
+import { Object3DLayer, type Object3DLayerHandle } from './Object3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
 import { FieldSceneLayer } from './FieldSceneLayer'
 import { FieldEditOverlay } from './FieldEditOverlay'
 import { FieldZoneTool } from './FieldZoneTool'
-import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera } from '../lib/arrow3d'
+import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
@@ -502,6 +504,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // projection camera (no view-offset) used for ground raycasts / handle math —
   // it matches the projection the layer uses for full-board coordinates.
   const arrow3dLayerRef = useRef<Arrow3DLayerHandle>(null)
+  const object3dLayerRef = useRef<Object3DLayerHandle>(null)
   // Field-perspective calibration for arrows. Precedence: a hand-posed camera wins
   // (real 3D height + shadow), else a homography (ground-exact, faked height), else
   // the default fixed near-ortho camera. `arrow3dCam` is the calibrated camera when
@@ -668,6 +671,41 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     editArrow3D(g, pl)
   }
 
+  // ── 3D objects (balls, cubes … the "3D materials" palette) ─────────────────
+  // In-progress edit of one object: drag its body (move on the ground) or its
+  // rotate handle (spin about Y). Placement is intrinsic (x/z ground + rotation).
+  const [object3dGesture, setObject3dGesture] = useState<{ id: string; kind: 'move' | 'rotate'; orig: Object3DElement; grabGround: { x: number; z: number } } | null>(null)
+  const object3dElements = doc.elements.filter((e): e is Object3DElement => e.type === 'object3d')
+
+  function editObject3D(g: NonNullable<typeof object3dGesture>, patch: Partial<Object3DElement>) {
+    const before: Partial<Object3DElement> = {}
+    for (const k of Object.keys(patch) as (keyof Object3DElement)[]) (before as Record<string, unknown>)[k] = g.orig[k]
+    updateElements([{ id: g.id, before, after: patch }])
+  }
+
+  // Move (x/z only) or rotate (about Y only) the dragged object to board point p.
+  function dragObject3D(g: NonNullable<typeof object3dGesture>, p: Point) {
+    const ground = arrow3dGround(p)
+    if (!ground) return
+    if (g.kind === 'move') {
+      editObject3D(g, { x: g.orig.x + (ground.x - g.grabGround.x), z: g.orig.z + (ground.z - g.grabGround.z) })
+    } else {
+      // Rotate: the handle points toward the pointer's ground direction from the center.
+      editObject3D(g, { rotation: Math.atan2(ground.x - g.orig.x, ground.z - g.orig.z) })
+    }
+  }
+
+  // Project a world point (metres) to board coords through the active field cam
+  // (or the field homography), so 3D-object handles land in the right place.
+  function object3dToBoard(x: number, y: number, z: number): { x: number; y: number } {
+    return useHomography ? worldToBoard(fieldH!, x, y, z) : worldPointToBoard(arrow3dCam, x, y, z)
+  }
+  // The rotate handle sits at the object's "forward" edge on the ground.
+  function object3dRotateBoard(el: Object3DElement): { x: number; y: number } {
+    const r = el.size * 0.9
+    return object3dToBoard(el.x + r * Math.sin(el.rotation), 0, el.z + r * Math.cos(el.rotation))
+  }
+
   // Lasso: free-draw a loop; every element the (implicitly closed) loop touches is
   // selected live and stays selected for the rest of the gesture (accumulated in a
   // ref so rapid moves read the latest). `lasso` holds the path for rendering.
@@ -678,7 +716,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const g = lassoRef.current
     if (!g) return
     for (const el of doc.elements) {
-      if (g.ids.has(el.id) || el.type === 'arrow3d') continue // already selected, or a 3D arrow (no SVG box)
+      if (g.ids.has(el.id) || (el.type === 'arrow3d' || el.type === 'object3d')) continue // already selected, or a 3D arrow (no SVG box)
       const b = unionBounds([el])
       if (b && lassoHitsBox(g.pts, b)) g.ids.add(el.id)
     }
@@ -728,7 +766,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function elementsUnder(p: Point, r: number): string[] {
     const out: string[] = []
     for (const el of doc.elements) {
-      if (el.type === 'arrow3d') continue // 3D arrows have no SVG box; not erasable this way
+      if ((el.type === 'arrow3d' || el.type === 'object3d')) continue // 3D arrows have no SVG box; not erasable this way
       const b = getElementBounds(el)
       const cx = Math.max(b.x, Math.min(p.x, b.x + b.width))
       const cy = Math.max(b.y, Math.min(p.y, b.y + b.height))
@@ -823,7 +861,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const movingPts = (originEls.length === 1 ? notablePoints(originEls[0]) : boxPoints(u)).map((p) => ({ x: p.x + raw.x, y: p.y + raw.y }))
     const moving: SnapElement = { box: movingBox, points: movingPts }
     const targets = doc.elements
-      .filter((e) => !m.ids.includes(e.id) && e.type !== 'arrow3d')
+      .filter((e) => !m.ids.includes(e.id) && e.type !== 'arrow3d' && e.type !== 'object3d')
       .map((e): SnapElement | null => {
         const b = unionBounds([e])
         return b ? { box: b, points: notablePoints(e) } : null
@@ -876,7 +914,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const edgeY = g.handle.includes('s') ? box.y + box.height : g.handle.includes('n') ? box.y : null
     const xPts = edgeX != null ? pts.filter((p) => Math.abs(p.x - edgeX) < 0.5) : []
     const yPts = edgeY != null ? pts.filter((p) => Math.abs(p.y - edgeY) < 0.5) : []
-    const targetPts = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d').flatMap((e) => notablePoints(e))
+    const targetPts = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d' && e.type !== 'object3d').flatMap((e) => notablePoints(e))
     const { dx, dy, guides } = snapResize(xPts, yPts, targetPts, SNAP_PX / (scale || 1))
     return { pointer: clampToCanvas({ x: base.x + dx, y: base.y + dy }), guides }
   }
@@ -954,7 +992,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function snapVertexBoard(g: Gesture, board: Point, excludeIdx: number): { board: Point; guides: SnapLine[] } {
     const el = doc.elements.find((e) => e.id === g.id)
     if (!snapToObjects || !el) return { board, guides: [] }
-    const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d').flatMap((e) => notablePoints(e))
+    const targetPts: SnapMark[] = doc.elements.filter((e) => e.id !== g.id && e.type !== 'arrow3d' && e.type !== 'object3d').flatMap((e) => notablePoints(e))
     if (el.type === 'polyline') {
       el.points.forEach((pt, idx) => {
         if (idx !== excludeIdx) targetPts.push(elementToBoard({ x: pt[0], y: pt[1] }, g.box0, g.t0))
@@ -1226,8 +1264,41 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           return
         }
       }
+      // A 3D object under the cursor selects (and starts a move on the ground).
+      const objId = object3dLayerRef.current?.pick(p.x, p.y)
+      if (objId) {
+        const el = doc.elements.find((x) => x.id === objId)
+        if (el?.type === 'object3d') {
+          setSelection(e.shiftKey ? [...new Set([...selectedIds, objId])] : [objId])
+          const ground = arrow3dGround(p)
+          if (ground) {
+            beginTransaction()
+            setObject3dGesture({ id: objId, kind: 'move', orig: el, grabGround: ground })
+          }
+          try {
+            containerRef.current?.setPointerCapture(e.pointerId)
+          } catch {
+            /* best-effort */
+          }
+          return
+        }
+      }
       setMarquee({ start: p, current: p, additive: e.shiftKey, base: selectedIds })
       containerRef.current?.setPointerCapture(e.pointerId)
+    }
+  }
+
+  // Start dragging a selected 3D object's rotate handle.
+  function onObject3DRotateDown(el: Object3DElement, e: React.PointerEvent) {
+    e.stopPropagation()
+    const p = svgRef.current ? clientToBoard(svgRef.current, e.clientX, e.clientY) : { x: 0, y: 0 }
+    const ground = arrow3dGround(p) ?? { x: el.x, z: el.z }
+    beginTransaction()
+    setObject3dGesture({ id: el.id, kind: 'rotate', orig: el, grabGround: ground })
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId)
+    } catch {
+      /* best-effort */
     }
   }
 
@@ -1251,7 +1322,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const contain = m.current.y >= m.start.y
     const hits = doc.elements
       .filter((el) => {
-        if (el.type === 'arrow3d') return false // 3D arrows aren't marquee-selectable (no SVG box)
+        if ((el.type === 'arrow3d' || el.type === 'object3d')) return false // 3D arrows aren't marquee-selectable (no SVG box)
         const b = getElementBounds(el)
         return contain ? boxContains(box, b) : boxesIntersect(b, box)
       })
@@ -1513,6 +1584,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       dragArrow3D(arrow3dGesture, p)
       return
     }
+    if (object3dGesture) {
+      dragObject3D(object3dGesture, p)
+      return
+    }
     if (bgPan) {
       setBackground({ position: [bgPan.origin[0] + (p.x - bgPan.start.x), bgPan.origin[1] + (p.y - bgPan.start.y)] })
     } else if (freeDraft) {
@@ -1564,6 +1639,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       createFigure(makeArrow3D(pl.x, pl.z, pl.y, pl.splineWidth))
     } else if (arrow3dGesture) {
       setArrow3dGesture(null)
+      commitTransaction()
+    } else if (object3dGesture) {
+      setObject3dGesture(null)
       commitTransaction()
     } else if (bgPan) {
       setBgPan(null)
@@ -1799,7 +1877,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   // 2D selection chrome excludes 3D arrows (they have no SVG box; their own
   // handles are drawn separately over the WebGL layer).
-  const liveSelected2D = liveSelected.filter((el) => el.type !== 'arrow3d')
+  const liveSelected2D = liveSelected.filter((el) => el.type !== 'arrow3d' && el.type !== 'object3d')
   const selectedArrow3D = liveSelected.length === 1 && liveSelected[0].type === 'arrow3d' ? (liveSelected[0] as Arrow3DElement) : null
   // Elements handed to the WebGL layer (+ a live preview while drag-creating).
   const arrow3dLayerElements = arrow3dDraft
@@ -1816,6 +1894,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // fixed camera). Rendered in an SVG overlay that shares the board viewBox, so
   // pan/zoom/letterbox are handled without touching a ref during render.
   const arrow3dHandles = selectedArrow3D ? arrow3dHandleBoard(selectedArrow3D) : null
+  // A single selected 3D object → its centre + rotate-handle board positions.
+  const selectedObject3D = liveSelected.length === 1 && liveSelected[0].type === 'object3d' ? (liveSelected[0] as Object3DElement) : null
+  const object3dCentreBoard = selectedObject3D ? object3dToBoard(selectedObject3D.x, 0, selectedObject3D.z) : null
+  const object3dRotBoard = selectedObject3D ? object3dRotateBoard(selectedObject3D) : null
   // Group frame box (padded for display) for a multi-selection — the interactive
   // group resize/rotate chrome is drawn on it.
   const groupUnion = liveSelected2D.length >= 2 ? unionBounds(liveSelected2D) : null
@@ -2076,6 +2158,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       </BoardCanvas>
       {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
+      {/* 3D objects ("3D materials"): WebGL overlay (pointer-transparent). */}
+      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} />
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
@@ -2133,6 +2217,23 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
               onPointerDown={(e) => onArrow3DHandleDown(selectedArrow3D, kind, e)}
             />
           ))}
+        </svg>
+      )}
+      {/* Selected 3D object: a rotate handle (about Y) sticking out from its centre. */}
+      {selectedObject3D && !object3dGesture && object3dCentreBoard && object3dRotBoard && (
+        <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
+          <line x1={object3dCentreBoard.x} y1={object3dCentreBoard.y} x2={object3dRotBoard.x} y2={object3dRotBoard.y} stroke="#ffffff" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+          <circle
+            cx={object3dRotBoard.x}
+            cy={object3dRotBoard.y}
+            r={7 / scale}
+            fill="#ffffff"
+            stroke="#3b82f6"
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+            style={{ pointerEvents: 'auto', cursor: 'grab' }}
+            onPointerDown={(e) => onObject3DRotateDown(selectedObject3D, e)}
+          />
         </svg>
       )}
       {/* Pan surface: covers the board while Space is held or the Hand tool is

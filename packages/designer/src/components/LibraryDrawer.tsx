@@ -5,8 +5,10 @@ import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
-import { useAssets, buildFigureElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
+import { useAssets, buildFigureElement, buildObject3DElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { clientToBoard } from '../lib/draw'
+import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
+import { makeCalibratedCamera } from '../lib/field-camera'
 import { FIELD_ZONES } from '../lib/field-zones'
 import { useEditorStore } from '../store/context'
 
@@ -14,6 +16,11 @@ import { useEditorStore } from '../store/context'
 // keyed by zone id (…/zones/<id>.png).
 const ZONE_THUMBS = Object.fromEntries(
   Object.entries(import.meta.glob('../assets/zones/*.png', { eager: true, query: '?url', import: 'default' })).map(([path, url]) => [path.split('/').pop()!.replace('.png', ''), url as string]),
+) as Record<string, string>
+
+// Bundled 3D-object palette thumbnails, keyed by object id (…/materials3d/<id>.svg).
+const OBJECT3D_THUMBS = Object.fromEntries(
+  Object.entries(import.meta.glob('../assets/materials3d/*.svg', { eager: true, query: '?url', import: 'default' })).map(([path, url]) => [path.split('/').pop()!.replace('.svg', ''), url as string]),
 ) as Record<string, string>
 
 // Movement (px) below which a press is a tap, not a drag; touch hold (ms) to start.
@@ -57,6 +64,8 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
   const setBackground = useEditorStore((s) => s.setBackground)
+  // The active 3D field camera — a dropped 3D object lands at its ground spot.
+  const field3d = useEditorStore((s) => s.doc.background.field3d)
   // Active field's default figure scale — applied to figures as they're added.
   const figureScale = useEditorStore((s) => s.doc.background.figureScale)
   // Remembered custom color per material action, so a new material inherits it.
@@ -108,6 +117,9 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   // Drag payload / drop descriptor for a figure (resolved colors from the
   // category, so the board needn't know the source category).
   function descriptor(f: CatalogFigure): FigureDragData | null {
+    // A 3D material: dropped as an `object3d` (not an SVG figure). No colors/size
+    // inheritance — the drop resolves its ground spot from the drop point.
+    if (f.object3d) return { figureId: `object3d:${f.object3d}`, w: 64, h: 64, mirror: false, object3d: f.object3d }
     if (!cat || cat.kind !== 'figure' || !catalog || !f.svg) return null
     // Legacy sizing (yceditor): a figure's longest side is the board-relative
     // base (boardWidth/10), with the catalog SVG size only giving the aspect
@@ -247,6 +259,22 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
       return
     }
     if (!d.desc) return
+    // A 3D object: resolve the drop's board point to a pitch-ground spot through
+    // the active field camera (or a fixed default), and place it there.
+    if (d.desc.object3d) {
+      let bx = BOARD_WIDTH / 2
+      let by = BOARD_HEIGHT / 2
+      if (atPoint) {
+        if (!b || !overBoard(b, x, y)) return
+        const p = clientToBoard(b.svg, x, y)
+        bx = clamp(p.x, 0, BOARD_WIDTH)
+        by = clamp(p.y, 0, BOARD_HEIGHT)
+      }
+      const cam = field3d ? makeCalibratedCamera(field3d) : makeArrow3DCamera()
+      const g = boardToGround(bx, by, cam) ?? { x: 52.5, z: 34 }
+      createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z))
+      return
+    }
     if (atPoint) {
       if (!b || !overBoard(b, x, y)) return
       const p = clientToBoard(b.svg, x, y)
@@ -484,7 +512,7 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                             f.svg ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                           )}
                         >
-                          <img src={url(f.thumb)} alt="" loading="lazy" draggable={false} className="max-h-full max-w-full object-contain" />
+                          <img src={f.object3d ? OBJECT3D_THUMBS[f.object3d] : url(f.thumb)} alt="" loading="lazy" draggable={false} className="max-h-full max-w-full object-contain" />
                         </button>
                       ))}
                     </div>

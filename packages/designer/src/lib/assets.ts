@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import { IDENTITY_TRANSFORM, BOARD_WIDTH, type BoardElement } from '@youcoach-board/core'
+import { IDENTITY_TRANSFORM, BOARD_WIDTH, OBJECT3D_DEFAULTS, type BoardElement } from '@youcoach-board/core'
 
 // Host-provided asset access (see specs/catalog.md). The board never hardcodes a
 // backend: the embedder says where figures/thumbnails/catalog live, and we
@@ -38,6 +38,9 @@ export interface CatalogFigure {
   colors?: string[]
   /** App-managed element (no SVG to place) — e.g. "text". The app creates it. */
   tool?: string
+  /** A real 3D object (three.js) rather than an SVG figure — its objectId (e.g.
+   *  'ball' | 'cube'). Dropped onto the pitch as an `object3d` element. */
+  object3d?: string
 }
 export interface FacetValue {
   id: string
@@ -190,6 +193,28 @@ export interface FigureDragData {
   colors?: Record<string, string>
   /** Marks the figure as a ball (special-cased later, e.g. animation). */
   ball?: boolean
+  /** Set for a "3D materials" item: the object3d id ('ball' | 'cube'); when
+   *  present the drop creates an `object3d` element on the pitch, not a figure. */
+  object3d?: string
+}
+
+/** Build a placed 3D-object element sitting on the pitch at ground (x, z) metres. */
+export function buildObject3DElement(objectId: string, x: number, z: number): BoardElement {
+  return {
+    id: crypto.randomUUID(),
+    type: 'object3d',
+    objectId,
+    x,
+    z,
+    rotation: OBJECT3D_DEFAULTS.rotation,
+    size: OBJECT3D_DEFAULTS.size,
+    transform: { ...IDENTITY_TRANSFORM },
+    stroke: '#1e1e1e',
+    strokeWidth: 3,
+    strokeStyle: 'solid',
+    fill: 'transparent',
+    fillStyle: 'solid',
+  }
 }
 
 /** Build a placed FigureElement from a drag descriptor, centered at (cx, cy). */

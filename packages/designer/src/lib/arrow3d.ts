@@ -277,6 +277,12 @@ export function groundToBoard(x: number, z: number): { x: number; y: number } {
   return worldToBoard(new THREE.Vector3(x, 0, z), projectionCamera())
 }
 
+/** Project an arbitrary world point (metres) to board coords through a camera —
+ *  for the designer to place 3D-object handles without importing three itself. */
+export function worldPointToBoard(camera: THREE.Camera, x: number, y: number, z: number): { x: number; y: number } {
+  return worldToBoard(new THREE.Vector3(x, y, z), camera)
+}
+
 /** Raycast a board point onto the ground plane (y=0); returns world {x, z}. */
 export function boardToGround(bx: number, by: number, camera: THREE.Camera): { x: number; z: number } | null {
   const ndc = new THREE.Vector2((bx / BOARD_WIDTH) * 2 - 1, -(by / BOARD_HEIGHT) * 2 + 1)

@@ -251,7 +251,26 @@ export interface Arrow3DElement extends BaseElement {
   opacity: number
 }
 
-export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement
+/** A real 3D object (three.js mesh) placed on the pitch — the first members of a
+ *  coming "3D materials" palette. Like arrow3d its placement is intrinsic (not via
+ *  `transform`): it sits on the ground plane at (x, z) metres, rotated `rotation`
+ *  radians about the vertical (Y) axis only, and is `size` metres big. `objectId`
+ *  selects which object ('ball' | 'cube' for now; extensible). Rendered by
+ *  Object3DLayer. */
+export interface Object3DElement extends BaseElement {
+  type: 'object3d'
+  /** Which 3D object to render ('ball' | 'cube' …). */
+  objectId: string
+  /** Ground position (metres, corner-origin pitch frame). */
+  x: number
+  z: number
+  /** Rotation about the vertical (Y) axis, in radians (the only allowed rotation). */
+  rotation: number
+  /** Nominal size in metres (ball diameter / cube edge). */
+  size: number
+}
+
+export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement | Object3DElement
 
 // ── Smooth curves (auto, no user handles) ───────────────────────────────────
 // A polyline with `curve` renders as a Catmull-Rom spline through its points,
@@ -735,9 +754,9 @@ export function getLocalBounds(el: BoardElement): Box {
     const ys = el.points.map((p) => p[1])
     return normalizeBox(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys))
   }
-  // A 3D arrow has no SVG box (it lives in the 3D overlay); the designer computes
-  // its screen bounds by projecting its handles. Return an empty box here.
-  if (el.type === 'arrow3d') return { x: 0, y: 0, width: 0, height: 0 }
+  // 3D elements (arrow / object) have no SVG box — they live in the 3D overlay;
+  // the designer computes their screen bounds by projecting. Empty box here.
+  if (el.type === 'arrow3d' || el.type === 'object3d') return { x: 0, y: 0, width: 0, height: 0 }
   return { x: el.x, y: el.y, width: el.width, height: el.height }
 }
 
@@ -949,8 +968,29 @@ export function parseElement(raw: unknown): BoardElement | null {
       opacity: clamp(num(o.opacity) ?? ARROW3D_DEFAULTS.opacity, 0, 1),
     }
   }
+  if (o.type === 'object3d') {
+    const objectId = typeof o.objectId === 'string' ? o.objectId : null
+    if (!objectId) return null
+    return {
+      ...base,
+      type: 'object3d',
+      objectId,
+      x: num(o.x) ?? OBJECT3D_DEFAULTS.x,
+      z: num(o.z) ?? OBJECT3D_DEFAULTS.z,
+      rotation: num(o.rotation) ?? OBJECT3D_DEFAULTS.rotation,
+      size: num(o.size) ?? OBJECT3D_DEFAULTS.size,
+    }
+  }
   return null
 }
+
+/** Default placement/size for a fresh 3D object (pitch-centre, unrotated). */
+export const OBJECT3D_DEFAULTS = {
+  x: 52.5,
+  z: 34,
+  rotation: 0,
+  size: 3,
+} as const
 
 /** Default geometry/appearance for a new 3D arrow (from YouCoach Video Analysis,
  *  with x/z/y placement chosen so a fresh arrow lands in view on the board). */

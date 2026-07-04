@@ -29,6 +29,7 @@ function elementSubject(el: BoardElement): Subject {
   if (el.type === 'token') return { icon: TokenIcon, label: el.shape === 'jersey' ? 'Jersey' : 'Token' }
   if (el.type === 'text') return { icon: Type, label: 'Text' }
   if (el.type === 'arrow3d') return { icon: Spline, label: '3D Arrow' }
+  if (el.type === 'object3d') return { icon: Shapes, label: el.objectId === 'cube' ? '3D Cube' : '3D Ball' }
   // Diamond/pentagon/triangle/trapezoid are created as closed polylines, so they
   // surface here through polylineSubject (a closed polyline → "Shape").
   return polylineSubject(el)

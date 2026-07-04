@@ -13,8 +13,8 @@ import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, 
 // at a FIXED on-screen size (TOKEN_LABEL_PX) regardless of the board's fit-scale or
 // the token's size; without it (viewer/export) the caption falls back to board units.
 export function ElementView({ element, viewScale }: { element: BoardElement; viewScale?: number }) {
-  // 3D arrows are drawn by the designer's WebGL overlay, never as SVG.
-  if (element.type === 'arrow3d') return null
+  // 3D arrows/objects are drawn by the designer's WebGL overlay, never as SVG.
+  if (element.type === 'arrow3d' || element.type === 'object3d') return null
   const { x, y, rotate, scale, opacity } = element.transform
   const c = getLocalBounds(element)
   const cx = c.x + c.width / 2
@@ -57,7 +57,7 @@ function Shape({ element, viewScale }: { element: BoardElement; viewScale?: numb
   const markerId = useId()
   const patternId = useId()
   const clipId = useId()
-  if (element.type === 'arrow3d') return null // 3D arrows render in the WebGL overlay
+  if (element.type === 'arrow3d' || element.type === 'object3d') return null // WebGL overlay
   const dash = strokeDash(element.strokeStyle, element.strokeWidth)
   // Dotted needs round caps to render as dots rather than vanishing.
   const cap = element.strokeStyle === 'dotted' ? 'round' : undefined

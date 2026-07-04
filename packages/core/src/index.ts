@@ -40,6 +40,8 @@ export {
   type TextAlign,
   type Arrow3DElement,
   ARROW3D_DEFAULTS,
+  type Object3DElement,
+  OBJECT3D_DEFAULTS,
   type ElementType,
   type ElementTransform,
   type StrokeStyle,
