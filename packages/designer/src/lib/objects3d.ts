@@ -121,24 +121,45 @@ function unitConeGeometry(): THREE.BufferGeometry {
     const maxDim = Math.max(size.x, size.y, size.z) || 1
     geom.translate(-center.x, -center.y, -center.z)
     geom.scale(1 / maxDim, 1 / maxDim, 1 / maxDim)
-    coneGeometry = geom
+    // De-index + per-face normals → flat (faceted) shading: each triangle reads
+    // as one flat tone under the toon ramp, giving the low-poly cel look.
+    const flat = geom.toNonIndexed()
+    flat.computeVertexNormals()
+    geom.dispose()
+    coneGeometry = flat
   }
   return coneGeometry.clone()
 }
 
-// A stepped grayscale ramp used as a toon gradientMap. Without it MeshToonMaterial
-// is a near-flat 2-tone; the discrete steps give crisp cel bands that make a
-// curved surface's form read clearly. Cached (one texture shared by all cones).
+// A stepped grayscale ramp used as a toon gradientMap. The few, widely-spaced
+// steps give hard, high-contrast cel bands (a very dark shadow tone up to full
+// light) for the extreme flat-shaded look. Cached (one texture, shared).
 let toonRamp: THREE.DataTexture | null = null
 function toonGradientMap(): THREE.DataTexture {
   if (!toonRamp) {
-    const steps = new Uint8Array([90, 150, 205, 255]) // dark → light bands
+    const steps = new Uint8Array([30, 120, 255]) // deep shadow → mid → full light
     const tex = new THREE.DataTexture(steps, steps.length, 1, THREE.RedFormat)
     tex.minFilter = tex.magFilter = THREE.NearestFilter
     tex.needsUpdate = true
     toonRamp = tex
   }
   return toonRamp
+}
+
+/** An extreme cel-shaded toon material: a hard 3-band gradient. Paired with the
+ *  cone's flat-normal geometry, each facet reads as a distinct flat tone. */
+function extremeToon(color: number): THREE.MeshToonMaterial {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonGradientMap() })
+}
+
+/** Black ink strokes along the geometry's hard edges (creases/rims — e.g. the
+ *  cone's base rim), the internal-line counterpart of the silhouette outline.
+ *  `thresholdAngle` (deg) keeps only sharp edges, not every triangle seam. */
+function creaseEdges(geometry: THREE.BufferGeometry, thresholdAngle = 24): THREE.LineSegments {
+  const seg = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, thresholdAngle), new THREE.LineBasicMaterial({ color: 0x111111 }))
+  seg.name = 'creaseEdges'
+  seg.scale.setScalar(1.008) // lift just off the surface to avoid z-fighting
+  return seg
 }
 
 /** A slightly-inflated, back-faces-only black shell of the same geometry — the
@@ -155,9 +176,10 @@ function toonOutline(geometry: THREE.BufferGeometry): THREE.Mesh {
 export function buildObject3D(objectId: string): THREE.Mesh {
   if (objectId === 'cone') {
     const geom = unitConeGeometry()
-    const mesh = new THREE.Mesh(geom, new THREE.MeshToonMaterial({ color: 0xf4611e, gradientMap: toonGradientMap() }))
+    const mesh = new THREE.Mesh(geom, extremeToon(0xf4611e))
     mesh.castShadow = true
-    mesh.add(toonOutline(geom)) // small black outline (shares the mesh geometry)
+    mesh.add(toonOutline(geom)) // silhouette ink (shares the mesh geometry)
+    mesh.add(creaseEdges(geom)) // internal strokes along the rim/creases
     return mesh
   }
   if (objectId === 'cube') {
