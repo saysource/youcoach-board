@@ -19,8 +19,8 @@ const GOAL_W = 7.32
 const GOAL_H = 2.44
 const GOAL_D = 2.0
 const POST_R = 0.06
-const LINE_W = 0.3 // base pitch line width (metres); scaled down when zoomed in
-const LINE_W_MIN = 0.12 // thinnest line (close zoom) — ~real pitch line width
+const LINE_W = 0.45 // base pitch line width (metres); scaled down when zoomed in
+const LINE_W_MIN = 0.18 // thinnest line (close zoom) — ~real pitch line width
 const BAND_OVERFLOW = 0 // stripe bands stay within the pitch
 const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
 // Stack heights (metres) so the ground / bands / lines never z-fight.
