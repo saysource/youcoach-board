@@ -10,6 +10,12 @@ import { clientToBoard } from '../lib/draw'
 import { FIELD_ZONES } from '../lib/field-zones'
 import { useEditorStore } from '../store/context'
 
+// Bundled zone preview thumbnails (generated from each zone's default pose),
+// keyed by zone id (…/zones/<id>.png).
+const ZONE_THUMBS = Object.fromEntries(
+  Object.entries(import.meta.glob('../assets/zones/*.png', { eager: true, query: '?url', import: 'default' })).map(([path, url]) => [path.split('/').pop()!.replace('.png', ''), url as string]),
+) as Record<string, string>
+
 // Movement (px) below which a press is a tap, not a drag; touch hold (ms) to start.
 const TAP_SLOP = 8
 const TOUCH_HOLD = 220
@@ -349,7 +355,14 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                 onClick={() => setBackground({ field3d: z.camera, fieldSvg: null })}
                 className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
               >
-                <span className="flex aspect-4/3 w-full items-center justify-center rounded bg-muted text-lg font-semibold text-muted-foreground">{i}</span>
+                <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
+                  {ZONE_THUMBS[z.id] ? (
+                    <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-lg font-semibold text-muted-foreground">{i}</span>
+                  )}
+                  <span className="absolute left-0.5 top-0.5 flex size-4 items-center justify-center rounded bg-black/55 text-[10px] font-semibold text-white">{i}</span>
+                </span>
                 <span className="text-[11px]">{z.label}</span>
               </button>
             ))}
