@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { X, Sparkles, Maximize, Minimize, Pin, PinOff, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, type LucideIcon } from 'lucide-react'
+import { X, Sparkles, Maximize, Minimize, Pin, PinOff, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, Camera, type LucideIcon } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -456,28 +456,24 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                   {c.label}
                 </div>
                 <div className="mb-3 grid grid-cols-2 gap-2 last:mb-0">
-                  {allZones.filter((z) => z.category === c.id).map((z) => {
-                    const n = allZones.findIndex((zz) => zz.id === z.id) // marker number (matches the overlay)
-                    return (
-                      <button
-                        key={z.id}
-                        type="button"
-                        title={z.label}
-                        onClick={() => applyZone(z)}
-                        className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
-                      >
-                        <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
-                          {ZONE_THUMBS[z.id] ? (
-                            <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
-                          ) : (
-                            <span className="text-lg font-semibold text-muted-foreground">{n}</span>
-                          )}
-                          <span className="absolute left-0.5 top-0.5 flex size-4 items-center justify-center rounded bg-black/55 text-[10px] font-semibold text-white">{n}</span>
-                        </span>
-                        <span className="text-[11px]">{z.label}</span>
-                      </button>
-                    )
-                  })}
+                  {allZones.filter((z) => z.category === c.id).map((z) => (
+                    <button
+                      key={z.id}
+                      type="button"
+                      title={z.label}
+                      onClick={() => applyZone(z)}
+                      className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
+                    >
+                      <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
+                        {ZONE_THUMBS[z.id] ? (
+                          <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                        ) : (
+                          <Camera className="size-5 text-muted-foreground" />
+                        )}
+                      </span>
+                      <span className="text-[11px]">{z.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             ))}

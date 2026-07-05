@@ -176,9 +176,11 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
           m.behind || !zones[i] ? null : (
             <g key={zones[i].id} transform={`translate(${m.x} ${m.y})`} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onPointerDown={(e) => e.stopPropagation()} onClick={() => { onExitPan(); flyTo(zones[i].camera.position, zones[i].target) }}>
               <circle r={16} fill="#0f172a" fillOpacity={0.82} stroke="#ffffff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-              <text textAnchor="middle" dominantBaseline="central" fontSize={18} fontWeight={600} fill="#ffffff">
-                {i}
-              </text>
+              {/* Camera glyph (Lucide "camera", 24×24) — scaled to ~18px and centred. */}
+              <g transform="translate(-9 -9) scale(0.75)" fill="none" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                <circle cx="12" cy="13" r="3" />
+              </g>
             </g>
           ),
         )}
