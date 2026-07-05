@@ -80,23 +80,24 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   // Last player's skin/kit slots, inherited by newly added players.
   const playerColors = useEditorStore((s) => s.playerColors)
 
-  // The current field type (background mode) + the selected zone category within it.
+  // The current field type (background mode); its zones are all shown, grouped by
+  // category. The category control is a shortcut that scrolls to that group.
   const fieldType = useEditorStore((s) => s.doc.background.fieldType)
-  const [zoneCategory, setZoneCategory] = useState<ZoneCategory | null>(null)
   const allZones = zonesForField(fieldType)
   const zoneCats = fieldsOnly ? categoriesForField(fieldType) : []
-  // The active category (the chosen one, if still valid for this type; else the first).
-  const effectiveZoneCat: ZoneCategory | null = zoneCategory && zoneCats.some((c) => c.id === zoneCategory) ? zoneCategory : (zoneCats[0]?.id ?? null)
-  const visibleZones = allZones.filter((z) => !effectiveZoneCat || z.category === effectiveZoneCat)
   // Clicking a zone flies the camera there and applies the zone's background presets.
   function applyZone(z: Zone) {
     setBackground({ field3d: z.camera, fieldSvg: null, fieldType: z.fieldType, ...z.background })
   }
-  // Switching field type resets the category and jumps to that type's default zone.
+  // Switching field type jumps to that type's default zone.
   function selectFieldType(ft: FieldType) {
-    setZoneCategory(null)
     const z = defaultZoneForField(ft)
     setBackground({ fieldType: ft, fieldSvg: null, ...(z ? { field3d: z.camera, ...z.background } : {}) })
+  }
+  // Scroll to a category's group of poses (and flash its header), like "jump to type".
+  function jumpToZoneCat(id: ZoneCategory) {
+    gridRef.current?.querySelector(`[data-section="zcat-${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setFlash((f) => ({ id: `zcat-${id}`, n: f.n + 1 }))
   }
 
   const [listOpen, setListOpen] = useState(false)
@@ -423,44 +424,56 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                       </Button>
                     </DropdownMenuTrigger>
                   </TooltipTrigger>
-                  <TooltipContent>{zoneCats.find((c) => c.id === effectiveZoneCat)?.label ?? 'View'}</TooltipContent>
+                  <TooltipContent>Jump to…</TooltipContent>
                 </Tooltip>
                 <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
                   {zoneCats.map((c) => (
-                    <DropdownMenuItem key={c.id} onSelect={() => setZoneCategory(c.id)}>
-                      <span className="flex-1">{c.label}</span>
-                      {c.id === effectiveZoneCat && <Check className="size-4 shrink-0 text-primary" />}
-                    </DropdownMenuItem>
+                    <DropdownMenuItem key={c.id} onSelect={() => jumpToZoneCat(c.id)}>{c.label}</DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
           </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            <div className="grid grid-cols-2 gap-2">
-              {visibleZones.map((z) => {
-                const n = allZones.findIndex((zz) => zz.id === z.id) // marker number (matches the overlay)
-                return (
-                  <button
-                    key={z.id}
-                    type="button"
-                    title={z.label}
-                    onClick={() => applyZone(z)}
-                    className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
-                  >
-                    <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
-                      {ZONE_THUMBS[z.id] ? (
-                        <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="text-lg font-semibold text-muted-foreground">{n}</span>
-                      )}
-                      <span className="absolute left-0.5 top-0.5 flex size-4 items-center justify-center rounded bg-black/55 text-[10px] font-semibold text-white">{n}</span>
-                    </span>
-                    <span className="text-[11px]">{z.label}</span>
-                  </button>
-                )
-              })}
-            </div>
+          {/* All poses for the field type, grouped into a titled section per
+              category (like the materials sections). */}
+          <div ref={gridRef} className="flex-1 overflow-y-auto p-2 pt-0">
+            {zoneCats.map((c) => (
+              <div key={c.id} data-section={`zcat-${c.id}`}>
+                <div
+                  key={`zt-${c.id}-${`zcat-${c.id}` === flash.id ? flash.n : 0}`}
+                  className={cn(
+                    'sticky top-0 z-10 -mx-2 mb-1 bg-foreground/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm first:mt-0',
+                    `zcat-${c.id}` === flash.id && 'ycb-flash',
+                  )}
+                >
+                  {c.label}
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-2 last:mb-0">
+                  {allZones.filter((z) => z.category === c.id).map((z) => {
+                    const n = allZones.findIndex((zz) => zz.id === z.id) // marker number (matches the overlay)
+                    return (
+                      <button
+                        key={z.id}
+                        type="button"
+                        title={z.label}
+                        onClick={() => applyZone(z)}
+                        className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
+                      >
+                        <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
+                          {ZONE_THUMBS[z.id] ? (
+                            <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-lg font-semibold text-muted-foreground">{n}</span>
+                          )}
+                          <span className="absolute left-0.5 top-0.5 flex size-4 items-center justify-center rounded bg-black/55 text-[10px] font-semibold text-white">{n}</span>
+                        </span>
+                        <span className="text-[11px]">{z.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ) : (
