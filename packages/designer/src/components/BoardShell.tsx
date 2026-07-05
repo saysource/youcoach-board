@@ -26,6 +26,7 @@ import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
 import { GameSystemDialog } from './GameSystemDialog'
 import { PropertiesPanel, MobileBar } from './properties/PropertiesPanel'
+import gyroscopeIcon from '../assets/gyroscope.svg'
 
 // Board area padding (px) and the space reserved on the left for the full
 // properties panel (panel width + margins).
@@ -336,6 +337,9 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             }}
           >
             <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navPose={navPose} navMarkers={navMarkers} onNavPose={setNavPose} />
+            {/* Navigation-active indicator: a gyroscope watermark in the working-area
+                top-right corner (decorative, doesn't block input). */}
+            {navigating && <img src={gyroscopeIcon} alt="" aria-hidden draggable={false} className="pointer-events-none absolute z-20" style={{ top: BOARD_TOP_PAD, right: boardPaddingRight, width: 100, height: 100, opacity: 0.5 }} />}
           </div>
 
           {/* Top-left menu (+ the navigation control below it on mobile). */}
