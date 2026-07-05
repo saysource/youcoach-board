@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView } from '@youcoach-board/core'
-import { buildFieldGroup, markingsGeometry, lineWidthForDistance, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
+import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldBands } from '@youcoach-board/core'
+import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
 import { applyViewCamera } from '../lib/field-camera'
 
 // A WebGL layer rendering the real 3D pitch, viewed through the board's field
@@ -20,6 +20,8 @@ interface Props {
   containerRef: React.RefObject<HTMLDivElement | null>
   /** Whether the two goals at the ends of the pitch are shown. */
   showGoals?: boolean
+  /** Orientation of the mown shading bands (or none). */
+  bands?: FieldBands
   /** Bump/flip to force an on-demand redraw when neither camera nor viewport
    *  changed but the layout might have (e.g. entering/leaving Edit-Background) —
    *  avoids a stale pitch until the next camera move. */
@@ -32,10 +34,12 @@ interface Ctx {
   cam: THREE.PerspectiveCamera
   lines: THREE.Mesh | null
   goals: THREE.Object3D | null
+  bands: THREE.Mesh | null
+  bandsOrient: FieldBands
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -70,7 +74,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const group = buildFieldGroup()
     scene.add(group)
 
-    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, lineW: 0 }
+    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: 'vertical', lineW: 0 }
     return ctxRef.current
   }
 
@@ -91,9 +95,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport, showGoals })
+  const propsRef = useRef({ camera, viewport, showGoals, bands })
   useEffect(() => {
-    propsRef.current = { camera, viewport, showGoals }
+    propsRef.current = { camera, viewport, showGoals, bands }
   })
 
   function render() {
@@ -103,6 +107,12 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     if (!ctx || !canvas || !rect || rect.width < 1) return
     const { camera: cam, viewport: vp } = propsRef.current
     if (ctx.goals) ctx.goals.visible = propsRef.current.showGoals
+    // Rebuild the shading bands when the orientation changes (cheap flat geometry).
+    if (ctx.bands && propsRef.current.bands !== ctx.bandsOrient) {
+      ctx.bands.geometry.dispose()
+      ctx.bands.geometry = bandsGeometry(propsRef.current.bands)
+      ctx.bandsOrient = propsRef.current.bands
+    }
     for (const el of [canvas, bgRef.current]) {
       if (!el) continue
       el.style.left = `${rect.left}px`
@@ -133,7 +143,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick, showGoals])
+  }, [camera, viewport, renderTick, showGoals, bands])
 
   useEffect(() => {
     const container = containerRef.current

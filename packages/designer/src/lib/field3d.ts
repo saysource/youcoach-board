@@ -115,21 +115,34 @@ export function markingsGeometry(w = LINE_W): THREE.BufferGeometry {
   return geo
 }
 
-// Alternating translucent-white "mowing" bands, extended past the pitch so the
-// shading covers a larger surface than the lines.
-function bandsGeometry(): THREE.BufferGeometry {
+/** The mown "shading" bands, extended past the pitch so the shading covers a larger
+ *  surface than the lines. `orientation` runs the stripes lengthwise (vertical, the
+ *  default — bands span the width), across (horizontal — bands span the length), or
+ *  off (empty geometry). */
+export type FieldBandsOrientation = 'vertical' | 'horizontal' | 'none'
+export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical'): THREE.BufferGeometry {
   const p: number[] = []
-  const mx = L * BAND_OVERFLOW
-  const mz = W * BAND_OVERFLOW
-  const x0 = -HALF_L - mx
-  const x1 = HALF_L + mx
-  const z0 = -HALF_W - mz
-  const z1 = HALF_W + mz
-  const bands = 14
-  const bw = (x1 - x0) / bands
-  for (let b = 0; b < bands; b += 2) {
-    const bx0 = x0 + b * bw
-    quad(p, bx0, z0, bx0 + bw, z0, bx0 + bw, z1, bx0, z1)
+  if (orientation !== 'none') {
+    const mx = L * BAND_OVERFLOW
+    const mz = W * BAND_OVERFLOW
+    const x0 = -HALF_L - mx
+    const x1 = HALF_L + mx
+    const z0 = -HALF_W - mz
+    const z1 = HALF_W + mz
+    const bands = 14
+    if (orientation === 'vertical') {
+      const bw = (x1 - x0) / bands
+      for (let b = 0; b < bands; b += 2) {
+        const bx0 = x0 + b * bw
+        quad(p, bx0, z0, bx0 + bw, z0, bx0 + bw, z1, bx0, z1)
+      }
+    } else {
+      const bh = (z1 - z0) / bands
+      for (let b = 0; b < bands; b += 2) {
+        const bz0 = z0 + b * bh
+        quad(p, x0, bz0, x1, bz0, x1, bz0 + bh, x0, bz0 + bh)
+      }
+    }
   }
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
@@ -163,7 +176,7 @@ function makeFlag(x: number, z: number): THREE.Group {
 /** Build the pitch as one group in the corner-origin world frame (0..105 × 0..68).
  *  The ground is transparent (the board background shows through); only the white
  *  lines + translucent shading bands are drawn, plus goals + flags. */
-export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean } = {}): THREE.Group {
+export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation } = {}): THREE.Group {
   const group = new THREE.Group()
 
   // Transparent ground that still catches the goals' soft shadows.
@@ -173,7 +186,9 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean } = {})
   group.add(shadow)
 
   // Translucent white shading bands (extended past the pitch), then crisp lines.
-  const bands = new THREE.Mesh(bandsGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
+  // Named so the layer can rebuild the geometry when the orientation changes.
+  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical'), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
+  bands.name = 'field-bands'
   bands.position.y = BAND_Y
   bands.renderOrder = 1
   group.add(bands)

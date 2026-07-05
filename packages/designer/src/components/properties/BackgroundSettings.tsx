@@ -1,4 +1,4 @@
-import { type LogoPosition } from '@youcoach-board/core'
+import { type LogoPosition, type FieldBands } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { Slider } from '../ui/slider'
@@ -10,6 +10,36 @@ import defaultFieldImage from '../../assets/field0.jpg'
 
 // Background swatch presets (first = restore the default field image).
 const BG_COLORS = ['transparent', '#2f8a3e', '#3b7a57', '#5b8c3a', '#d1d1d1', '#9f9f9f', '#a6c58b', '#3389e0', '#ffffff']
+
+const BANDS_OPTIONS: { value: FieldBands; label: string; render: React.ReactNode }[] = [
+  {
+    value: 'vertical',
+    label: 'Vertical',
+    render: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+        <rect x="3" y="2" width="3" height="16" /><rect x="8.5" y="2" width="3" height="16" /><rect x="14" y="2" width="3" height="16" />
+      </svg>
+    ),
+  },
+  {
+    value: 'horizontal',
+    label: 'Horizontal',
+    render: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+        <rect x="2" y="3" width="16" height="3" /><rect x="2" y="8.5" width="16" height="3" /><rect x="2" y="14" width="16" height="3" />
+      </svg>
+    ),
+  },
+  {
+    value: 'none',
+    label: 'None',
+    render: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+        <circle cx="10" cy="10" r="7" /><line x1="5" y1="15" x2="15" y2="5" />
+      </svg>
+    ),
+  },
+]
 
 const LOGO_OPTIONS: { value: LogoPosition; label: string; render: React.ReactNode }[] = [
   { value: 'top-left', label: 'Top left', render: <LogoTopLeftIcon className="size-5" /> },
@@ -79,6 +109,11 @@ export function BackgroundSettings() {
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium text-muted-foreground">Goals</span>
         <Switch checked={bg.showGoals} onCheckedChange={(v) => setBackground({ showGoals: v })} />
+      </div>
+
+      <div className="grid gap-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">Bands</span>
+        <Segmented items={BANDS_OPTIONS} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
       </div>
 
       <div className="grid gap-1.5">

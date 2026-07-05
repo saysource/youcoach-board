@@ -19,6 +19,10 @@ export const BOARD_VERSION = 3
 /** Where the YouCoach logo sits over the background (0.2 opacity), or null. */
 export type LogoPosition = 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
+/** The mown "shading" bands on the pitch: lengthwise (vertical), across
+ *  (horizontal), or off. */
+export type FieldBands = 'vertical' | 'horizontal' | 'none'
+
 /** Background configuration: a solid color, an optional raster image, and an
  *  optional field SVG overlay whose declared colors the user can tweak. */
 /** A real 3D field: a pitch model rendered by three.js, viewed through a posed
@@ -55,6 +59,8 @@ export interface BoardBackground {
   objectScale: number
   /** Whether the two 3D goals at the ends of the pitch are shown. */
   showGoals: boolean
+  /** Orientation of the mown shading bands (or none). */
+  bands: FieldBands
   /** YouCoach logo placement over the background, or null for none. */
   logo: LogoPosition | null
 }
@@ -90,6 +96,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   figureScale: 1,
   objectScale: 4, // materials are real-size (a cone is a dot on a full pitch); 4× makes them legible by default
   showGoals: true,
+  bands: 'vertical',
   logo: 'center',
 }
 
@@ -146,6 +153,7 @@ function parseBackground(raw: unknown): BoardBackground {
     figureScale: num(o.figureScale, DEFAULT_BACKGROUND.figureScale),
     objectScale: num(o.objectScale, DEFAULT_BACKGROUND.objectScale),
     showGoals: o.showGoals !== false,
+    bands: o.bands === 'horizontal' || o.bands === 'none' ? o.bands : DEFAULT_BACKGROUND.bands,
     // Absent → default (center); explicit null → no logo; valid → that position.
     logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : o.logo === null ? null : DEFAULT_BACKGROUND.logo,
   }
