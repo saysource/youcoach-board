@@ -758,7 +758,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Move (x/z) every object in the gesture by a shared ground delta, or rotate
   // the primary (about Y). The primary drives snapping; its snapped delta applies
   // to all so a multi-selection keeps its relative layout.
-  function dragObject3D(g: NonNullable<typeof object3dGesture>, p: Point) {
+  function dragObject3D(g: NonNullable<typeof object3dGesture>, p: Point, shift: boolean) {
     const ground = arrow3dGround(p)
     if (!ground) return
     if (g.kind === 'move') {
@@ -778,8 +778,14 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         }),
       )
     } else {
-      // Rotate: the handle points toward the pointer's ground direction from the center.
-      editObject3D(g, { rotation: Math.atan2(ground.x - g.orig.x, ground.z - g.orig.z) })
+      // Rotate: the handle points toward the pointer's ground direction from the
+      // center. Holding Shift snaps to 15° steps.
+      let rot = Math.atan2(ground.x - g.orig.x, ground.z - g.orig.z)
+      if (shift) {
+        const step = Math.PI / 12 // 15°
+        rot = Math.round(rot / step) * step
+      }
+      editObject3D(g, { rotation: rot })
     }
   }
 
@@ -1735,7 +1741,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         }
         return
       }
-      dragObject3D(g, p)
+      dragObject3D(g, p, e.shiftKey)
       return
     }
     if (bgPan) {
