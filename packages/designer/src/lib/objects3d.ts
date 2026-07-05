@@ -66,6 +66,25 @@ export function defaultObject3DSize(objectId: string, fallback: number): number 
   return fallback
 }
 
+// Colorable materials: exactly the GLB-backed objects (cones, hurdles, ladder,
+// mannequins, balance dome). Goals + ball/cube are not tintable.
+export function isObject3DColorable(objectId: string): boolean {
+  return objectId in GLB_OBJECTS
+}
+
+// A placed goal (real-metric, structural) — exempt from the global object scale so
+// the "make materials bigger" default doesn't balloon regulation goals.
+export function isObject3DGoal(objectId: string): boolean {
+  return objectId in GOALS
+}
+
+// The authored default tint for a colorable object (as a CSS hex), used to seed a
+// freshly placed element's color and as the picker's baseline.
+export function object3dDefaultColor(objectId: string): string {
+  const c = GLB_OBJECTS[objectId]?.color
+  return c === undefined ? '#ffffff' : `#${c.toString(16).padStart(6, '0')}`
+}
+
 // Rotationally symmetric objects: a Y-axis rotation has no visible effect, so
 // their rotation handle is hidden and rotation is left at 0.
 // The mannequin carries a front-facing print, so a Y-rotation IS visible (it turns

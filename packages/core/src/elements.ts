@@ -269,8 +269,14 @@ export interface Object3DElement extends BaseElement {
   z: number
   /** Rotation about the vertical (Y) axis, in radians (the only allowed rotation). */
   rotation: number
-  /** Nominal size in metres (ball diameter / cube edge). */
+  /** Custom size as a multiplier RELATIVE to the global object scale (1 = global).
+   *  Only used when `useGlobalSize` is false; the rendered scale is floored at the
+   *  object's real size (×1 absolute), never smaller. */
   size: number
+  /** When true (default), the object renders at the global object scale
+   *  (background.objectScale) and `size` is ignored. When false, it uses its own
+   *  custom `size`. */
+  useGlobalSize: boolean
 }
 
 export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement | Object3DElement
@@ -983,6 +989,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       z: num(o.z) ?? OBJECT3D_DEFAULTS.z,
       rotation: num(o.rotation) ?? OBJECT3D_DEFAULTS.rotation,
       size: num(o.size) ?? OBJECT3D_DEFAULTS.size,
+      useGlobalSize: o.useGlobalSize !== false,
     }
   }
   return null
@@ -993,7 +1000,7 @@ export const OBJECT3D_DEFAULTS = {
   x: 52.5,
   z: 34,
   rotation: 0,
-  size: 3,
+  size: 1, // 1 = the global object scale (custom size is relative to it)
 } as const
 
 /** Default geometry/appearance for a new 3D arrow (from YouCoach Video Analysis,

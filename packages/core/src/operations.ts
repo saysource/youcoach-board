@@ -46,6 +46,9 @@ export interface ElementPatch {
   figureId?: string
   colors?: Record<string, string>
   mirror?: boolean
+  // 3D object (object3d) size: a relative multiplier + whether to follow the global scale.
+  size?: number
+  useGlobalSize?: boolean
   // World-ground anchor for pitch-pinned elements: a single [x, z] for standing
   // elements (figure/token = their bottom-center), or one [x, z] per point for a
   // pinned polyline (parallel to `points`, so the shape warps onto the field).

@@ -8,7 +8,7 @@ import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement } from '@youcoach-board
 import { makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
 import { SUN_POSITION, SUN_TARGET } from '../lib/field3d'
-import { buildObject3D } from '../lib/objects3d'
+import { buildObject3D, isObject3DColorable, isObject3DGoal, object3dDefaultColor } from '../lib/objects3d'
 
 /** Imperative API to hit-test 3D objects (they aren't SVG, so InteractiveBoard
  *  can't click them through the normal element handlers). */
@@ -152,16 +152,26 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         ctx.scene.add(obj)
         ctx.meshes.set(e.id, obj)
       }
-      // Scale by the element size × the global object-scale, then lift by the
-      // actual base so it rests on the ground (a fixed size/2 lift would float
-      // short objects). Both scale and lift use the same effective scale.
-      const scale = e.size * objectScale
+      // Effective scale: a global-tracking or custom multiplier over the real-size
+      // mesh, floored at ×1 (never smaller than real). Goals are real-metric
+      // structural objects, so they ignore the global "make materials bigger" scale.
+      const rel = e.useGlobalSize ? 1 : e.size
+      const scale = isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(1, rel * objectScale)
       obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
       obj.position.set(e.x, -baseMinY * scale, e.z)
       obj.rotation.set(0, e.rotation, 0)
       obj.userData.id = e.id
       obj.userData.objectId = e.objectId
+      // Live tint for colorable materials: recolor the body toon material only
+      // (the root mesh) — outline/crease/decal children keep their own colours.
+      if (isObject3DColorable(e.objectId)) {
+        const m = (obj as THREE.Mesh).material
+        if (m instanceof THREE.MeshToonMaterial) {
+          const c = e.fill && e.fill !== 'transparent' ? e.fill : object3dDefaultColor(e.objectId)
+          m.color.set(c)
+        }
+      }
     }
     for (const [id, mesh] of ctx.meshes) {
       if (seen.has(id)) continue

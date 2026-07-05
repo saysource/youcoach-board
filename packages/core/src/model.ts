@@ -88,7 +88,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   scale: 1,
   position: [0, 0],
   figureScale: 1,
-  objectScale: 1,
+  objectScale: 4, // materials are real-size (a cone is a dot on a full pitch); 4× makes them legible by default
   showGoals: true,
   logo: 'center',
 }

@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import { IDENTITY_TRANSFORM, BOARD_WIDTH, OBJECT3D_DEFAULTS, type BoardElement } from '@youcoach-board/core'
-import { defaultObject3DSize } from './objects3d'
+import { defaultObject3DSize, isObject3DColorable, object3dDefaultColor } from './objects3d'
 
 // Host-provided asset access (see specs/catalog.md). The board never hardcodes a
 // backend: the embedder says where figures/thumbnails/catalog live, and we
@@ -209,11 +209,14 @@ export function buildObject3DElement(objectId: string, x: number, z: number): Bo
     z,
     rotation: OBJECT3D_DEFAULTS.rotation,
     size: defaultObject3DSize(objectId, OBJECT3D_DEFAULTS.size),
+    useGlobalSize: true,
     transform: { ...IDENTITY_TRANSFORM },
     stroke: '#1e1e1e',
     strokeWidth: 3,
     strokeStyle: 'solid',
-    fill: 'transparent',
+    // Colorable materials carry their authored tint as `fill` (recolorable); the
+    // rest (goals, ball, cube) render their own material and leave it transparent.
+    fill: isObject3DColorable(objectId) ? object3dDefaultColor(objectId) : 'transparent',
     fillStyle: 'solid',
   }
 }

@@ -143,6 +143,9 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
         ) : p.allArrow3d ? (
           // 3D arrow: colour + a settings popover (opacity + geometry).
           <Arrow3DControls side="right" />
+        ) : p.allObject3D ? (
+          // 3D object/material: colour (tintable ones) + a size settings popover.
+          <Object3DControls side="right" />
         ) : p.allMaterialColor ? (
           // Material: a single custom color (yc-color-1), no opacity, + opacity settings.
           <>
@@ -327,6 +330,68 @@ function LockButton() {
       </TooltipTrigger>
       <TooltipContent>{allLocked ? 'Unlock' : 'Lock'}</TooltipContent>
     </Tooltip>
+  )
+}
+
+// 3D object/material controls: a body colour (tintable materials only, no opacity —
+// the stroke widget) plus a settings popover with "use global size" + a size slider.
+function Object3DControls({ side }: { side: 'right' | 'top' }) {
+  const p = usePropertyEditing()
+  return (
+    <>
+      {p.allObject3DColor && <ColorButton kind="stroke" label="Color" value={p.values.object3dColor} onChange={p.setObject3DColor} side={side} showOpacity={false} />}
+      <Object3DSettingsButton side={side} />
+    </>
+  )
+}
+
+// Size range as a multiplier of the global scale: down to 1/5×, up to 10×, with the
+// slider MIDPOINT = the global size (1×). Log-mapped so each half is proportional.
+const OBJ_SIZE_MIN = 0.2
+const OBJ_SIZE_MAX = 10
+function objSizeToSlider(size: number): number {
+  const s = Math.min(OBJ_SIZE_MAX, Math.max(OBJ_SIZE_MIN, size))
+  return s <= 1 ? ((Math.log(s) - Math.log(OBJ_SIZE_MIN)) / -Math.log(OBJ_SIZE_MIN)) * 50 : 50 + (Math.log(s) / Math.log(OBJ_SIZE_MAX)) * 50
+}
+function objSliderToSize(v: number): number {
+  const t = v / 100
+  const s = t <= 0.5 ? Math.exp(Math.log(OBJ_SIZE_MIN) * (1 - t * 2)) : Math.exp(Math.log(OBJ_SIZE_MAX) * ((t - 0.5) * 2))
+  return Math.round(s * 100) / 100
+}
+
+function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
+  const p = usePropertyEditing()
+  const useGlobal = p.values.object3dUseGlobal ?? true
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button size="icon" aria-label="Object size">
+              <SlidersHorizontal />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Size</TooltipContent>
+      </Tooltip>
+      <PopoverContent side={side} align="start" className="w-56">
+        <div className="grid gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">Use global size</span>
+            <Switch checked={useGlobal} onCheckedChange={p.setObject3DUseGlobal} />
+          </div>
+          {!useGlobal && (
+            <div className="grid gap-1.5">
+              <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>Small</span>
+                <span>Big</span>
+              </div>
+              <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(p.values.object3dSize ?? 1))} onChange={(v) => p.setObject3DSize(objSliderToSize(v))} />
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 

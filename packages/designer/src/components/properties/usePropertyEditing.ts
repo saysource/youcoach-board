@@ -11,6 +11,7 @@ import { isCreationTool } from '../../store/editorStore'
 import { toolCreatesClosed, nextTokenText, measureTextBox } from '../../lib/draw'
 import { useAssets } from '../../lib/assets'
 import { playerSvgs, SKIN_SLOT, HAIR_SLOT, JERSEY_SLOT, SHORTS_SLOT, VSTRIPE_SLOT, HSTRIPE_SLOT, SOCKS_SLOT, DEFAULT_SKIN, DEFAULT_HAIR, stripeFills, type KitStyle, type PlayerKit } from '../../lib/player-kit'
+import { isObject3DColorable, object3dDefaultColor } from '../../lib/objects3d'
 
 /** Closed shapes can be filled (background color); open ones can't. */
 export function isClosed(el: BoardElement): boolean {
@@ -78,6 +79,8 @@ export function usePropertyEditing() {
       allMaterialColor: false,
       allPlayer: false,
       allArrow3d: false,
+      allObject3D: false,
+      allObject3DColor: false,
       values: {
         stroke: toolDefaults.stroke as string | undefined,
         strokeWidth: toolDefaults.strokeWidth as number | undefined,
@@ -113,6 +116,10 @@ export function usePropertyEditing() {
         skin: undefined as string | undefined,
         hair: undefined as string | undefined,
         kit: undefined as PlayerKit | undefined,
+        // 3D object (selection-only).
+        object3dColor: undefined as string | undefined,
+        object3dSize: undefined as number | undefined,
+        object3dUseGlobal: undefined as boolean | undefined,
       },
       setStroke: (stroke: string) => setToolDefaults({ stroke }),
       setStrokeWidth: (strokeWidth: number) => setToolDefaults({ strokeWidth }),
@@ -149,6 +156,9 @@ export function usePropertyEditing() {
       setAlign: (align: TextAlign) => setTextDefaults({ align }),
       setBold: (bold: boolean) => setTextDefaults({ bold }),
       setMaterialColor: () => {},
+      setObject3DColor: () => {},
+      setObject3DUseGlobal: () => {},
+      setObject3DSize: () => {},
       setSkin: () => {},
       setHair: () => {},
       setSkinHair: () => {},
@@ -172,6 +182,11 @@ export function usePropertyEditing() {
   const texts = els.filter((e): e is Extract<BoardElement, { type: 'text' }> => e.type === 'text')
   const allText = texts.length === els.length
   const allArrow3d = els.length > 0 && els.every((e) => e.type === 'arrow3d')
+  const object3ds = els.filter((e): e is Extract<BoardElement, { type: 'object3d' }> => e.type === 'object3d')
+  const allObject3D = object3ds.length === els.length && els.length > 0
+  // Colorable = every selected object3d is a tintable material (cones, hurdles…).
+  const allObject3DColor = allObject3D && object3ds.every((e) => isObject3DColorable(e.objectId))
+  const firstObject3D = object3ds[0]
   // Each displayed value is the FIRST selected element's (not blanked when mixed).
   const first = els[0]
   const firstPoly = first.type === 'polyline' ? first : undefined
@@ -226,6 +241,8 @@ export function usePropertyEditing() {
     allMaterialColor,
     allPlayer,
     allArrow3d,
+    allObject3D,
+    allObject3DColor,
     values: {
       stroke: first.stroke,
       strokeWidth: first.strokeWidth,
@@ -261,6 +278,11 @@ export function usePropertyEditing() {
       skin: allPlayer ? (pc[SKIN_SLOT] ?? DEFAULT_SKIN) : undefined,
       hair: allPlayer ? (pc[HAIR_SLOT] ?? DEFAULT_HAIR) : undefined,
       kit: allPlayer ? playerKit : undefined,
+      // 3D object: body color (falls back to the authored default), custom size and
+      // whether it follows the global object scale.
+      object3dColor: firstObject3D ? (firstObject3D.fill && firstObject3D.fill !== 'transparent' ? firstObject3D.fill : object3dDefaultColor(firstObject3D.objectId)) : undefined,
+      object3dSize: firstObject3D?.size,
+      object3dUseGlobal: firstObject3D?.useGlobalSize,
     },
     setStroke: (stroke: string) => {
       patch(els, (e) => ({ before: { stroke: e.stroke }, after: { stroke } }))
@@ -314,6 +336,11 @@ export function usePropertyEditing() {
         if (!slot) return { before: {}, after: {} }
         return { before: { colors: f.colors }, after: { colors: { ...f.colors, [slot]: color } } }
       }),
+    // 3D object body color (stored as `fill`); no opacity, like the stroke widget.
+    setObject3DColor: (color: string) => patch(object3ds, (e) => ({ before: { fill: e.fill }, after: { fill: color } })),
+    // Follow the global object scale, or use a custom relative size.
+    setObject3DUseGlobal: (useGlobalSize: boolean) => patch(object3ds, (e) => ({ before: { useGlobalSize: (e as Extract<BoardElement, { type: 'object3d' }>).useGlobalSize }, after: { useGlobalSize } })),
+    setObject3DSize: (size: number) => patch(object3ds, (e) => ({ before: { size: (e as Extract<BoardElement, { type: 'object3d' }>).size }, after: { size } })),
     // Player skin/kit: patch the relevant color slots on the selected player(s).
     // (The remember-effect re-captures them, so new players inherit the change.)
     setSkin: (skin: string) => patch(figures, (e) => ({ before: { colors: (e as Extract<BoardElement, { type: 'figure' }>).colors }, after: { colors: { ...(e as Extract<BoardElement, { type: 'figure' }>).colors, [SKIN_SLOT]: skin } } })),
