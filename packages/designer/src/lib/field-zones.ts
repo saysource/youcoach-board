@@ -67,7 +67,10 @@ const TRAINING_LAYOUTS: { id: TrainingLayout; label: string; goals: boolean }[] 
   { id: 'zones', label: 'Zones', goals: false },
 ]
 const TRAINING_TOP: CameraConfig = { ref: 'soccer11', position: [52.5, 38, 34], target: [52.5, 0, 34], fov: 50 }
-const TRAINING_PERSP: CameraConfig = { ref: 'soccer11', position: [52.5, 15, 6], target: [52.5, 0, 34], fov: 50 }
+// Elevated 3/4 view pulled well back so the whole 40×30 area (and the goal
+// variants' goals) fit the canvas with margins — the previous pose sat too low
+// and too close, cropping the near edge.
+const TRAINING_PERSP: CameraConfig = { ref: 'soccer11', position: [52.5, 32, 4], target: [52.5, 0, 34], fov: 50 }
 const TRAINING_ZONES: Zone[] = TRAINING_LAYOUTS.flatMap((l): Zone[] => [
   { id: `training-${l.id}-top`, label: l.label, fieldType: 'training', category: 'top', target: [52.5, 0, 34], camera: TRAINING_TOP, background: { showGoals: l.goals, trainingLayout: l.id } },
   { id: `training-${l.id}-persp`, label: l.label, fieldType: 'training', category: 'perspective', target: [52.5, 0, 34], camera: TRAINING_PERSP, background: { showGoals: l.goals, trainingLayout: l.id } },
