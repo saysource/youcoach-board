@@ -142,9 +142,10 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         const asMesh = obj as THREE.Mesh
         if (asMesh.isMesh && asMesh.geometry) {
           if (!asMesh.geometry.boundingBox) asMesh.geometry.computeBoundingBox()
-          // Use the outline's underside (mesh bottom − ink thickness) as the base
-          // so the object lifts just enough to keep the outline off the clip plane.
-          obj.userData.baseMinY = asMesh.geometry.boundingBox!.min.y - ((obj.userData.outlineOffset as number) ?? 0)
+          // Lift so the outline's underside clears the y=0 clip plane (the outline
+          // dips ~outlineOffset below the mesh; ×1.4 gives a touch of clearance so
+          // flat models like the ladder aren't sliced at the bottom).
+          obj.userData.baseMinY = asMesh.geometry.boundingBox!.min.y - ((obj.userData.outlineOffset as number) ?? 0) * 1.4
         } else {
           obj.userData.baseMinY = new THREE.Box3().setFromObject(obj).min.y
         }

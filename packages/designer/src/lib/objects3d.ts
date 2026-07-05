@@ -215,14 +215,15 @@ function extremeToon(color: number): THREE.MeshToonMaterial {
 function creaseEdges(geometry: THREE.BufferGeometry, thresholdAngle = 24): THREE.LineSegments {
   const seg = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, thresholdAngle), new THREE.LineBasicMaterial({ color: 0x111111 }))
   seg.name = 'creaseEdges'
-  seg.scale.setScalar(1.008) // lift just off the surface to avoid z-fighting
+  seg.scale.setScalar(1.003) // nudge off the surface (small, so it isn't displaced on big models)
+  seg.raycast = () => {} // decorative — never a click target (else its ~1u line threshold makes a huge hit area)
   return seg
 }
 
-// Toon outline thickness as a fraction of a model's largest dimension, so the
-// ink line stays visually proportional across objects of very different sizes
-// (a 0.25 m cone vs a 1.75 m mannequin). Its world value is stored per object so
-// the layer can lift by it (keeping the outline's underside above the y=0 clip).
+// Toon outline thickness as a fraction of a model's MEDIAN dimension (not the
+// largest) so it stays proportional to the object's cross-section, not its length
+// — a long, thin ladder was getting an outline thicker than its own bars. Stored
+// per object so the layer can lift by it (keeping the underside above the y=0 clip).
 export const OUTLINE_FRACTION = 0.009
 
 /** The back-faces-only black "ink" outline shell. Instead of a uniform scale
@@ -258,6 +259,7 @@ function outlineMaterial(thickness: number): THREE.ShaderMaterial {
 function toonOutline(geometry: THREE.BufferGeometry, thickness: number): THREE.Mesh {
   const outline = new THREE.Mesh(geometry, outlineMaterial(thickness))
   outline.name = 'toonOutline'
+  outline.raycast = () => {} // decorative shell — never a click target (pick the real mesh)
   return outline
 }
 
@@ -277,7 +279,8 @@ export function buildObject3D(objectId: string): THREE.Object3D {
   if (glb) {
     const geom = glbGeometry(objectId, glb.data)
     const s = geom.boundingBox!.getSize(new THREE.Vector3())
-    const outlineOffset = OUTLINE_FRACTION * (Math.max(s.x, s.y, s.z) || 1)
+    const median = [s.x, s.y, s.z].sort((a, b) => a - b)[1]
+    const outlineOffset = OUTLINE_FRACTION * (median || 1)
     const mesh = new THREE.Mesh(geom, extremeToon(glb.color))
     mesh.castShadow = true
     mesh.add(toonOutline(geom, outlineOffset)) // silhouette ink (shares the mesh geometry)
