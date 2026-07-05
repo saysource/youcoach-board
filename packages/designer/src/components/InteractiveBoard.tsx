@@ -2218,7 +2218,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
       {/* 3D objects ("3D materials"): WebGL overlay (pointer-transparent). */}
-      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} />
+      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} />
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}

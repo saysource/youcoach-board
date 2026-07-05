@@ -49,6 +49,10 @@ export interface BoardBackground {
    *  field declares the figure size that reads well on it — e.g. smaller on a
    *  full pitch than on a half field). 1 = the figure's natural catalog size. */
   figureScale: number
+  /** Display scale for placed 3D objects (cones, hurdles, goals, …). The models
+   *  are authored at real metric size; this multiplies them so small props stay
+   *  visible on a top-down board. 1 = real size, up to 4×. */
+  objectScale: number
   /** YouCoach logo placement over the background, or null for none. */
   logo: LogoPosition | null
 }
@@ -82,6 +86,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   scale: 1,
   position: [0, 0],
   figureScale: 1,
+  objectScale: 1,
   logo: 'center',
 }
 
@@ -136,6 +141,7 @@ function parseBackground(raw: unknown): BoardBackground {
     scale: num(o.scale, DEFAULT_BACKGROUND.scale),
     position: [num(pos[0], 0), num(pos[1], 0)],
     figureScale: num(o.figureScale, DEFAULT_BACKGROUND.figureScale),
+    objectScale: num(o.objectScale, DEFAULT_BACKGROUND.objectScale),
     // Absent → default (center); explicit null → no logo; valid → that position.
     logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : o.logo === null ? null : DEFAULT_BACKGROUND.logo,
   }

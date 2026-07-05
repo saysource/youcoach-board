@@ -24,6 +24,8 @@ interface Props {
   /** The active field camera (background.field3d / a posed field). Objects render
    *  through it so they sit on the pitch; null → the default fixed near-ortho cam. */
   camera: PosedCamera | null
+  /** Global display multiplier for placed objects (background.objectScale). */
+  objectScale: number
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
 }
@@ -41,7 +43,7 @@ interface Ctx {
 
 const SELECT_COLOR = 0x2a6cff
 
-export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, viewport, camera, svgRef, containerRef }, ref) {
+export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, viewport, camera, objectScale, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -149,11 +151,13 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         ctx.scene.add(obj)
         ctx.meshes.set(e.id, obj)
       }
-      // Scale by size, then lift by the actual base so it rests on the ground
-      // (objects vary in height — a fixed size/2 lift would float short ones).
-      obj.scale.setScalar(e.size)
+      // Scale by the element size × the global object-scale, then lift by the
+      // actual base so it rests on the ground (a fixed size/2 lift would float
+      // short objects). Both scale and lift use the same effective scale.
+      const scale = e.size * objectScale
+      obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
-      obj.position.set(e.x, -baseMinY * e.size, e.z)
+      obj.position.set(e.x, -baseMinY * scale, e.z)
       obj.rotation.set(0, e.rotation, 0)
       obj.userData.id = e.id
       obj.userData.objectId = e.objectId
@@ -216,7 +220,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, selectedIds, viewport, camera])
+  }, [elements, selectedIds, viewport, camera, objectScale])
 
   useEffect(() => {
     const container = containerRef.current
