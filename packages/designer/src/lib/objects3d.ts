@@ -56,8 +56,12 @@ const OBJECT3D_SIZES: Record<string, number> = {
   goal_full: 1, goal_9: 1, goal_7: 1, goal_futsal: 1, goal_small: 1,
   cone_hurdle: 3.44, hurdle_low: 2.46, hurdle: 2.46, hurdle_high: 2.46, speed_ladder: 3.4,
 }
+// TEMP: 4× the GLB toon objects so the outline/proportions are easy to inspect.
+// Set back to 1 (or fold into per-kind sizes) once sizing is finalised.
+const GLB_SIZE_MULT = 4
 export function defaultObject3DSize(objectId: string, fallback: number): number {
-  return OBJECT3D_SIZES[objectId] ?? fallback
+  const base = OBJECT3D_SIZES[objectId] ?? fallback
+  return objectId in GLB_OBJECTS ? base * GLB_SIZE_MULT : base
 }
 
 /** A simple soccer-ball texture: white with scattered black pentagons. */

@@ -1,5 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import * as THREE from 'three'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement } from '@youcoach-board/core'
 import { makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
@@ -30,27 +34,12 @@ interface Ctx {
   fixedCam: THREE.PerspectiveCamera
   calibCam: THREE.PerspectiveCamera
   meshes: Map<string, THREE.Object3D>
+  composer: EffectComposer
+  renderPass: RenderPass
+  outlinePass: OutlinePass
 }
 
-// The selection highlight, added as a hidden child named 'outline'. A single
-// Mesh gets a back-faces-only inflated silhouette (a clean coloured ring); a
-// Group (goal) gets a wireframe bounding box, since it has no single geometry.
 const SELECT_COLOR = 0x2a6cff
-function selectionOutline(obj: THREE.Object3D, box: THREE.Box3): THREE.Object3D {
-  const asMesh = obj as THREE.Mesh
-  let outline: THREE.Object3D
-  if (asMesh.isMesh && asMesh.geometry) {
-    outline = new THREE.Mesh(asMesh.geometry, new THREE.MeshBasicMaterial({ color: SELECT_COLOR, side: THREE.BackSide }))
-    outline.scale.setScalar(1.09)
-  } else {
-    const size = box.getSize(new THREE.Vector3())
-    outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x, size.y, size.z)), new THREE.LineBasicMaterial({ color: SELECT_COLOR }))
-    outline.position.copy(box.getCenter(new THREE.Vector3()))
-  }
-  outline.name = 'outline'
-  outline.visible = false
-  return outline
-}
 
 export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, viewport, camera, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -62,6 +51,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     if (!canvas) return null
     const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true })
     renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.setClearColor(0x000000, 0) // transparent so the field shows through the composer
     // Clip anything below the pitch (y < 0): the toon outline / selection shells
     // extend slightly past a mesh in every direction, so their underside would
     // otherwise poke below the grass and read as the object being "under" it.
@@ -93,7 +83,28 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     ground.receiveShadow = true
     scene.add(ground)
 
-    ctxRef.current = { renderer, scene, fixedCam: makeArrow3DCamera(), calibCam: new THREE.PerspectiveCamera(), meshes: new Map() }
+    const fixedCam = makeArrow3DCamera()
+    const calibCam = new THREE.PerspectiveCamera()
+
+    // Post-processing: a proper screen-space selection outline (OutlinePass) —
+    // uniform pixel width regardless of geometry, unlike an inverted-hull shell.
+    // Multisampled target keeps the objects anti-aliased through the composer.
+    const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { samples: 4 }))
+    composer.setPixelRatio(window.devicePixelRatio)
+    const renderPass = new RenderPass(scene, fixedCam)
+    renderPass.clearAlpha = 0
+    composer.addPass(renderPass)
+    const outlinePass = new OutlinePass(new THREE.Vector2(1, 1), scene, fixedCam)
+    outlinePass.edgeStrength = 6
+    outlinePass.edgeThickness = 1
+    outlinePass.edgeGlow = 0
+    outlinePass.pulsePeriod = 0
+    outlinePass.visibleEdgeColor.set(SELECT_COLOR)
+    outlinePass.hiddenEdgeColor.set(SELECT_COLOR)
+    composer.addPass(outlinePass)
+    composer.addPass(new OutputPass())
+
+    ctxRef.current = { renderer, scene, fixedCam, calibCam, meshes: new Map(), composer, renderPass, outlinePass }
     return ctxRef.current
   }
 
@@ -122,19 +133,17 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         // Local-space bounds (object is untransformed here): used to lift it onto
         // the ground and to size a Group's selection box.
         obj.updateMatrixWorld(true)
-        const box = new THREE.Box3().setFromObject(obj)
         // Rest the VISIBLE mesh on the ground. For a single mesh use its own
-        // geometry (the box also includes the slightly-larger outline/crease
-        // shells, which would otherwise lift it a few cm and leave a floating
-        // gap). Groups (goals) have no single geometry → use the full box.
+        // geometry (a full-object box also includes the slightly-larger outline/
+        // crease shells, which would lift it a few cm and leave a floating gap).
+        // Groups (goals) have no single geometry → use the full box.
         const asMesh = obj as THREE.Mesh
         if (asMesh.isMesh && asMesh.geometry) {
           if (!asMesh.geometry.boundingBox) asMesh.geometry.computeBoundingBox()
           obj.userData.baseMinY = asMesh.geometry.boundingBox!.min.y
         } else {
-          obj.userData.baseMinY = box.min.y
+          obj.userData.baseMinY = new THREE.Box3().setFromObject(obj).min.y
         }
-        obj.add(selectionOutline(obj, box))
         ctx.scene.add(obj)
         ctx.meshes.set(e.id, obj)
       }
@@ -144,8 +153,6 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
       obj.position.set(e.x, -baseMinY * e.size, e.z)
       obj.rotation.set(0, e.rotation, 0)
-      const outline = obj.getObjectByName('outline')
-      if (outline) outline.visible = selectedIds.includes(e.id)
       obj.userData.id = e.id
       obj.userData.objectId = e.objectId
     }
@@ -181,15 +188,22 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     canvas.style.width = `${rect.width}px`
     canvas.style.height = `${rect.height}px`
     ctx.renderer.setSize(rect.width, rect.height, false)
+    ctx.composer.setSize(rect.width, rect.height)
+    let activeCam: THREE.PerspectiveCamera
     if (camera) {
       applyViewCamera(ctx.calibCam, camera, viewport)
-      ctx.renderer.render(ctx.scene, ctx.calibCam)
+      activeCam = ctx.calibCam
     } else {
       const zoom = viewport.zoom || 1
       ctx.fixedCam.setViewOffset(BOARD_WIDTH, BOARD_HEIGHT, viewport.panX, viewport.panY, BOARD_WIDTH / zoom, BOARD_HEIGHT / zoom)
       ctx.fixedCam.updateProjectionMatrix()
-      ctx.renderer.render(ctx.scene, ctx.fixedCam)
+      activeCam = ctx.fixedCam
     }
+    // Render through the composer so OutlinePass highlights the selection.
+    ctx.renderPass.camera = activeCam
+    ctx.outlinePass.renderCamera = activeCam
+    ctx.outlinePass.selectedObjects = selectedIds.map((id) => ctx.meshes.get(id)).filter((o): o is THREE.Object3D => !!o)
+    ctx.composer.render()
   }
 
   const renderRef = useRef(render)
