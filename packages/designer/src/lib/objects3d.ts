@@ -427,22 +427,26 @@ export function buildObject3D(objectId: string): THREE.Object3D {
 // authored to rest with its ORIGIN on the ground and its CENTRE ~0.10 m up, so the
 // whole ball sits a little above the surface (never half-buried by the y=0 clip).
 let ballPrims: { geometry: THREE.BufferGeometry; color: THREE.Color }[] | null = null
+let ballShell: THREE.BufferGeometry | null = null
 function buildBall(): THREE.Group {
   if (!ballPrims) ballPrims = parseGlbByMaterial(base64ToArrayBuffer(BALL_GLB_BASE64))
+  // The whole-sphere geometry (both primitives merged) — the silhouette ink needs
+  // the full ball, not just one material's patches.
+  if (!ballShell) {
+    ballShell = parseGlbGeometry(base64ToArrayBuffer(BALL_GLB_BASE64))
+    ballShell.computeBoundingBox()
+  }
   const group = new THREE.Group()
-  let shell: THREE.BufferGeometry | null = null // largest primitive → silhouette ink
   for (const { geometry, color } of ballPrims) {
-    const g = geometry.clone()
-    const mesh = new THREE.Mesh(g, extremeToon(color.getHex(THREE.SRGBColorSpace)))
+    const mesh = new THREE.Mesh(geometry.clone(), extremeToon(color.getHex(THREE.SRGBColorSpace)))
     mesh.castShadow = true
     group.add(mesh)
-    if (!shell || g.boundingBox!.getSize(new THREE.Vector3()).length() > shell.boundingBox!.getSize(new THREE.Vector3()).length()) shell = g
   }
-  if (shell) {
-    const s = shell.boundingBox!.getSize(new THREE.Vector3())
-    const outlineOffset = OUTLINE_FRACTION * ([s.x, s.y, s.z].sort((a, b) => a - b)[1] || 1)
-    group.add(toonOutline(shell, outlineOffset))
-  }
+  const s = ballShell.boundingBox!.getSize(new THREE.Vector3())
+  // A bolder ink line than the default fraction — a small ball's silhouette is
+  // already a dark toon band, so a thin outline vanishes into it.
+  const outlineOffset = OUTLINE_FRACTION * 3 * ([s.x, s.y, s.z].sort((a, b) => a - b)[1] || 1)
+  group.add(toonOutline(ballShell.clone(), outlineOffset))
   group.userData.originAtGround = true // keep the authored height (don't re-rest)
   return group
 }
