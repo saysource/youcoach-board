@@ -253,10 +253,11 @@ function makeGoal(sign: number, halfL = HALF_L, goalW = GOAL_W, z = 0): THREE.Gr
 
 // A goal on the near/far touchline (z = ±halfW), turned 90° so its mouth faces the
 // field. signZ = +1 → far edge (mouth toward −Z); −1 → near edge (mouth toward +Z).
+// buildGoal opens toward +X, so far edge needs +90° and near edge −90°.
 function makeEdgeGoal(x: number, signZ: number, halfW: number, goalW: number): THREE.Group {
   const g = buildGoal({ width: goalW, height: GOAL_H, depth: GOAL_D, style: 'box', postR: POST_R })
   g.position.set(x, GOAL_Y, signZ * (halfW + GOAL_D / 2))
-  g.rotation.y = signZ > 0 ? -Math.PI / 2 : Math.PI / 2
+  g.rotation.y = signZ > 0 ? Math.PI / 2 : -Math.PI / 2
   return g
 }
 
