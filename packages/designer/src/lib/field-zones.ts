@@ -61,9 +61,15 @@ const TRAINING_ZONES: Zone[] = [
   { id: 'training-perspective', label: 'Perspective', fieldType: 'training', category: 'perspective', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [52.5, 15, 6], target: [52.5, 0, 34], fov: 50 }, background: { showGoals: false } },
 ]
 
+// Zones area (40×30 with two shaded external end-zones). One seeded top pose.
+const ZONES_AREA_ZONES: Zone[] = [
+  { id: 'zones-top', label: 'Top view', fieldType: 'training_zones', category: 'top', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [52.5, 38, 34], target: [52.5, 0, 34], fov: 50 }, background: { showGoals: false } },
+]
+
 export const FIELD_ZONES: Zone[] = [
   ...SOCCER_ZONES.map((z) => ({ ...z, category: pitchCategory(z.camera) })),
   ...TRAINING_ZONES,
+  ...ZONES_AREA_ZONES,
 ]
 
 // Field types offered in the drawer, in order. Futsal is defined in the model but
@@ -71,6 +77,7 @@ export const FIELD_ZONES: Zone[] = [
 export const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
   { value: 'soccer11', label: 'Soccer 11' },
   { value: 'training', label: 'Training Area' },
+  { value: 'training_zones', label: 'Training Zones' },
 ]
 
 const CATEGORY_LABELS: Record<ZoneCategory, string> = { top: 'Top View', perspective: 'Perspective' }

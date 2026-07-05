@@ -25,7 +25,7 @@ export type FieldBands = 'vertical' | 'horizontal' | 'none'
 
 /** The kind of playing surface. Each type has its own markings, default goals and
  *  set of camera zones. (Futsal is planned; not yet rendered.) */
-export type FieldType = 'soccer11' | 'training' | 'futsal'
+export type FieldType = 'soccer11' | 'training' | 'training_zones' | 'futsal'
 
 /** Background configuration: a solid color, an optional raster image, and an
  *  optional field SVG overlay whose declared colors the user can tweak. */
@@ -151,7 +151,7 @@ function parseBackground(raw: unknown): BoardBackground {
     image: typeof o.image === 'string' ? o.image : null,
     fieldSvg: typeof o.fieldSvg === 'string' ? o.fieldSvg : null,
     field3d: parseFieldView(o.field3d),
-    fieldType: o.fieldType === 'training' || o.fieldType === 'futsal' ? o.fieldType : 'soccer11',
+    fieldType: o.fieldType === 'training' || o.fieldType === 'training_zones' || o.fieldType === 'futsal' ? o.fieldType : 'soccer11',
     fieldColors:
       typeof o.fieldColors === 'object' && o.fieldColors !== null
         ? (o.fieldColors as Record<string, string>)

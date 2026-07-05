@@ -24,8 +24,12 @@ const HALF_W = W / 2 // 34
 export const FIELD_DIMS: Record<FieldType, { halfL: number; halfW: number; goalW: number }> = {
   soccer11: { halfL: 52.5, halfW: 34, goalW: 7.32 },
   training: { halfL: 20, halfW: 15, goalW: 5 },
+  training_zones: { halfL: 20, halfW: 15, goalW: 5 },
   futsal: { halfL: 20, halfW: 10, goalW: 3 },
 }
+// The two dividing lines of the zones area sit this far in from each end (metres);
+// the strips outside them are the shaded "external" zones.
+const ZONE_INSET = 10
 const GOAL_W = 7.32
 const GOAL_H = 2.44
 const GOAL_D = 2.0
@@ -94,17 +98,29 @@ function disc(pos: number[], cx: number, cz: number, r: number, steps = 16) {
 
 /** Field markings for a type, built in the centred frame. */
 export function markingsGeometry(w = LINE_W, fieldType: FieldType = 'soccer11'): THREE.BufferGeometry {
-  return fieldType === 'soccer11' ? soccerMarkings(w) : trainingMarkings(w, FIELD_DIMS[fieldType].halfL, FIELD_DIMS[fieldType].halfW)
+  const { halfL, halfW } = FIELD_DIMS[fieldType]
+  if (fieldType === 'soccer11') return soccerMarkings(w)
+  if (fieldType === 'training_zones') return trainingZonesMarkings(w, halfL, halfW)
+  return trainingMarkings(w, halfL, halfW)
 }
 
-// A plain rectangular training pitch: outer boundary + halfway + centre circle.
+// A plain rectangular training area: just the outer boundary.
 function trainingMarkings(w: number, halfL: number, halfW: number): THREE.BufferGeometry {
   const p: number[] = []
-  const r = Math.min(halfL, halfW) * 0.3 // centre circle ~proportional to the area
   poly(p, [[-halfL, -halfW], [halfL, -halfW], [halfL, halfW], [-halfL, halfW]], true, w)
-  seg(p, 0, -halfW, 0, halfW, w)
-  arc(p, 0, 0, r, 0, 2 * Math.PI, 64, w)
-  disc(p, 0, 0, w * 0.6)
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+  return geo
+}
+
+// The zones area: outer boundary + two vertical dividers ZONE_INSET metres in from
+// each end (the strips beyond them are the shaded external zones — see bandsGeometry).
+function trainingZonesMarkings(w: number, halfL: number, halfW: number): THREE.BufferGeometry {
+  const p: number[] = []
+  poly(p, [[-halfL, -halfW], [halfL, -halfW], [halfL, halfW], [-halfL, halfW]], true, w)
+  const x = halfL - ZONE_INSET
+  seg(p, -x, -halfW, -x, halfW, w)
+  seg(p, x, -halfW, x, halfW, w)
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
   return geo
@@ -145,10 +161,21 @@ function soccerMarkings(w: number): THREE.BufferGeometry {
 /** The mown "shading" bands, extended past the pitch so the shading covers a larger
  *  surface than the lines. `orientation` runs the stripes lengthwise (vertical, the
  *  default — bands span the width), across (horizontal — bands span the length), or
- *  off (empty geometry). */
+ *  off (empty geometry). For the zones area, the "bands" are instead a single fill
+ *  over each of the two external zones (unless off). */
 export type FieldBandsOrientation = 'vertical' | 'horizontal' | 'none'
-export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', halfL = HALF_L, halfW = HALF_W): THREE.BufferGeometry {
+export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', halfL = HALF_L, halfW = HALF_W, fieldType: FieldType = 'soccer11'): THREE.BufferGeometry {
   const p: number[] = []
+  if (fieldType === 'training_zones') {
+    if (orientation !== 'none') {
+      const x = halfL - ZONE_INSET
+      quad(p, -halfL, -halfW, -x, -halfW, -x, halfW, -halfL, halfW) // left external zone
+      quad(p, x, -halfW, halfL, -halfW, halfL, halfW, x, halfW) // right external zone
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+    return geo
+  }
   if (orientation !== 'none') {
     const x0 = -halfL
     const x1 = halfL
@@ -215,7 +242,7 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
 
   // Translucent white shading bands (over the field extent), then crisp lines.
   // Named so the layer can rebuild the geometry when the orientation changes.
-  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical', halfL, halfW), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
+  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical', halfL, halfW, fieldType), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
   bands.name = 'field-bands'
   bands.position.y = BAND_Y
   bands.renderOrder = 1

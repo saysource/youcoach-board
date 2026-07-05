@@ -134,7 +134,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     // Rebuild the shading bands when the orientation changes (cheap flat geometry).
     if (ctx.bands && propsRef.current.bands !== ctx.bandsOrient) {
       ctx.bands.geometry.dispose()
-      ctx.bands.geometry = bandsGeometry(propsRef.current.bands, FIELD_DIMS[ctx.fieldType].halfL, FIELD_DIMS[ctx.fieldType].halfW)
+      ctx.bands.geometry = bandsGeometry(propsRef.current.bands, FIELD_DIMS[ctx.fieldType].halfL, FIELD_DIMS[ctx.fieldType].halfW, ctx.fieldType)
       ctx.bandsOrient = propsRef.current.bands
     }
     for (const el of [canvas, bgRef.current]) {
