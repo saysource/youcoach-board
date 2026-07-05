@@ -29,6 +29,7 @@ const MODELS = [
   ['mannequin.glb', 'mannequin.glb', 'MANNEQUIN_GLB_BASE64', 'mannequin-glb.ts'],
   ['wall_mannequin.glb', 'wall_mannequin.glb', 'WALL_MANNEQUIN_GLB_BASE64', 'wall-mannequin-glb.ts'],
   ['balance_dome.glb', 'balance_dome.glb', 'BALANCE_DOME_GLB_BASE64', 'balance-dome-glb.ts'],
+  ['agility_pole.glb', 'agility_pole.glb', 'AGILITY_POLE_GLB_BASE64', 'agility-pole-glb.ts'],
 ]
 
 let done = 0

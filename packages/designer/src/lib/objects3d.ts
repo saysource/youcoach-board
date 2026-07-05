@@ -21,6 +21,7 @@ import { SPEED_LADDER_GLB_BASE64 } from './speed-ladder-glb'
 import { MANNEQUIN_GLB_BASE64 } from './mannequin-glb'
 import { WALL_MANNEQUIN_GLB_BASE64 } from './wall-mannequin-glb'
 import { BALANCE_DOME_GLB_BASE64 } from './balance-dome-glb'
+import { AGILITY_POLE_GLB_BASE64 } from './agility-pole-glb'
 import { BALL_GLB_BASE64 } from './ball-glb'
 // The inflatable mannequin's "fake defender" drawing — a single black line-art
 // path, printed onto the front of the (tintable) mannequin body as a decal.
@@ -40,6 +41,7 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   mannequin: { data: MANNEQUIN_GLB_BASE64, color: 0xe7eaed }, // off-white inflatable; recolorable
   wall_mannequin: { data: WALL_MANNEQUIN_GLB_BASE64, color: 0x9aa3ab },
   balance_dome: { data: BALANCE_DOME_GLB_BASE64, color: 0x2aa8a8 },
+  agility_pole: { data: AGILITY_POLE_GLB_BASE64, color: 0xdc3838 }, // slalom pole; recolorable
 }
 
 // Procedural goals. Built at their real metric size (feet → metres), so they're
@@ -53,7 +55,7 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
@@ -90,7 +92,7 @@ export function object3dDefaultColor(objectId: string): string {
 // their rotation handle is hidden and rotation is left at 0.
 // The mannequin carries a front-facing print, so a Y-rotation IS visible (it turns
 // the fake defender to face a different way) — it stays rotatable.
-const ROTATION_SYMMETRIC = new Set<string>(['ball', 'cone', 'high_cone', 'balance_dome'])
+const ROTATION_SYMMETRIC = new Set<string>(['ball', 'cone', 'high_cone', 'balance_dome', 'agility_pole'])
 export function isObject3DRotatable(objectId: string): boolean {
   return !ROTATION_SYMMETRIC.has(objectId)
 }

@@ -17602,6 +17602,12 @@
      "h": 100
     },
     {
+     "object3d": "agility_pole",
+     "thumb": "materials3d/agility_pole",
+     "w": 100,
+     "h": 100
+    },
+    {
      "object3d": "goal_full",
      "thumb": "materials3d/goal_full",
      "w": 100,
