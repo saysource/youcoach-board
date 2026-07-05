@@ -221,13 +221,43 @@ function creaseEdges(geometry: THREE.BufferGeometry, thresholdAngle = 24): THREE
   return seg
 }
 
-/** A slightly-inflated, back-faces-only black shell of the same geometry — the
- *  classic toon "ink" outline. Added as a child so it scales/moves with the
- *  object; a small factor keeps the line thin. */
+// Ink thickness of the toon outline, as a fraction of the (unit-normalised)
+// model — so it stays proportional at any placed `size`.
+const OUTLINE_THICKNESS = 0.009
+
+/** The back-faces-only black "ink" outline shell. Instead of a uniform scale
+ *  (which displaces the shell sideways on thin, off-centre parts like a hurdle
+ *  rail — a one-sided outline), it pushes every vertex OUT along its surface
+ *  normal by a fixed distance, giving an even line all the way round. Offset in
+ *  model space so it scales with the object; clipping-plane aware (y<0 hidden). */
+function outlineMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { thickness: { value: OUTLINE_THICKNESS } },
+    side: THREE.BackSide,
+    clipping: true,
+    vertexShader: `
+      #include <clipping_planes_pars_vertex>
+      uniform float thickness;
+      void main() {
+        vec3 p = position + normalize(normal) * thickness;
+        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <clipping_planes_vertex>
+      }
+    `,
+    fragmentShader: `
+      #include <clipping_planes_pars_fragment>
+      void main() {
+        #include <clipping_planes_fragment>
+        gl_FragColor = vec4(0.067, 0.067, 0.067, 1.0);
+      }
+    `,
+  })
+}
+
 function toonOutline(geometry: THREE.BufferGeometry): THREE.Mesh {
-  const outline = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide }))
+  const outline = new THREE.Mesh(geometry, outlineMaterial())
   outline.name = 'toonOutline'
-  outline.scale.setScalar(1.04)
   return outline
 }
 
