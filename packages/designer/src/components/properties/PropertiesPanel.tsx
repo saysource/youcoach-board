@@ -380,15 +380,15 @@ function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
             <span className="text-[11px] font-medium text-muted-foreground">Use global size</span>
             <Switch checked={useGlobal} onCheckedChange={p.setObject3DUseGlobal} />
           </div>
-          {!useGlobal && (
-            <div className="grid gap-1.5">
-              <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-                <span>Small</span>
-                <span>Big</span>
-              </div>
-              <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(p.values.object3dSize ?? 1))} onChange={(v) => p.setObject3DSize(objSliderToSize(v))} />
+          {/* Always shown; disabled (and parked at the global midpoint) while the
+              object follows the global size, so the control stays visible. */}
+          <div className={cn('grid gap-1.5', useGlobal && 'opacity-60')}>
+            <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <span>Small</span>
+              <span>Big</span>
             </div>
-          )}
+            <WaveSlider min={0} max={100} disabled={useGlobal} value={useGlobal ? 50 : Math.round(objSizeToSlider(p.values.object3dSize ?? 1))} onChange={(v) => p.setObject3DSize(objSliderToSize(v))} />
+          </div>
         </div>
       </PopoverContent>
     </Popover>
@@ -665,7 +665,7 @@ function pctToFreq(pct: number): number {
 
 // A slider that coalesces a whole drag into one undo step (see useDragTransaction,
 // same model as the opacity control).
-function WaveSlider({ min, max, value, onChange }: { min: number; max: number; value: number; onChange: (v: number) => void }) {
+function WaveSlider({ min, max, value, onChange, disabled }: { min: number; max: number; value: number; onChange: (v: number) => void; disabled?: boolean }) {
   const arm = useDragTransaction()
   return (
     <Slider
@@ -673,6 +673,8 @@ function WaveSlider({ min, max, value, onChange }: { min: number; max: number; v
       max={max}
       step={1}
       value={[value]}
+      disabled={disabled}
+      className={cn(disabled && 'opacity-40')}
       onValueChange={([v]) => {
         arm()
         onChange(v)
