@@ -21,6 +21,7 @@ import { LibraryDrawer } from './LibraryDrawer'
 import { ZoomBar } from './ZoomBar'
 import { UndoRedoBar } from './UndoRedoBar'
 import { NavBar } from './NavBar'
+import { NavHints } from './NavHints'
 import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
 import { GameSystemDialog } from './GameSystemDialog'
@@ -168,6 +169,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const savedField3d = useEditorStore((s) => s.doc.background.field3d)
   const [navigating, setNavigating] = useState(false)
   const [navPose, setNavPose] = useState<FieldView | null>(null)
+  const [navMarkers, setNavMarkers] = useState(false) // numbered position markers, off by default
   const navAvailable = !!savedField3d && !bgEditing && !homographyEditing && !cameraEditing && !zoneEditing
   function toggleNav() {
     if (navigating) {
@@ -333,13 +335,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navPose={navPose} onNavPose={setNavPose} />
+            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navPose={navPose} navMarkers={navMarkers} onNavPose={setNavPose} />
           </div>
 
           {/* Top-left menu (+ the navigation control below it on mobile). */}
           <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
             <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} />
-            {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} />}
+            {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} />}
           </div>
 
           {/* Main toolbar — top-center, or bottom-center in mobile mode. In
@@ -413,7 +415,14 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
               <ZoomBar />
               <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
-              <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} />
+              <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} />
+            </div>
+          )}
+
+          {/* Navigation controls hint (desktop only — touch gestures come later). */}
+          {navigating && !mobile && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2">
+              <NavHints />
             </div>
           )}
 

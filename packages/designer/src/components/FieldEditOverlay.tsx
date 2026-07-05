@@ -33,7 +33,7 @@ interface Fly {
   start: number
 }
 
-export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose, onExitPan }: { field3d: FieldView; fieldType: FieldType; viewBox: string; panMode: boolean; onPose: (p: Pose) => void; onExitPan: () => void }) {
+export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose, onExitPan, showMarkers = true }: { field3d: FieldView; fieldType: FieldType; viewBox: string; panMode: boolean; onPose: (p: Pose) => void; onExitPan: () => void; showMarkers?: boolean }) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   // Only the current field type's zones are shown as markers. A ref feeds the
   // rAF loop (created once) the latest list without re-subscribing.
@@ -159,7 +159,7 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
       {/* OrbitControls input surface (empty; markers sit above it). */}
       <div ref={surfaceRef} className="absolute inset-0 z-20" style={{ touchAction: 'none', cursor: 'grab' }} />
       <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 z-20 h-full w-full" style={{ pointerEvents: 'none' }}>
-        {markers.map((m, i) =>
+        {showMarkers && markers.map((m, i) =>
           m.behind || !zones[i] ? null : (
             <g key={zones[i].id} transform={`translate(${m.x} ${m.y})`} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onPointerDown={(e) => e.stopPropagation()} onClick={() => { onExitPan(); flyTo(zones[i].camera.position, zones[i].target) }}>
               <circle r={16} fill="#0f172a" fillOpacity={0.82} stroke="#ffffff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
