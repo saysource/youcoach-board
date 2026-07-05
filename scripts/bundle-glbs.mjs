@@ -30,6 +30,7 @@ const MODELS = [
   ['wall_mannequin.glb', 'wall_mannequin.glb', 'WALL_MANNEQUIN_GLB_BASE64', 'wall-mannequin-glb.ts'],
   ['balance_dome.glb', 'balance_dome.glb', 'BALANCE_DOME_GLB_BASE64', 'balance-dome-glb.ts'],
   ['agility_pole.glb', 'agility_pole.glb', 'AGILITY_POLE_GLB_BASE64', 'agility-pole-glb.ts'],
+  ['flag_pole.glb', 'flag_pole.glb', 'FLAG_POLE_GLB_BASE64', 'flag-pole-glb.ts'],
   // 3D players: static meshes baked in the neutral standing pose (armature applied)
   // from the Studio Ochi pack. assets/players3d/players3d.glb keeps the skinned +
   // animated source for a future animation phase.

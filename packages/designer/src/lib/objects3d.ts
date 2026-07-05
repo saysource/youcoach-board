@@ -22,6 +22,7 @@ import { MANNEQUIN_GLB_BASE64 } from './mannequin-glb'
 import { WALL_MANNEQUIN_GLB_BASE64 } from './wall-mannequin-glb'
 import { BALANCE_DOME_GLB_BASE64 } from './balance-dome-glb'
 import { AGILITY_POLE_GLB_BASE64 } from './agility-pole-glb'
+import { FLAG_POLE_GLB_BASE64 } from './flag-pole-glb'
 import { BALL_GLB_BASE64 } from './ball-glb'
 import { PLAYER_MAN_A_GLB_BASE64 } from './player-man-a-glb'
 import { PLAYER_MAN_B_GLB_BASE64 } from './player-man-b-glb'
@@ -57,6 +58,7 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   wall_mannequin: { data: WALL_MANNEQUIN_GLB_BASE64, color: 0x9aa3ab },
   balance_dome: { data: BALANCE_DOME_GLB_BASE64, color: 0x2aa8a8 },
   agility_pole: { data: AGILITY_POLE_GLB_BASE64, color: 0xdc3838 }, // slalom pole; recolorable
+  flag_pole: { data: FLAG_POLE_GLB_BASE64, color: 0x2f74d0 }, // pole + cloth flag; recolorable
 }
 
 // 3D players: static Studio Ochi character meshes baked in a neutral standing
@@ -81,7 +83,7 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small', 'player_man_a', 'player_man_b', 'player_man_c', 'player_woman_a', 'player_woman_b', 'player_woman_c'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'flag_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small', 'player_man_a', 'player_man_b', 'player_man_c', 'player_woman_a', 'player_woman_b', 'player_woman_c'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
@@ -145,8 +147,36 @@ interface GlbJson {
   materials?: Array<{ pbrMetallicRoughness?: { baseColorFactor?: number[] } }>
   accessors: Array<{ bufferView: number; componentType: number; count: number; type: string; byteOffset?: number }>
   bufferViews: Array<{ byteOffset?: number; byteLength: number }>
+  nodes?: Array<{ mesh?: number; children?: number[]; matrix?: number[]; translation?: number[]; rotation?: number[]; scale?: number[] }>
 }
 
+/** The world matrix of the node that references `meshIndex`, composed up its
+ *  parent chain. Our parser reads mesh primitives directly (ignoring the scene
+ *  graph), which only works when the exporter baked transforms into the mesh
+ *  (identity node). A Blender export that keeps the object's rotation/translation
+ *  on the node (e.g. Z-up "cloth flag" not applied) needs this baked in, or the
+ *  model renders mis-oriented/offset. Identity nodes → identity matrix (no-op). */
+function nodeWorldMatrix(json: GlbJson, meshIndex: number): THREE.Matrix4 {
+  const nodes = json.nodes ?? []
+  const start = nodes.findIndex((n) => n.mesh === meshIndex)
+  if (start < 0) return new THREE.Matrix4()
+  const parent = new Map<number, number>()
+  nodes.forEach((n, i) => (n.children ?? []).forEach((c) => parent.set(c, i)))
+  const local = (n: NonNullable<GlbJson['nodes']>[number]) => {
+    if (n.matrix) return new THREE.Matrix4().fromArray(n.matrix)
+    const t = n.translation ?? [0, 0, 0]
+    const r = n.rotation ?? [0, 0, 0, 1]
+    const s = n.scale ?? [1, 1, 1]
+    return new THREE.Matrix4().compose(new THREE.Vector3(t[0], t[1], t[2]), new THREE.Quaternion(r[0], r[1], r[2], r[3]), new THREE.Vector3(s[0], s[1], s[2]))
+  }
+  let idx = start
+  const world = local(nodes[idx])
+  while (parent.has(idx)) {
+    idx = parent.get(idx)!
+    world.premultiply(local(nodes[idx])) // ancestor · … · parent · node
+  }
+  return world
+}
 
 /** Minimal, synchronous GLB → BufferGeometry parser for our un-compressed assets
  *  (POSITION + NORMAL + indices). Merges ALL primitives of the first mesh into a
@@ -213,6 +243,7 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
   if (hasUvs) geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
   if (totalIdx) geom.setIndex(new THREE.BufferAttribute(indices, 1))
   if (!hasNormals) geom.computeVertexNormals()
+  geom.applyMatrix4(nodeWorldMatrix(json, 0)) // bake the mesh node's transform (identity for most assets)
   return geom
 }
 
@@ -240,12 +271,14 @@ function parseGlbByMaterial(buf: ArrayBuffer): { geometry: THREE.BufferGeometry;
     const byteOffset = (bv.byteOffset ?? 0) + (acc.byteOffset ?? 0)
     return new comp.array(bin!, byteOffset, acc.count * NUM_COMPONENTS[acc.type])
   }
+  const nodeMat = nodeWorldMatrix(json, 0) // bake the mesh node's transform (identity for most assets)
   return json.meshes[0].primitives.map((p) => {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(read(p.attributes.POSITION) as Float32Array, 3))
     if (p.attributes.NORMAL != null) geometry.setAttribute('normal', new THREE.BufferAttribute(read(p.attributes.NORMAL) as Float32Array, 3))
     else geometry.computeVertexNormals()
     if (p.indices != null) geometry.setIndex(new THREE.BufferAttribute(read(p.indices), 1))
+    geometry.applyMatrix4(nodeMat)
     geometry.computeBoundingBox()
     const f = json!.materials?.[p.material ?? -1]?.pbrMetallicRoughness?.baseColorFactor
     // Use the base colour as the toon display colour (crisp white / near-black patches).
