@@ -8,7 +8,7 @@
 // carry BACKGROUND overrides (goals on/off, bands) applied when it's selected — so
 // e.g. a training area can offer "with goals" and "without goals" presets.
 
-import type { FieldType, FieldBands } from '@youcoach-board/core'
+import type { FieldType, FieldBands, TrainingLayout } from '@youcoach-board/core'
 import type { CameraConfig } from './field-camera'
 
 export type ZoneCategory = 'top' | 'perspective'
@@ -23,8 +23,8 @@ export interface Zone {
   /** Default camera pose framing the target. */
   camera: CameraConfig
   /** Background settings this zone applies on selection (inherited by the doc).
-   *  `endZones` (training area) shows the two divider lines + shaded end-zones. */
-  background?: Partial<{ showGoals: boolean; bands: FieldBands; endZones: boolean }>
+   *  `trainingLayout` (training area) picks the variant: lines + shaded region + goals. */
+  background?: Partial<{ showGoals: boolean; bands: FieldBands; trainingLayout: TrainingLayout }>
 }
 
 // Camera pitch (degrees above the ground) above which a pose reads as a top view
@@ -54,15 +54,24 @@ const SOCCER_ZONES: Omit<Zone, 'category'>[] = [
   { id: 'full-top-vertical', label: 'Full Top Vertical', fieldType: 'soccer11', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [53.68, 134.99, 34], target: [52.5, 0, 34], fov: 50 } },
 ]
 
-// Training area (40×30, centred on the pitch centre). Seeded poses framing the
-// smaller area; the "with / without goals" presets and a "Zones" pose that turns on
-// the two divider lines + shaded external end-zones (a variant of the same area).
-const TRAINING_ZONES: Zone[] = [
-  { id: 'training-top', label: 'Top view', fieldType: 'training', category: 'top', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [52.5, 38, 34], target: [52.5, 0, 34], fov: 50 }, background: { showGoals: false, endZones: false } },
-  { id: 'training-top-goals', label: 'Top + goals', fieldType: 'training', category: 'top', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [52.5, 38, 34], target: [52.5, 0, 34], fov: 50 }, background: { showGoals: true, endZones: false } },
-  { id: 'training-zones', label: 'Zones', fieldType: 'training', category: 'top', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [52.5, 38, 34], target: [52.5, 0, 34], fov: 50 }, background: { showGoals: false, endZones: true } },
-  { id: 'training-perspective', label: 'Perspective', fieldType: 'training', category: 'perspective', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [52.5, 15, 6], target: [52.5, 0, 34], fov: 50 }, background: { showGoals: false, endZones: false } },
+// Training-area variants (40×30, centred on the pitch centre). Each is offered as a
+// Top-view and a Perspective pose framing the smaller area; the pose applies the
+// variant's markings/shading/goals via `trainingLayout`.
+const TRAINING_LAYOUTS: { id: TrainingLayout; label: string; goals: boolean }[] = [
+  { id: 'plain', label: 'Plain', goals: false },
+  { id: 'ends', label: 'End goals', goals: true },
+  { id: 'goals4', label: 'Four goals', goals: true },
+  { id: 'band_h', label: 'Middle band', goals: false },
+  { id: 'channel_goals', label: 'Channel + goals', goals: true },
+  { id: 'channel', label: 'Channel', goals: false },
+  { id: 'zones', label: 'Zones', goals: false },
 ]
+const TRAINING_TOP: CameraConfig = { ref: 'soccer11', position: [52.5, 38, 34], target: [52.5, 0, 34], fov: 50 }
+const TRAINING_PERSP: CameraConfig = { ref: 'soccer11', position: [52.5, 15, 6], target: [52.5, 0, 34], fov: 50 }
+const TRAINING_ZONES: Zone[] = TRAINING_LAYOUTS.flatMap((l): Zone[] => [
+  { id: `training-${l.id}-top`, label: l.label, fieldType: 'training', category: 'top', target: [52.5, 0, 34], camera: TRAINING_TOP, background: { showGoals: l.goals, trainingLayout: l.id } },
+  { id: `training-${l.id}-persp`, label: l.label, fieldType: 'training', category: 'perspective', target: [52.5, 0, 34], camera: TRAINING_PERSP, background: { showGoals: l.goals, trainingLayout: l.id } },
+])
 
 export const FIELD_ZONES: Zone[] = [
   ...SOCCER_ZONES.map((z) => ({ ...z, category: pitchCategory(z.camera) })),

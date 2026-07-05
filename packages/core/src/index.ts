@@ -13,6 +13,7 @@ export type {
   LogoPosition,
   FieldBands,
   FieldType,
+  TrainingLayout,
   FieldView,
 } from './model'
 export {

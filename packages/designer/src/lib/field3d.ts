@@ -9,7 +9,7 @@
 // the pitch spans 0..105 × 0..68 — the same frame arrows + camera poses use.
 
 import * as THREE from 'three'
-import type { FieldType } from '@youcoach-board/core'
+import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildGoal } from './goal'
 
 // Pitch dims (metres, ~FIFA), matching field-reference.ts.
@@ -26,9 +26,61 @@ export const FIELD_DIMS: Record<FieldType, { halfL: number; halfW: number; goalW
   training: { halfL: 20, halfW: 15, goalW: 5 },
   futsal: { halfL: 20, halfW: 10, goalW: 3 },
 }
-// When the training area shows its end-zones, the two dividing lines sit this far
-// in from each end (metres); the strips beyond them are the shaded external zones.
+// Training-area variants sit inside the 40×30 area, in the centred frame. Dividing
+// lines sit ZONE_INSET metres in from each end; horizontal bands are a third tall.
 const ZONE_INSET = 10
+
+// The training goals are smaller than a regulation goal.
+const TRAIN_GOAL_W = 5
+
+// Divider LINES per layout, as segments [x0, z0, x1, z1] in the centred frame.
+function trainingLineSegs(layout: TrainingLayout, halfL: number, halfW: number): [number, number, number, number][] {
+  const zb = halfW / 3
+  switch (layout) {
+    case 'zones':
+    case 'channel':
+    case 'ends':
+      return [[-ZONE_INSET, -halfW, -ZONE_INSET, halfW], [ZONE_INSET, -halfW, ZONE_INSET, halfW]]
+    case 'goals4':
+      return [[-halfL, 0, halfL, 0]] // one horizontal midline
+    case 'band_h':
+      return [[-halfL, -zb, halfL, -zb], [-halfL, zb, halfL, zb]]
+    default:
+      return []
+  }
+}
+
+// Shaded fill RECTS per layout, as axis-aligned [x0, z0, x1, z1] (the translucent
+// "band" over a region). Replaces the mowing stripes for non-plain layouts.
+function trainingShadeRects(layout: TrainingLayout, halfL: number, halfW: number): [number, number, number, number][] {
+  const zb = halfW / 3
+  switch (layout) {
+    case 'zones':
+      return [[-halfL, -halfW, -ZONE_INSET, halfW], [ZONE_INSET, -halfW, halfL, halfW]] // external strips
+    case 'channel':
+    case 'channel_goals':
+      return [[-ZONE_INSET, -halfW, ZONE_INSET, halfW]] // middle vertical band
+    case 'band_h':
+      return [[-halfL, -zb, halfL, zb]] // middle horizontal band
+    default:
+      return []
+  }
+}
+
+// The goals for a layout, positioned in the centred frame.
+function trainingGoalGroups(layout: TrainingLayout, halfL: number, halfW: number): THREE.Group[] {
+  const gw = TRAIN_GOAL_W
+  switch (layout) {
+    case 'ends':
+      return [makeGoal(-1, halfL, gw), makeGoal(1, halfL, gw)]
+    case 'channel_goals': // two goals at each end, offset in width
+      return [makeGoal(-1, halfL, gw, 7.5), makeGoal(-1, halfL, gw, -7.5), makeGoal(1, halfL, gw, 7.5), makeGoal(1, halfL, gw, -7.5)]
+    case 'goals4': // two on the far edge, two on the near edge
+      return [makeEdgeGoal(-ZONE_INSET, 1, halfW, gw), makeEdgeGoal(ZONE_INSET, 1, halfW, gw), makeEdgeGoal(-ZONE_INSET, -1, halfW, gw), makeEdgeGoal(ZONE_INSET, -1, halfW, gw)]
+    default:
+      return []
+  }
+}
 const GOAL_W = 7.32
 const GOAL_H = 2.44
 const GOAL_D = 2.0
@@ -95,24 +147,19 @@ function disc(pos: number[], cx: number, cz: number, r: number, steps = 16) {
   }
 }
 
-/** Field markings for a type, built in the centred frame. `endZones` (training area
- *  only) adds two vertical dividers ZONE_INSET metres in from each end. */
-export function markingsGeometry(w = LINE_W, fieldType: FieldType = 'soccer11', endZones = false): THREE.BufferGeometry {
+/** Field markings for a type, built in the centred frame. The training `layout`
+ *  adds its divider lines to the outer boundary. */
+export function markingsGeometry(w = LINE_W, fieldType: FieldType = 'soccer11', layout: TrainingLayout = 'plain'): THREE.BufferGeometry {
   const { halfL, halfW } = FIELD_DIMS[fieldType]
   if (fieldType === 'soccer11') return soccerMarkings(w)
-  return trainingMarkings(w, halfL, halfW, fieldType === 'training' && endZones)
+  return trainingMarkings(w, halfL, halfW, fieldType === 'training' ? layout : 'plain')
 }
 
-// A rectangular training area (just the outer boundary), plus — when `endZones` —
-// two vertical dividers whose outer strips are the shaded external zones (bands).
-function trainingMarkings(w: number, halfL: number, halfW: number, endZones: boolean): THREE.BufferGeometry {
+// A rectangular training area (outer boundary) plus the layout's divider lines.
+function trainingMarkings(w: number, halfL: number, halfW: number, layout: TrainingLayout): THREE.BufferGeometry {
   const p: number[] = []
   poly(p, [[-halfL, -halfW], [halfL, -halfW], [halfL, halfW], [-halfL, halfW]], true, w)
-  if (endZones) {
-    const x = halfL - ZONE_INSET
-    seg(p, -x, -halfW, -x, halfW, w)
-    seg(p, x, -halfW, x, halfW, w)
-  }
+  for (const [x0, z0, x1, z1] of trainingLineSegs(layout, halfL, halfW)) seg(p, x0, z0, x1, z1, w)
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
   return geo
@@ -156,14 +203,13 @@ function soccerMarkings(w: number): THREE.BufferGeometry {
  *  off (empty geometry). For the zones area, the "bands" are instead a single fill
  *  over each of the two external zones (unless off). */
 export type FieldBandsOrientation = 'vertical' | 'horizontal' | 'none'
-export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', halfL = HALF_L, halfW = HALF_W, fieldType: FieldType = 'soccer11', endZones = false): THREE.BufferGeometry {
+export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', halfL = HALF_L, halfW = HALF_W, fieldType: FieldType = 'soccer11', layout: TrainingLayout = 'plain'): THREE.BufferGeometry {
   const p: number[] = []
-  // Training end-zones: the "bands" become a single fill over each external strip.
-  if (fieldType === 'training' && endZones) {
+  // A non-plain training layout replaces the mowing stripes with its own shaded
+  // region(s) — a single translucent fill over each rect.
+  if (fieldType === 'training' && layout !== 'plain') {
     if (orientation !== 'none') {
-      const x = halfL - ZONE_INSET
-      quad(p, -halfL, -halfW, -x, -halfW, -x, halfW, -halfL, halfW) // left external zone
-      quad(p, x, -halfW, halfL, -halfW, halfL, halfW, x, halfW) // right external zone
+      for (const [x0, z0, x1, z1] of trainingShadeRects(layout, halfL, halfW)) quad(p, x0, z0, x1, z0, x1, z1, x0, z1)
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
@@ -198,10 +244,19 @@ export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', h
 // goal. The canonical goal opens toward +X with its back behind; the far-end
 // goal is turned 180° so both mouths face the field. Centered between the goal
 // line (front) and its back (GOAL_D outside), just above the lines (GOAL_Y).
-function makeGoal(sign: number, halfL = HALF_L, goalW = GOAL_W): THREE.Group {
+function makeGoal(sign: number, halfL = HALF_L, goalW = GOAL_W, z = 0): THREE.Group {
   const g = buildGoal({ width: goalW, height: GOAL_H, depth: GOAL_D, style: 'box', postR: POST_R })
-  g.position.set(sign * (halfL + GOAL_D / 2), GOAL_Y, 0)
+  g.position.set(sign * (halfL + GOAL_D / 2), GOAL_Y, z)
   if (sign > 0) g.rotation.y = Math.PI
+  return g
+}
+
+// A goal on the near/far touchline (z = ±halfW), turned 90° so its mouth faces the
+// field. signZ = +1 → far edge (mouth toward −Z); −1 → near edge (mouth toward +Z).
+function makeEdgeGoal(x: number, signZ: number, halfW: number, goalW: number): THREE.Group {
+  const g = buildGoal({ width: goalW, height: GOAL_H, depth: GOAL_D, style: 'box', postR: POST_R })
+  g.position.set(x, GOAL_Y, signZ * (halfW + GOAL_D / 2))
+  g.rotation.y = signZ > 0 ? -Math.PI / 2 : Math.PI / 2
   return g
 }
 
@@ -222,9 +277,9 @@ function makeFlag(x: number, z: number): THREE.Group {
  *  field types share the world frame (objects/arrows/cameras). The ground is
  *  transparent; only the white lines + shading bands are drawn, plus goals + flags.
  *  Flags are only meaningful on the full soccer pitch. */
-export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation; fieldType?: FieldType; endZones?: boolean } = {}): THREE.Group {
+export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation; fieldType?: FieldType; layout?: TrainingLayout } = {}): THREE.Group {
   const fieldType = opts.fieldType ?? 'soccer11'
-  const endZones = opts.endZones ?? false
+  const layout = opts.layout ?? 'plain'
   const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
   const group = new THREE.Group()
 
@@ -236,7 +291,7 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
 
   // Translucent white shading bands (over the field extent), then crisp lines.
   // Named so the layer can rebuild the geometry when the orientation changes.
-  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical', halfL, halfW, fieldType, endZones), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
+  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical', halfL, halfW, fieldType, layout), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
   bands.name = 'field-bands'
   bands.position.y = BAND_Y
   bands.renderOrder = 1
@@ -244,15 +299,17 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
 
   // Opaque so they depth-test cleanly above the bands (no transparency sorting).
   // Named so the layer can rebuild the geometry at a zoom-dependent width.
-  const lines = new THREE.Mesh(markingsGeometry(LINE_W, fieldType, endZones), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }))
+  const lines = new THREE.Mesh(markingsGeometry(LINE_W, fieldType, layout), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }))
   lines.name = 'field-lines'
   lines.position.y = LINE_Y
   group.add(lines)
 
-  // Goals in a named subgroup so the layer can toggle their visibility live.
+  // Goals in a named subgroup so the layer can toggle their visibility live. Soccer
+  // has its two end goals; the training area's goals come from its layout.
   const goals = new THREE.Group()
   goals.name = 'field-goals'
-  goals.add(makeGoal(-1, halfL, goalW), makeGoal(1, halfL, goalW))
+  if (fieldType === 'training') goals.add(...trainingGoalGroups(layout, halfL, halfW))
+  else goals.add(makeGoal(-1, halfL, goalW), makeGoal(1, halfL, goalW))
   goals.visible = opts.goals ?? true
   group.add(goals)
 

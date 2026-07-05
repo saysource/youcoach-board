@@ -86,14 +86,14 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const allZones = zonesForField(fieldType)
   const zoneCats = fieldsOnly ? categoriesForField(fieldType) : []
   // Clicking a zone flies the camera there and applies the zone's background presets
-  // (endZones is normalised so a plain pose always clears the training dividers).
+  // (trainingLayout is normalised so a plain pose always resets the training variant).
   function applyZone(z: Zone) {
-    setBackground({ field3d: z.camera, fieldSvg: null, fieldType: z.fieldType, ...z.background, endZones: !!z.background?.endZones })
+    setBackground({ field3d: z.camera, fieldSvg: null, fieldType: z.fieldType, ...z.background, trainingLayout: z.background?.trainingLayout ?? 'plain' })
   }
   // Switching field type jumps to that type's default zone.
   function selectFieldType(ft: FieldType) {
     const z = defaultZoneForField(ft)
-    setBackground({ fieldType: ft, fieldSvg: null, endZones: !!z?.background?.endZones, ...(z ? { field3d: z.camera, ...z.background } : {}) })
+    setBackground({ fieldType: ft, fieldSvg: null, trainingLayout: z?.background?.trainingLayout ?? 'plain', ...(z ? { field3d: z.camera, ...z.background } : {}) })
   }
   // Scroll to a category's group of poses (and flash its header), like "jump to type".
   function jumpToZoneCat(id: ZoneCategory) {

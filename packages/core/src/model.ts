@@ -27,6 +27,10 @@ export type FieldBands = 'vertical' | 'horizontal' | 'none'
  *  set of camera zones. (Futsal is planned; not yet rendered.) */
 export type FieldType = 'soccer11' | 'training' | 'futsal'
 
+/** A training-area variant (its internal lines, shaded region and goals). Selected
+ *  by a pose, not toggled directly. `plain` = the bare striped rectangle. */
+export type TrainingLayout = 'plain' | 'zones' | 'channel' | 'channel_goals' | 'ends' | 'goals4' | 'band_h'
+
 /** Background configuration: a solid color, an optional raster image, and an
  *  optional field SVG overlay whose declared colors the user can tweak. */
 /** A real 3D field: a pitch model rendered by three.js, viewed through a posed
@@ -50,9 +54,9 @@ export interface BoardBackground {
   field3d: FieldView | null
   /** Which playing surface the 3D field renders (markings + goals + zones). */
   fieldType: FieldType
-  /** Training area only: show the two divider lines + shaded external end-zones.
-   *  Pose-driven (a zone sets it) — not a standalone toggle. */
-  endZones: boolean
+  /** Training area only: which variant (lines + shaded region + goals). Pose-driven
+   *  (a zone sets it) — not a standalone toggle. */
+  trainingLayout: TrainingLayout
   /** Values for the field SVG's configurable colors, keyed by color slot. */
   fieldColors: Record<string, string>
   /** Scale + translation of the field SVG within the board. */
@@ -100,7 +104,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   fieldSvg: null,
   field3d: null,
   fieldType: 'soccer11',
-  endZones: false,
+  trainingLayout: 'plain',
   fieldColors: {},
   scale: 1,
   position: [0, 0],
@@ -112,6 +116,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
 }
 
 const LOGO_POSITIONS: LogoPosition[] = ['center', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
+const TRAINING_LAYOUTS: TrainingLayout[] = ['plain', 'zones', 'channel', 'channel_goals', 'ends', 'goals4', 'band_h']
 
 export const DEFAULT_ANIMATION: BoardAnimation = { animated: false, duration: 10 }
 
@@ -156,7 +161,7 @@ function parseBackground(raw: unknown): BoardBackground {
     fieldSvg: typeof o.fieldSvg === 'string' ? o.fieldSvg : null,
     field3d: parseFieldView(o.field3d),
     fieldType: o.fieldType === 'training' || o.fieldType === 'futsal' ? o.fieldType : 'soccer11',
-    endZones: o.endZones === true,
+    trainingLayout: TRAINING_LAYOUTS.includes(o.trainingLayout as TrainingLayout) ? (o.trainingLayout as TrainingLayout) : 'plain',
     fieldColors:
       typeof o.fieldColors === 'object' && o.fieldColors !== null
         ? (o.fieldColors as Record<string, string>)
