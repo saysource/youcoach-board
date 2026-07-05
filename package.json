@@ -11,6 +11,7 @@
     "build": "yarn workspace @youcoach-board/core build && yarn workspace @youcoach-board/viewer build && yarn workspace @youcoach-board/designer build",
     "dev": "yarn workspace @youcoach-board/designer dev",
     "dev:trace": "node scripts/dev-trace.mjs",
+    "glb": "node scripts/bundle-glbs.mjs",
     "typecheck": "tsc --build --verbose",
     "lint": "eslint .",
     "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo"
