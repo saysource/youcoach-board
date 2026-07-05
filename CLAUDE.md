@@ -52,3 +52,16 @@ Primary (mirrors real npm): `file:` dependency on the built package — run `yar
 - Effects + 3D Arrow to borrow from YouCoach Video Analysis: `/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachvideo/client/src/presentation/canvas/Layer3D.tsx` and `.../figures/effects`.
 - Tailwind dark/light customizations to copy from `/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachapp2/client`.
 - Design north star: Excalidraw's minimalism (floating toolbars, on-demand drawer). Drawable area is a fixed ratio (canvas vs. SVG choice still open).
+
+## Regenerating field-zone thumbnails (drawer previews)
+
+The fields drawer shows a PNG per zone, bundled from `packages/designer/src/assets/zones/<zone-id>.png` (glob'd by id in [LibraryDrawer.tsx](packages/designer/src/components/LibraryDrawer.tsx); training ids are `training-<layout>-<top|persp>`). Thumbnails are **340×255 (4:3)**, captured from the live app (grass texture + WebGL lines/goals composited) via headless-Chrome CDP (see [[verify-with-cdp]]), then downscaled with `sips -z 255 340`.
+
+Settled capture settings:
+
+- **Stroke: render field lines at 4× width.** At 340px (and the ~115px in-drawer size) the real line width nearly vanishes, so multiply it for thumbnails. The scene thins lines by camera distance in [FieldSceneLayer.tsx](packages/designer/src/components/FieldSceneLayer.tsx) (`w = lineWidthForDistance(dist)`); temporarily change it to `* ((globalThis).__lineMul ?? 1)` and set `window.__lineMul = 4` before capturing. Revert after.
+- **Poses** (from [field-zones.ts](packages/designer/src/lib/field-zones.ts)): top = `position [52.5,38,34]`, persp = `position [52.5,32,4]`, both `target [52.5,0,34]`, fov 50.
+- **Capture region** = the board `<canvas>` rect (4:3, e.g. `120,40,1093,820` — read it live, don't hardcode). Hide floating chrome first (toolbar/menu/zoom/drawer) so only the board is captured.
+- **Driving state:** temporarily expose the store (`(window).__store = store` in [EditorStoreProvider.tsx](packages/designer/src/store/EditorStoreProvider.tsx)) and call `__store.getState().setBackground({ fieldType:'training', trainingLayout, showGoals, field3d:{ ref:'soccer11', position, target, fov:50 } })` per zone. Nudge the pose by a hair each iteration to force a re-render (`render()` is on-demand, not a rAF loop).
+
+Both `window.__store` and the `__lineMul` multiplier are **temporary dev hooks — always revert them before committing.**
