@@ -7,3 +7,4 @@ yarn-error.log
 
 # Local agent settings (per-developer)
 .claude/settings.local.json
+*.blend1

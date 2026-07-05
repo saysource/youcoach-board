@@ -18,9 +18,12 @@ import { HURDLE_LOW_GLB_BASE64 } from './hurdle-low-glb'
 import { HURDLE_GLB_BASE64 } from './hurdle-glb'
 import { HURDLE_HIGH_GLB_BASE64 } from './hurdle-high-glb'
 import { SPEED_LADDER_GLB_BASE64 } from './speed-ladder-glb'
+import { MANNEQUIN_GLB_BASE64 } from './mannequin-glb'
+import { BALANCE_DOME_GLB_BASE64 } from './balance-dome-glb'
 
-// GLB-backed objects: embedded model bytes + toon colour. Add a row (and an
-// entry in KNOWN_OBJECTS + the catalog) to grow the palette.
+// GLB-backed objects: embedded model bytes + toon colour. The models are authored
+// at real metric scale with their base on the ground (y=0), so they render as-is
+// (size is a plain ×1 multiplier). Add a row (and KNOWN_OBJECTS + catalog) to grow.
 const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   cone: { data: CONE_GLB_BASE64, color: 0xf4611e },
   high_cone: { data: HIGH_CONE_GLB_BASE64, color: 0xf4611e },
@@ -29,6 +32,8 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   hurdle: { data: HURDLE_GLB_BASE64, color: 0xf2c200 },
   hurdle_high: { data: HURDLE_HIGH_GLB_BASE64, color: 0xf2c200 },
   speed_ladder: { data: SPEED_LADDER_GLB_BASE64, color: 0xf2c200 },
+  mannequin: { data: MANNEQUIN_GLB_BASE64, color: 0x2c3e50 },
+  balance_dome: { data: BALANCE_DOME_GLB_BASE64, color: 0x2aa8a8 },
 }
 
 // Procedural goals. Built at their real metric size (feet → metres), so they're
@@ -42,26 +47,18 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'balance_dome', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
 }
 
-// Per-kind default `size` (metres). Goals are modelled at real size → placed at
-// ×1; other objects fall back to the caller's default (a nominal 1 m unit mesh).
-// Goals are modelled at real size → placed at ×1. The hurdles render at their
-// modelled real width (metres) so they drop in at a sensible scale.
-const OBJECT3D_SIZES: Record<string, number> = {
-  goal_full: 1, goal_9: 1, goal_7: 1, goal_futsal: 1, goal_small: 1,
-  cone_hurdle: 3.44, hurdle_low: 2.46, hurdle: 2.46, hurdle_high: 2.46, speed_ladder: 3.4,
-}
-// TEMP: 4× the GLB toon objects so the outline/proportions are easy to inspect.
-// Set back to 1 (or fold into per-kind sizes) once sizing is finalised.
-const GLB_SIZE_MULT = 4
+// Default placed `size` (a scale multiplier). GLB objects and goals are modelled
+// at real metric size, so they drop in at ×1; the procedural ball/cube fall back
+// to the caller's nominal default.
 export function defaultObject3DSize(objectId: string, fallback: number): number {
-  const base = OBJECT3D_SIZES[objectId] ?? fallback
-  return objectId in GLB_OBJECTS ? base * GLB_SIZE_MULT : base
+  if (objectId in GLB_OBJECTS || objectId in GOALS) return 1
+  return fallback
 }
 
 /** A simple soccer-ball texture: white with scattered black pentagons. */
@@ -181,24 +178,16 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
   return geom
 }
 
-// Parse + normalise a GLB object once per id, lazily. Like the procedural
-// ball/cube, the stored geometry is centered at the origin and fits a unit (1 m)
-// box (its largest dimension = 1), so Object3DLayer can scale it by `size` and
-// rest it on the ground. We clone it per instance so each mesh owns disposable
-// geometry. The model's smooth normals are kept — they give a visible
-// light→dark falloff toward the silhouette that flat faceting washes out.
+// Parse a GLB object once per id, lazily, at its authored REAL metric size with
+// its base on the ground (y=0) — no re-centering/rescaling. We clone it per
+// instance so each mesh owns disposable geometry. The model's smooth normals are
+// kept — they give a visible light→dark falloff toward the silhouette.
 const geomCache = new Map<string, THREE.BufferGeometry>()
-function unitGlbGeometry(id: string, data: string): THREE.BufferGeometry {
+function glbGeometry(id: string, data: string): THREE.BufferGeometry {
   let geom = geomCache.get(id)
   if (!geom) {
     geom = parseGlbGeometry(base64ToArrayBuffer(data))
     geom.computeBoundingBox()
-    const box = geom.boundingBox!
-    const center = box.getCenter(new THREE.Vector3())
-    const size = box.getSize(new THREE.Vector3())
-    const maxDim = Math.max(size.x, size.y, size.z) || 1
-    geom.translate(-center.x, -center.y, -center.z)
-    geom.scale(1 / maxDim, 1 / maxDim, 1 / maxDim)
     geomCache.set(id, geom)
   }
   return geom.clone()
@@ -221,20 +210,20 @@ function creaseEdges(geometry: THREE.BufferGeometry, thresholdAngle = 24): THREE
   return seg
 }
 
-// Ink thickness of the toon outline, as a fraction of the (unit-normalised)
-// model — so it stays proportional at any placed `size`. Exported so the layer
-// can lift an object by this much and keep the outline's underside above y=0
-// (otherwise the clip plane flat-cuts the bottom of the feet).
-export const OUTLINE_THICKNESS = 0.009
+// Toon outline thickness as a fraction of a model's largest dimension, so the
+// ink line stays visually proportional across objects of very different sizes
+// (a 0.25 m cone vs a 1.75 m mannequin). Its world value is stored per object so
+// the layer can lift by it (keeping the outline's underside above the y=0 clip).
+export const OUTLINE_FRACTION = 0.009
 
 /** The back-faces-only black "ink" outline shell. Instead of a uniform scale
  *  (which displaces the shell sideways on thin, off-centre parts like a hurdle
  *  rail — a one-sided outline), it pushes every vertex OUT along its surface
  *  normal by a fixed distance, giving an even line all the way round. Offset in
  *  model space so it scales with the object; clipping-plane aware (y<0 hidden). */
-function outlineMaterial(): THREE.ShaderMaterial {
+function outlineMaterial(thickness: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
-    uniforms: { thickness: { value: OUTLINE_THICKNESS } },
+    uniforms: { thickness: { value: thickness } },
     side: THREE.BackSide,
     clipping: true,
     vertexShader: `
@@ -257,15 +246,16 @@ function outlineMaterial(): THREE.ShaderMaterial {
   })
 }
 
-function toonOutline(geometry: THREE.BufferGeometry): THREE.Mesh {
-  const outline = new THREE.Mesh(geometry, outlineMaterial())
+function toonOutline(geometry: THREE.BufferGeometry, thickness: number): THREE.Mesh {
+  const outline = new THREE.Mesh(geometry, outlineMaterial(thickness))
   outline.name = 'toonOutline'
   return outline
 }
 
 /** Build the renderable for a 3D object id. GLB/primitive kinds are a single
- *  unit-sized Mesh centered at the origin; goals are a real-size Group (centered
- *  in x/z, base on the ground). Object3DLayer handles either. */
+ *  real-size Mesh (base on the ground); goals are a real-size Group. `userData
+ *  .outlineOffset` is the ink thickness in world metres, so the layer can lift
+ *  the object by it. Object3DLayer handles either. */
 export function buildObject3D(objectId: string): THREE.Object3D {
   const goal = GOALS[objectId]
   if (goal) {
@@ -276,11 +266,14 @@ export function buildObject3D(objectId: string): THREE.Object3D {
   }
   const glb = GLB_OBJECTS[objectId]
   if (glb) {
-    const geom = unitGlbGeometry(objectId, glb.data)
+    const geom = glbGeometry(objectId, glb.data)
+    const s = geom.boundingBox!.getSize(new THREE.Vector3())
+    const outlineOffset = OUTLINE_FRACTION * (Math.max(s.x, s.y, s.z) || 1)
     const mesh = new THREE.Mesh(geom, extremeToon(glb.color))
     mesh.castShadow = true
-    mesh.add(toonOutline(geom)) // silhouette ink (shares the mesh geometry)
+    mesh.add(toonOutline(geom, outlineOffset)) // silhouette ink (shares the mesh geometry)
     mesh.add(creaseEdges(geom)) // internal strokes along the rim/creases
+    mesh.userData.outlineOffset = outlineOffset
     return mesh
   }
   if (objectId === 'cube') {

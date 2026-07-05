@@ -17584,6 +17584,18 @@
      "h": 100
     },
     {
+     "object3d": "mannequin",
+     "thumb": "materials3d/mannequin",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "balance_dome",
+     "thumb": "materials3d/balance_dome",
+     "w": 100,
+     "h": 100
+    },
+    {
      "object3d": "goal_full",
      "thumb": "materials3d/goal_full",
      "w": 100,

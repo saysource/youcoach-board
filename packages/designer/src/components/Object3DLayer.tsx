@@ -8,7 +8,7 @@ import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement } from '@youcoach-board
 import { makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
 import { SUN_POSITION, SUN_TARGET } from '../lib/field3d'
-import { buildObject3D, OUTLINE_THICKNESS } from '../lib/objects3d'
+import { buildObject3D } from '../lib/objects3d'
 
 /** Imperative API to hit-test 3D objects (they aren't SVG, so InteractiveBoard
  *  can't click them through the normal element handlers). */
@@ -142,7 +142,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
           if (!asMesh.geometry.boundingBox) asMesh.geometry.computeBoundingBox()
           // Use the outline's underside (mesh bottom − ink thickness) as the base
           // so the object lifts just enough to keep the outline off the clip plane.
-          obj.userData.baseMinY = asMesh.geometry.boundingBox!.min.y - OUTLINE_THICKNESS
+          obj.userData.baseMinY = asMesh.geometry.boundingBox!.min.y - ((obj.userData.outlineOffset as number) ?? 0)
         } else {
           obj.userData.baseMinY = new THREE.Box3().setFromObject(obj).min.y
         }
