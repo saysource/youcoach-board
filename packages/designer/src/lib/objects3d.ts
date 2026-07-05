@@ -19,6 +19,7 @@ import { HURDLE_GLB_BASE64 } from './hurdle-glb'
 import { HURDLE_HIGH_GLB_BASE64 } from './hurdle-high-glb'
 import { SPEED_LADDER_GLB_BASE64 } from './speed-ladder-glb'
 import { MANNEQUIN_GLB_BASE64 } from './mannequin-glb'
+import { WALL_MANNEQUIN_GLB_BASE64 } from './wall-mannequin-glb'
 import { BALANCE_DOME_GLB_BASE64 } from './balance-dome-glb'
 
 // GLB-backed objects: embedded model bytes + toon colour. The models are authored
@@ -33,6 +34,7 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   hurdle_high: { data: HURDLE_HIGH_GLB_BASE64, color: 0xf2c200 },
   speed_ladder: { data: SPEED_LADDER_GLB_BASE64, color: 0xf2c200 },
   mannequin: { data: MANNEQUIN_GLB_BASE64, color: 0x2c3e50 },
+  wall_mannequin: { data: WALL_MANNEQUIN_GLB_BASE64, color: 0x9aa3ab },
   balance_dome: { data: BALANCE_DOME_GLB_BASE64, color: 0x2aa8a8 },
 }
 
@@ -47,7 +49,7 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'balance_dome', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)

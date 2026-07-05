@@ -17590,6 +17590,12 @@
      "h": 100
     },
     {
+     "object3d": "wall_mannequin",
+     "thumb": "materials3d/wall_mannequin",
+     "w": 100,
+     "h": 100
+    },
+    {
      "object3d": "balance_dome",
      "thumb": "materials3d/balance_dome",
      "w": 100,
