@@ -222,8 +222,10 @@ function creaseEdges(geometry: THREE.BufferGeometry, thresholdAngle = 24): THREE
 }
 
 // Ink thickness of the toon outline, as a fraction of the (unit-normalised)
-// model — so it stays proportional at any placed `size`.
-const OUTLINE_THICKNESS = 0.009
+// model — so it stays proportional at any placed `size`. Exported so the layer
+// can lift an object by this much and keep the outline's underside above y=0
+// (otherwise the clip plane flat-cuts the bottom of the feet).
+export const OUTLINE_THICKNESS = 0.009
 
 /** The back-faces-only black "ink" outline shell. Instead of a uniform scale
  *  (which displaces the shell sideways on thin, off-centre parts like a hurdle
