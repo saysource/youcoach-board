@@ -33,8 +33,11 @@ interface Fly {
   start: number
 }
 
-export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose, onExitPan, showMarkers = true }: { field3d: FieldView; fieldType: FieldType; viewBox: string; panMode: boolean; onPose: (p: Pose) => void; onExitPan: () => void; showMarkers?: boolean }) {
+export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose, onExitPan, showMarkers = true, onTap }: { field3d: FieldView; fieldType: FieldType; viewBox: string; panMode: boolean; onPose: (p: Pose) => void; onExitPan: () => void; showMarkers?: boolean; onTap?: () => void }) {
   const surfaceRef = useRef<HTMLDivElement>(null)
+  // Track a press so a plain click (no drag) on the orbit surface can be reported
+  // as a tap — the caller nudges the "Exit" button, hinting that editing is elsewhere.
+  const tapRef = useRef<{ x: number; y: number; t: number } | null>(null)
   // Only the current field type's zones are shown as markers. A ref feeds the
   // rAF loop (created once) the latest list without re-subscribing.
   const zones = zonesForField(fieldType)
@@ -157,7 +160,17 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
   return (
     <>
       {/* OrbitControls input surface (empty; markers sit above it). */}
-      <div ref={surfaceRef} className="absolute inset-0 z-20" style={{ touchAction: 'none', cursor: 'grab' }} />
+      <div
+        ref={surfaceRef}
+        className="absolute inset-0 z-20"
+        style={{ touchAction: 'none', cursor: 'grab' }}
+        onPointerDown={(e) => { tapRef.current = { x: e.clientX, y: e.clientY, t: e.timeStamp } }}
+        onPointerUp={(e) => {
+          const d = tapRef.current
+          tapRef.current = null
+          if (d && e.timeStamp - d.t < 300 && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) onTap?.()
+        }}
+      />
       <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 z-20 h-full w-full" style={{ pointerEvents: 'none' }}>
         {showMarkers && markers.map((m, i) =>
           m.behind || !zones[i] ? null : (

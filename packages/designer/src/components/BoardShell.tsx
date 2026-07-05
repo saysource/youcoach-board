@@ -170,6 +170,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const [navigating, setNavigating] = useState(false)
   const [navPose, setNavPose] = useState<FieldView | null>(null)
   const [navMarkers, setNavMarkers] = useState(false) // numbered position markers, off by default
+  const [navBounce, setNavBounce] = useState(0) // bumps to replay the "Exit" bounce on a bare click
   const navAvailable = !!savedField3d && !bgEditing && !homographyEditing && !cameraEditing && !zoneEditing
   function toggleNav() {
     if (navigating) {
@@ -178,6 +179,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     }
     if (!navAvailable) return
     setNavPose((p) => p ?? savedField3d) // start from the drawing's current pose
+    setNavBounce(0)
     setNavigating(true)
   }
   function resetNav() {
@@ -185,6 +187,11 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   }
   function storeNav() {
     if (navPose) setBackground({ field3d: navPose }) // this pose becomes the default
+  }
+  // A bare click (no drag) while navigating nudges the Exit button, since editing
+  // works differently here and users may expect to click the scene to select/move.
+  function navTap() {
+    setNavBounce((n) => n + 1)
   }
   // Editing the background owns the pose directly — leave navigation and drop the
   // session view (render-phase sync) so finishing shows the freshly-edited saved pose.
@@ -339,7 +346,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navPose={navPose} navMarkers={navMarkers} onNavPose={setNavPose} />
+            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navPose={navPose} navMarkers={navMarkers} onNavPose={setNavPose} onNavTap={navTap} />
             {/* Navigation-active indicator: an orbit watermark in the working-area
                 top-right corner (decorative, doesn't block input). Kept mounted so
                 it fades in/out with navigation mode. */}
@@ -362,7 +369,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 </Button>
               </div>
             ) : navigating ? (
-              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+              <div key={navBounce} className={cn('pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md', navBounce > 0 && 'ycb-nav-bounce')}>
                 <Button size="sm" onClick={toggleNav} className="font-medium">
                   <Orbit /> Exit navigation mode
                 </Button>

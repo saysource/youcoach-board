@@ -305,7 +305,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navPose = null, navMarkers = false, onNavPose }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navPose?: FieldView | null; navMarkers?: boolean; onNavPose?: (p: FieldView) => void }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navPose = null, navMarkers = false, onNavPose, onNavTap }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navPose?: FieldView | null; navMarkers?: boolean; onNavPose?: (p: FieldView) => void; onNavTap?: () => void }) {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -2139,8 +2139,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 ),
               )}
             {/* Selection chrome: full handles for a single selection, plain
-                outlines + a group frame for a multi-selection. */}
-            {!creating &&
+                outlines + a group frame for a multi-selection. Hidden while
+                navigating — the board isn't editable there, so a selection frame
+                would wrongly suggest you can move things. */}
+            {!creating && !navigating &&
               liveSelected2D.map((el) => (
                 <SelectionHandles
                   key={`sel-${el.id}`}
@@ -2153,7 +2155,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             {/* Group resize/rotate chrome for a multi-selection. Hidden while
                 rotating (the box is an AABB that grows, so the handle would slide
                 out from under the pointer); the per-element frames stay. */}
-            {groupBox && groupGesture?.kind !== 'rotate' && <GroupHandles box={groupBox} scale={scale} onDown={onGroupHandleDown} />}
+            {!navigating && groupBox && groupGesture?.kind !== 'rotate' && <GroupHandles box={groupBox} scale={scale} onDown={onGroupHandleDown} />}
             {marqueeBox && (
               <rect
                 x={marqueeBox.x}
@@ -2330,7 +2332,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
       {/* 3D objects ("3D materials"): WebGL overlay (pointer-transparent). */}
-      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} />
+      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={navigating ? [] : selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} />
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
@@ -2339,7 +2341,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {editing3d && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={panMode} onExitPan={() => setView('orbit')} onPose={(p) => setBackground({ field3d: p })} />}
       {/* Navigation mode: the same orbit controls in normal mode, mirroring to the
           SESSION pose (navPose) instead of the drawing's saved pose. */}
-      {navigating && !backgroundMode && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={false} onExitPan={() => {}} onPose={(p) => onNavPose?.(p)} showMarkers={navMarkers} />}
+      {navigating && !backgroundMode && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={false} onExitPan={() => {}} onPose={(p) => onNavPose?.(p)} showMarkers={navMarkers} onTap={onNavTap} />}
       {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
       {backgroundMode && field3d && (
         <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">
@@ -2355,7 +2357,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           <FieldCtl label="Reset view" onClick={() => { setView('orbit'); setBackground({ field3d: DEFAULT_ZONE.camera }) }}><RefreshCw /></FieldCtl>
         </div>
       )}
-      {selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
+      {!navigating && selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
         <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           {/* Dotted guides: tail → apex → head, and apex → base midpoint. */}
           <polyline
@@ -2394,7 +2396,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         </svg>
       )}
       {/* Selected 3D object: a rotate handle (about Y) sticking out from its centre. */}
-      {selectedObject3D && !selectedObject3D.locked && isObject3DRotatable(selectedObject3D.objectId) && !object3dGesture && object3dCentreBoard && object3dRotBoard && (
+      {!navigating && selectedObject3D && !selectedObject3D.locked && isObject3DRotatable(selectedObject3D.objectId) && !object3dGesture && object3dCentreBoard && object3dRotBoard && (
         <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           <line x1={object3dCentreBoard.x} y1={object3dCentreBoard.y} x2={object3dRotBoard.x} y2={object3dRotBoard.y} stroke="#ffffff" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
           <circle
