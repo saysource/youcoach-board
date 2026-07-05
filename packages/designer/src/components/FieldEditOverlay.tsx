@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView } from '@youcoach-board/core'
+import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldType } from '@youcoach-board/core'
 import { projectToBoard } from '../lib/arrow3d'
-import { FIELD_ZONES } from '../lib/field-zones'
+import { zonesForField } from '../lib/field-zones'
 
 // Edit-Background overlay for the real 3D field: real OrbitControls (drag = orbit,
 // wheel = zoom) around a LOCKED target, plus numbered zone markers. Clicking a
@@ -33,8 +33,15 @@ interface Fly {
   start: number
 }
 
-export function FieldEditOverlay({ field3d, viewBox, panMode, onPose, onExitPan }: { field3d: FieldView; viewBox: string; panMode: boolean; onPose: (p: Pose) => void; onExitPan: () => void }) {
+export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose, onExitPan }: { field3d: FieldView; fieldType: FieldType; viewBox: string; panMode: boolean; onPose: (p: Pose) => void; onExitPan: () => void }) {
   const surfaceRef = useRef<HTMLDivElement>(null)
+  // Only the current field type's zones are shown as markers. A ref feeds the
+  // rAF loop (created once) the latest list without re-subscribing.
+  const zones = zonesForField(fieldType)
+  const zonesRef = useRef(zones)
+  useEffect(() => {
+    zonesRef.current = zones
+  })
   const camRef = useRef<THREE.PerspectiveCamera | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
   const flyRef = useRef<Fly | null>(null)
@@ -105,7 +112,7 @@ export function FieldEditOverlay({ field3d, viewBox, panMode, onPose, onExitPan 
       }
       // Project the zone targets to board coords; flag ones behind the camera.
       setMarkers(
-        FIELD_ZONES.map((z) => {
+        zonesRef.current.map((z) => {
           tmp.set(z.target[0], z.target[1], z.target[2])
           const inFront = tmp.clone().applyMatrix4(cam.matrixWorldInverse).z < -0.01
           const b = projectToBoard(tmp, cam)
@@ -153,8 +160,8 @@ export function FieldEditOverlay({ field3d, viewBox, panMode, onPose, onExitPan 
       <div ref={surfaceRef} className="absolute inset-0 z-20" style={{ touchAction: 'none', cursor: 'grab' }} />
       <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 z-20 h-full w-full" style={{ pointerEvents: 'none' }}>
         {markers.map((m, i) =>
-          m.behind ? null : (
-            <g key={FIELD_ZONES[i].id} transform={`translate(${m.x} ${m.y})`} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onPointerDown={(e) => e.stopPropagation()} onClick={() => { onExitPan(); flyTo(FIELD_ZONES[i].camera.position, FIELD_ZONES[i].target) }}>
+          m.behind || !zones[i] ? null : (
+            <g key={zones[i].id} transform={`translate(${m.x} ${m.y})`} style={{ pointerEvents: 'auto', cursor: 'pointer' }} onPointerDown={(e) => e.stopPropagation()} onClick={() => { onExitPan(); flyTo(zones[i].camera.position, zones[i].target) }}>
               <circle r={16} fill="#0f172a" fillOpacity={0.82} stroke="#ffffff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
               <text textAnchor="middle" dominantBaseline="central" fontSize={18} fontWeight={600} fill="#ffffff">
                 {i}

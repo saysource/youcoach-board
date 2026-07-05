@@ -12,6 +12,7 @@ export type {
   BoardAnimation,
   LogoPosition,
   FieldBands,
+  FieldType,
   FieldView,
 } from './model'
 export {

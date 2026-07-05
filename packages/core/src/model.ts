@@ -23,6 +23,10 @@ export type LogoPosition = 'center' | 'top-left' | 'top-right' | 'bottom-left' |
  *  (horizontal), or off. */
 export type FieldBands = 'vertical' | 'horizontal' | 'none'
 
+/** The kind of playing surface. Each type has its own markings, default goals and
+ *  set of camera zones. (Futsal is planned; not yet rendered.) */
+export type FieldType = 'soccer11' | 'training' | 'futsal'
+
 /** Background configuration: a solid color, an optional raster image, and an
  *  optional field SVG overlay whose declared colors the user can tweak. */
 /** A real 3D field: a pitch model rendered by three.js, viewed through a posed
@@ -44,6 +48,8 @@ export interface BoardBackground {
   fieldSvg: string | null
   /** A real 3D field (three.js) + its camera pose. When set, wins over fieldSvg. */
   field3d: FieldView | null
+  /** Which playing surface the 3D field renders (markings + goals + zones). */
+  fieldType: FieldType
   /** Values for the field SVG's configurable colors, keyed by color slot. */
   fieldColors: Record<string, string>
   /** Scale + translation of the field SVG within the board. */
@@ -90,6 +96,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   image: null,
   fieldSvg: null,
   field3d: null,
+  fieldType: 'soccer11',
   fieldColors: {},
   scale: 1,
   position: [0, 0],
@@ -144,6 +151,7 @@ function parseBackground(raw: unknown): BoardBackground {
     image: typeof o.image === 'string' ? o.image : null,
     fieldSvg: typeof o.fieldSvg === 'string' ? o.fieldSvg : null,
     field3d: parseFieldView(o.field3d),
+    fieldType: o.fieldType === 'training' || o.fieldType === 'futsal' ? o.fieldType : 'soccer11',
     fieldColors:
       typeof o.fieldColors === 'object' && o.fieldColors !== null
         ? (o.fieldColors as Record<string, string>)

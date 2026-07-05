@@ -2091,7 +2091,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     >
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
-      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} renderTick={editing3d} />}
+      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} fieldType={doc.background.fieldType} renderTick={editing3d} />}
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
@@ -2332,7 +2332,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
       {zoneMode && field3d && <FieldZoneTool field3d={field3d} viewBox={viewBox} />}
       {/* 3D-field pose editor: OrbitControls + numbered zone markers (bg-edit). */}
-      {editing3d && field3d && <FieldEditOverlay field3d={field3d} viewBox={viewBox} panMode={panMode} onExitPan={() => setView('orbit')} onPose={(p) => setBackground({ field3d: p })} />}
+      {editing3d && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={panMode} onExitPan={() => setView('orbit')} onPose={(p) => setBackground({ field3d: p })} />}
       {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
       {backgroundMode && field3d && (
         <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">

@@ -234,7 +234,7 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
   }
 
   function addZone() {
-    const z: Zone = { id: `zone-${zones.length}`, label: `Zone ${zones.length}`, target: currentTarget(), camera: currentPose() }
+    const z: Zone = { id: `zone-${zones.length}`, label: `Zone ${zones.length}`, fieldType: 'soccer11', category: 'top', target: currentTarget(), camera: currentPose() }
     setZones((zs) => [...zs, z])
     setSelected(zones.length)
   }

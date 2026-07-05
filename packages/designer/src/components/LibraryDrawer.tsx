@@ -9,8 +9,9 @@ import { useAssets, buildFigureElement, buildObject3DElement, figureIndex, figur
 import { clientToBoard } from '../lib/draw'
 import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
 import { makeCalibratedCamera } from '../lib/field-camera'
-import { FIELD_ZONES } from '../lib/field-zones'
+import { zonesForField, categoriesForField, defaultZoneForField, FIELD_TYPE_OPTIONS, type ZoneCategory, type Zone } from '../lib/field-zones'
 import { useEditorStore } from '../store/context'
+import type { FieldType } from '@youcoach-board/core'
 
 // Bundled zone preview thumbnails (generated from each zone's default pose),
 // keyed by zone id (…/zones/<id>.png).
@@ -78,6 +79,25 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const elements = useEditorStore((s) => s.doc.elements)
   // Last player's skin/kit slots, inherited by newly added players.
   const playerColors = useEditorStore((s) => s.playerColors)
+
+  // The current field type (background mode) + the selected zone category within it.
+  const fieldType = useEditorStore((s) => s.doc.background.fieldType)
+  const [zoneCategory, setZoneCategory] = useState<ZoneCategory | null>(null)
+  const allZones = zonesForField(fieldType)
+  const zoneCats = fieldsOnly ? categoriesForField(fieldType) : []
+  // The active category (the chosen one, if still valid for this type; else the first).
+  const effectiveZoneCat: ZoneCategory | null = zoneCategory && zoneCats.some((c) => c.id === zoneCategory) ? zoneCategory : (zoneCats[0]?.id ?? null)
+  const visibleZones = allZones.filter((z) => !effectiveZoneCat || z.category === effectiveZoneCat)
+  // Clicking a zone flies the camera there and applies the zone's background presets.
+  function applyZone(z: Zone) {
+    setBackground({ field3d: z.camera, fieldSvg: null, fieldType: z.fieldType, ...z.background })
+  }
+  // Switching field type resets the category and jumps to that type's default zone.
+  function selectFieldType(ft: FieldType) {
+    setZoneCategory(null)
+    const z = defaultZoneForField(ft)
+    setBackground({ fieldType: ft, fieldSvg: null, ...(z ? { field3d: z.camera, ...z.background } : {}) })
+  }
 
   const [listOpen, setListOpen] = useState(false)
   const [facing, setFacing] = useState<string | null>(null)
@@ -370,30 +390,71 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
       ) : !catalog ? (
         <div className="p-3 text-sm text-muted-foreground">Loading library…</div>
       ) : fieldsOnly ? (
-        /* Background mode: the "fields" are notable ZONES of the real 3D pitch —
-           clicking one flies the camera to that spot (legacy SVG fields hidden). */
-        <div className="flex-1 overflow-y-auto p-2">
-          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">3D field — zones</div>
-          <div className="grid grid-cols-2 gap-2">
-            {FIELD_ZONES.map((z, i) => (
-              <button
-                key={z.id}
-                type="button"
-                title={z.label}
-                onClick={() => setBackground({ field3d: z.camera, fieldSvg: null })}
-                className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
-              >
-                <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
-                  {ZONE_THUMBS[z.id] ? (
-                    <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-lg font-semibold text-muted-foreground">{i}</span>
-                  )}
-                  <span className="absolute left-0.5 top-0.5 flex size-4 items-center justify-center rounded bg-black/55 text-[10px] font-semibold text-white">{i}</span>
-                </span>
-                <span className="text-[11px]">{z.label}</span>
-              </button>
-            ))}
+        /* Background mode: a FIELD TYPE picker + a category picker over that type's
+           camera ZONES. Clicking a zone flies the camera there and applies its
+           background presets (legacy SVG fields hidden). */
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex items-center gap-1 border-b border-border p-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="flex-1 justify-between font-normal">
+                  <span className="truncate">{FIELD_TYPE_OPTIONS.find((f) => f.value === fieldType)?.label ?? 'Field'}</span>
+                  <ChevronDown />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {FIELD_TYPE_OPTIONS.map((f) => (
+                  <DropdownMenuItem key={f.value} onSelect={() => selectFieldType(f.value)}>
+                    <span className="flex-1">{f.label}</span>
+                    {f.value === fieldType && <Check className="size-4 shrink-0 text-primary" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {zoneCats.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex-1 justify-between font-normal">
+                    <span className="truncate">{zoneCats.find((c) => c.id === effectiveZoneCat)?.label ?? 'View'}</span>
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {zoneCats.map((c) => (
+                    <DropdownMenuItem key={c.id} onSelect={() => setZoneCategory(c.id)}>
+                      <span className="flex-1">{c.label}</span>
+                      {c.id === effectiveZoneCat && <Check className="size-4 shrink-0 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto p-2">
+            <div className="grid grid-cols-2 gap-2">
+              {visibleZones.map((z) => {
+                const n = allZones.findIndex((zz) => zz.id === z.id) // marker number (matches the overlay)
+                return (
+                  <button
+                    key={z.id}
+                    type="button"
+                    title={z.label}
+                    onClick={() => applyZone(z)}
+                    className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
+                  >
+                    <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
+                      {ZONE_THUMBS[z.id] ? (
+                        <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-lg font-semibold text-muted-foreground">{n}</span>
+                      )}
+                      <span className="absolute left-0.5 top-0.5 flex size-4 items-center justify-center rounded bg-black/55 text-[10px] font-semibold text-white">{n}</span>
+                    </span>
+                    <span className="text-[11px]">{z.label}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       ) : (

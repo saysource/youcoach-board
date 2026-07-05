@@ -9,6 +9,7 @@
 // the pitch spans 0..105 × 0..68 — the same frame arrows + camera poses use.
 
 import * as THREE from 'three'
+import type { FieldType } from '@youcoach-board/core'
 import { buildGoal } from './goal'
 
 // Pitch dims (metres, ~FIFA), matching field-reference.ts.
@@ -16,13 +17,21 @@ const L = 105
 const W = 68
 const HALF_L = L / 2 // 52.5
 const HALF_W = W / 2 // 34
+// Per-field-type half-dimensions + goal width (metres). Every field is built
+// CENTRED and then translated to the pitch centre (52.5, 0, 34), so objects,
+// arrows and cameras keep sharing one world frame; the camera zones frame each
+// field's own extent. Futsal is a placeholder until real court dims are provided.
+export const FIELD_DIMS: Record<FieldType, { halfL: number; halfW: number; goalW: number }> = {
+  soccer11: { halfL: 52.5, halfW: 34, goalW: 7.32 },
+  training: { halfL: 20, halfW: 15, goalW: 5 },
+  futsal: { halfL: 20, halfW: 10, goalW: 3 },
+}
 const GOAL_W = 7.32
 const GOAL_H = 2.44
 const GOAL_D = 2.0
 const POST_R = 0.06
 const LINE_W = 0.45 // base pitch line width (metres); scaled down when zoomed in
 const LINE_W_MIN = 0.18 // thinnest line (close zoom) — ~real pitch line width
-const BAND_OVERFLOW = 0 // stripe bands stay within the pitch
 const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
 // Stack heights (metres) so the ground / bands / lines never z-fight.
 const BAND_Y = 0.05
@@ -83,7 +92,25 @@ function disc(pos: number[], cx: number, cz: number, r: number, steps = 16) {
   }
 }
 
-export function markingsGeometry(w = LINE_W): THREE.BufferGeometry {
+/** Field markings for a type, built in the centred frame. */
+export function markingsGeometry(w = LINE_W, fieldType: FieldType = 'soccer11'): THREE.BufferGeometry {
+  return fieldType === 'soccer11' ? soccerMarkings(w) : trainingMarkings(w, FIELD_DIMS[fieldType].halfL, FIELD_DIMS[fieldType].halfW)
+}
+
+// A plain rectangular training pitch: outer boundary + halfway + centre circle.
+function trainingMarkings(w: number, halfL: number, halfW: number): THREE.BufferGeometry {
+  const p: number[] = []
+  const r = Math.min(halfL, halfW) * 0.3 // centre circle ~proportional to the area
+  poly(p, [[-halfL, -halfW], [halfL, -halfW], [halfL, halfW], [-halfL, halfW]], true, w)
+  seg(p, 0, -halfW, 0, halfW, w)
+  arc(p, 0, 0, r, 0, 2 * Math.PI, 64, w)
+  disc(p, 0, 0, w * 0.6)
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+  return geo
+}
+
+function soccerMarkings(w: number): THREE.BufferGeometry {
   const p: number[] = []
   const jn = (x: number, z: number) => disc(p, x, z, w / 2, 10) // fill a join
   // Outer boundary + halfway (disc the halfway's T-junctions with the touchlines).
@@ -120,15 +147,13 @@ export function markingsGeometry(w = LINE_W): THREE.BufferGeometry {
  *  default — bands span the width), across (horizontal — bands span the length), or
  *  off (empty geometry). */
 export type FieldBandsOrientation = 'vertical' | 'horizontal' | 'none'
-export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical'): THREE.BufferGeometry {
+export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', halfL = HALF_L, halfW = HALF_W): THREE.BufferGeometry {
   const p: number[] = []
   if (orientation !== 'none') {
-    const mx = L * BAND_OVERFLOW
-    const mz = W * BAND_OVERFLOW
-    const x0 = -HALF_L - mx
-    const x1 = HALF_L + mx
-    const z0 = -HALF_W - mz
-    const z1 = HALF_W + mz
+    const x0 = -halfL
+    const x1 = halfL
+    const z0 = -halfW
+    const z1 = halfW
     const bands = 14
     if (orientation === 'vertical') {
       const bw = (x1 - x0) / bands
@@ -153,9 +178,9 @@ export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical'): 
 // goal. The canonical goal opens toward +X with its back behind; the far-end
 // goal is turned 180° so both mouths face the field. Centered between the goal
 // line (front) and its back (GOAL_D outside), just above the lines (GOAL_Y).
-function makeGoal(sign: number): THREE.Group {
-  const g = buildGoal({ width: GOAL_W, height: GOAL_H, depth: GOAL_D, style: 'box', postR: POST_R })
-  g.position.set(sign * (HALF_L + GOAL_D / 2), GOAL_Y, 0)
+function makeGoal(sign: number, halfL = HALF_L, goalW = GOAL_W): THREE.Group {
+  const g = buildGoal({ width: goalW, height: GOAL_H, depth: GOAL_D, style: 'box', postR: POST_R })
+  g.position.set(sign * (halfL + GOAL_D / 2), GOAL_Y, 0)
   if (sign > 0) g.rotation.y = Math.PI
   return g
 }
@@ -173,10 +198,13 @@ function makeFlag(x: number, z: number): THREE.Group {
   return grp
 }
 
-/** Build the pitch as one group in the corner-origin world frame (0..105 × 0..68).
- *  The ground is transparent (the board background shows through); only the white
- *  lines + translucent shading bands are drawn, plus goals + flags. */
-export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation } = {}): THREE.Group {
+/** Build the pitch as one group, CENTRED then shifted to the pitch centre so all
+ *  field types share the world frame (objects/arrows/cameras). The ground is
+ *  transparent; only the white lines + shading bands are drawn, plus goals + flags.
+ *  Flags are only meaningful on the full soccer pitch. */
+export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation; fieldType?: FieldType } = {}): THREE.Group {
+  const fieldType = opts.fieldType ?? 'soccer11'
+  const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
   const group = new THREE.Group()
 
   // Transparent ground that still catches the goals' soft shadows.
@@ -185,9 +213,9 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
   shadow.receiveShadow = true
   group.add(shadow)
 
-  // Translucent white shading bands (extended past the pitch), then crisp lines.
+  // Translucent white shading bands (over the field extent), then crisp lines.
   // Named so the layer can rebuild the geometry when the orientation changes.
-  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical'), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
+  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical', halfL, halfW), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
   bands.name = 'field-bands'
   bands.position.y = BAND_Y
   bands.renderOrder = 1
@@ -195,7 +223,7 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
 
   // Opaque so they depth-test cleanly above the bands (no transparency sorting).
   // Named so the layer can rebuild the geometry at a zoom-dependent width.
-  const lines = new THREE.Mesh(markingsGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }))
+  const lines = new THREE.Mesh(markingsGeometry(LINE_W, fieldType), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }))
   lines.name = 'field-lines'
   lines.position.y = LINE_Y
   group.add(lines)
@@ -203,15 +231,16 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
   // Goals in a named subgroup so the layer can toggle their visibility live.
   const goals = new THREE.Group()
   goals.name = 'field-goals'
-  goals.add(makeGoal(-1), makeGoal(1))
+  goals.add(makeGoal(-1, halfL, goalW), makeGoal(1, halfL, goalW))
   goals.visible = opts.goals ?? true
   group.add(goals)
 
-  if (opts.flags ?? true) {
-    for (const x of [-HALF_L, HALF_L]) for (const z of [-HALF_W, HALF_W]) group.add(makeFlag(x, z))
+  // Corner flags only on the full soccer pitch.
+  if ((opts.flags ?? true) && fieldType === 'soccer11') {
+    for (const x of [-halfL, halfL]) for (const z of [-halfW, halfW]) group.add(makeFlag(x, z))
   }
 
-  // Centre-origin children → shift so the pitch spans 0..105 × 0..68.
+  // Centre-origin children → shift so the field is centred on the pitch centre.
   group.position.set(HALF_L, 0, HALF_W)
   return group
 }

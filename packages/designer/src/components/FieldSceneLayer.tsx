@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldBands } from '@youcoach-board/core'
-import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
+import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldBands, type FieldType } from '@youcoach-board/core'
+import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, FIELD_DIMS, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
 import { applyViewCamera } from '../lib/field-camera'
 
 // A WebGL layer rendering the real 3D pitch, viewed through the board's field
@@ -22,6 +22,8 @@ interface Props {
   showGoals?: boolean
   /** Orientation of the mown shading bands (or none). */
   bands?: FieldBands
+  /** Which playing surface to render (markings + goals). */
+  fieldType?: FieldType
   /** Bump/flip to force an on-demand redraw when neither camera nor viewport
    *  changed but the layout might have (e.g. entering/leaving Edit-Background) —
    *  avoids a stale pitch until the next camera move. */
@@ -32,14 +34,16 @@ interface Ctx {
   renderer: THREE.WebGLRenderer
   scene: THREE.Scene
   cam: THREE.PerspectiveCamera
+  group: THREE.Group
   lines: THREE.Mesh | null
   goals: THREE.Object3D | null
   bands: THREE.Mesh | null
   bandsOrient: FieldBands
+  fieldType: FieldType
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -71,10 +75,10 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     sun.shadow.bias = -0.0004
     scene.add(sun)
     scene.add(sun.target)
-    const group = buildFieldGroup()
+    const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands })
     scene.add(group)
 
-    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: 'vertical', lineW: 0 }
+    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, fieldType: propsRef.current.fieldType, lineW: 0 }
     return ctxRef.current
   }
 
@@ -95,9 +99,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport, showGoals, bands })
+  const propsRef = useRef({ camera, viewport, showGoals, bands, fieldType })
   useEffect(() => {
-    propsRef.current = { camera, viewport, showGoals, bands }
+    propsRef.current = { camera, viewport, showGoals, bands, fieldType }
   })
 
   function render() {
@@ -106,11 +110,31 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const rect = boardRect()
     if (!ctx || !canvas || !rect || rect.width < 1) return
     const { camera: cam, viewport: vp } = propsRef.current
+    // Field type changed → rebuild the whole field group (markings/goals/bands all
+    // depend on it), then re-grab the named sub-objects and reset the caches.
+    if (propsRef.current.fieldType !== ctx.fieldType) {
+      ctx.scene.remove(ctx.group)
+      ctx.group.traverse((o) => {
+        const m = o as Partial<THREE.Mesh>
+        m.geometry?.dispose()
+        const mat = (o as THREE.Mesh).material
+        if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((x) => x.dispose())
+      })
+      const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands })
+      ctx.scene.add(group)
+      ctx.group = group
+      ctx.lines = (group.getObjectByName('field-lines') as THREE.Mesh) ?? null
+      ctx.goals = group.getObjectByName('field-goals') ?? null
+      ctx.bands = (group.getObjectByName('field-bands') as THREE.Mesh) ?? null
+      ctx.bandsOrient = propsRef.current.bands
+      ctx.fieldType = propsRef.current.fieldType
+      ctx.lineW = 0
+    }
     if (ctx.goals) ctx.goals.visible = propsRef.current.showGoals
     // Rebuild the shading bands when the orientation changes (cheap flat geometry).
     if (ctx.bands && propsRef.current.bands !== ctx.bandsOrient) {
       ctx.bands.geometry.dispose()
-      ctx.bands.geometry = bandsGeometry(propsRef.current.bands)
+      ctx.bands.geometry = bandsGeometry(propsRef.current.bands, FIELD_DIMS[ctx.fieldType].halfL, FIELD_DIMS[ctx.fieldType].halfW)
       ctx.bandsOrient = propsRef.current.bands
     }
     for (const el of [canvas, bgRef.current]) {
@@ -127,7 +151,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       const w = lineWidthForDistance(dist)
       if (Math.abs(w - ctx.lineW) > 0.004) {
         ctx.lines.geometry.dispose()
-        ctx.lines.geometry = markingsGeometry(w)
+        ctx.lines.geometry = markingsGeometry(w, ctx.fieldType)
         ctx.lineW = w
       }
     }
@@ -143,7 +167,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick, showGoals, bands])
+  }, [camera, viewport, renderTick, showGoals, bands, fieldType])
 
   useEffect(() => {
     const container = containerRef.current
