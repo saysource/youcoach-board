@@ -72,6 +72,7 @@ import { FieldSceneLayer } from './FieldSceneLayer'
 import { FieldEditOverlay } from './FieldEditOverlay'
 import { FieldZoneTool } from './FieldZoneTool'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
+import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
@@ -677,8 +678,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // rotate handle (spin about Y). Placement is intrinsic (x/z ground + rotation).
   // `start`/`engaged` add a small drag threshold (resistance) before a move takes;
   // `alt` (Option held on press) duplicates the object once the drag engages.
-  const [object3dGesture, setObject3dGesture] = useState<{ id: string; kind: 'move' | 'rotate'; orig: Object3DElement; grabGround: { x: number; z: number }; start: Point; engaged: boolean; alt: boolean } | null>(null)
-  // Snap guides shown while dragging a 3D object (its base centre → other elements).
+  // `moving` = the ground origins of every object dragged together (the clicked
+  // object `id` is the primary, used as the snap reference). Rotate uses only the
+  // primary.
+  const [object3dGesture, setObject3dGesture] = useState<{ id: string; kind: 'move' | 'rotate'; orig: Object3DElement; grabGround: { x: number; z: number }; start: Point; engaged: boolean; alt: boolean; moving: { id: string; x: number; z: number }[] } | null>(null)
+  // Field-axis alignment guides shown while dragging 3D object(s).
   const [object3dSnapGuides, setObject3dSnapGuides] = useState<SnapLine[]>([])
   const object3dElements = doc.elements.filter((e): e is Object3DElement => e.type === 'object3d')
 
@@ -688,37 +692,91 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     updateElements([{ id: g.id, before, after: patch }])
   }
 
-  // Snap a 3D object's new base centre (ground x/z) to other elements' notable
-  // points (2D boxes + other objects' base centres), in board space. Returns the
-  // snapped ground x/z + the alignment guides to draw.
-  function snapObject3DGround(nx: number, nz: number, selfId: string): { x: number; z: number; guides: SnapLine[] } {
-    const c = object3dToBoard(nx, 0, nz)
-    const targets = doc.elements
-      .filter((e) => e.id !== selfId && e.type !== 'arrow3d')
-      .map(snapElementOf)
-      .filter((t): t is SnapElement => t !== null)
-    const res = computeSnap({ box: { x: c.x, y: c.y, width: 0, height: 0 }, points: [c] }, targets, SNAP_PX / (scale || 1))
-    if (res.dx || res.dy) {
-      const gr = arrow3dGround({ x: c.x + res.dx, y: c.y + res.dy })
-      if (gr) return { x: gr.x, z: gr.z, guides: res.guides }
+  // Snap a dragged 3D object's ground x/z so it lines up with other objects ALONG
+  // THE FIELD AXES (constant pitch-x or pitch-z), not screen axes — so alignment
+  // behaves the same in perspective as top-down. The snap radius is the on-screen
+  // SNAP_PX converted to ground metres per axis (perspective varies metres/px).
+  function snapObject3DField(nx: number, nz: number, exclude: Set<string>): { x: number; z: number; guides: SnapLine[] } {
+    // Ground positions of the other elements: objects use their x/z; 2D elements
+    // are projected from their board centre onto the pitch plane.
+    const targets: { x: number; z: number }[] = []
+    for (const e of doc.elements) {
+      if (exclude.has(e.id) || e.type === 'arrow3d') continue
+      if (e.type === 'object3d') {
+        targets.push({ x: e.x, z: e.z })
+        continue
+      }
+      const b = unionBounds([e])
+      const gr = b && arrow3dGround({ x: b.x + b.width / 2, y: b.y + b.height / 2 })
+      if (gr) targets.push(gr)
     }
-    return { x: nx, z: nz, guides: res.guides }
+    const px = SNAP_PX / (scale || 1)
+    const c0 = object3dToBoard(nx, 0, nz)
+    const cX = object3dToBoard(nx + 0.5, 0, nz)
+    const cZ = object3dToBoard(nx, 0, nz + 0.5)
+    const thrX = px / (Math.hypot(cX.x - c0.x, cX.y - c0.y) / 0.5 || 1)
+    const thrZ = px / (Math.hypot(cZ.x - c0.x, cZ.y - c0.y) / 0.5 || 1)
+    let bestX = thrX
+    let snapX: number | null = null
+    let bestZ = thrZ
+    let snapZ: number | null = null
+    for (const t of targets) {
+      const dxa = Math.abs(t.x - nx)
+      if (dxa < bestX) {
+        bestX = dxa
+        snapX = t.x
+      }
+      const dza = Math.abs(t.z - nz)
+      if (dza < bestZ) {
+        bestZ = dza
+        snapZ = t.z
+      }
+    }
+    const ox = snapX ?? nx
+    const oz = snapZ ?? nz
+    const toB = (x: number, z: number) => object3dToBoard(x, 0, z)
+    const guides: SnapLine[] = []
+    // A field-axis guide runs through the moving object + every target it lines
+    // up with; a straight ground line stays straight when projected to the board.
+    if (snapX != null) {
+      const aligned = targets.filter((t) => Math.abs(t.x - ox) < 0.02)
+      const zs = [oz, ...aligned.map((t) => t.z)]
+      const a = toB(ox, Math.min(...zs))
+      const b = toB(ox, Math.max(...zs))
+      guides.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, marks: [toB(ox, oz), ...aligned.map((t) => toB(t.x, t.z))] })
+    }
+    if (snapZ != null) {
+      const aligned = targets.filter((t) => Math.abs(t.z - oz) < 0.02)
+      const xs = [ox, ...aligned.map((t) => t.x)]
+      const a = toB(Math.min(...xs), oz)
+      const b = toB(Math.max(...xs), oz)
+      guides.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, marks: [toB(ox, oz), ...aligned.map((t) => toB(t.x, t.z))] })
+    }
+    return { x: ox, z: oz, guides }
   }
 
-  // Move (x/z only) or rotate (about Y only) the dragged object to board point p.
+  // Move (x/z) every object in the gesture by a shared ground delta, or rotate
+  // the primary (about Y). The primary drives snapping; its snapped delta applies
+  // to all so a multi-selection keeps its relative layout.
   function dragObject3D(g: NonNullable<typeof object3dGesture>, p: Point) {
     const ground = arrow3dGround(p)
     if (!ground) return
     if (g.kind === 'move') {
-      let nx = g.orig.x + (ground.x - g.grabGround.x)
-      let nz = g.orig.z + (ground.z - g.grabGround.z)
+      let dx = ground.x - g.grabGround.x
+      let dz = ground.z - g.grabGround.z
       if (snapToObjects) {
-        const sn = snapObject3DGround(nx, nz, g.id)
-        nx = sn.x
-        nz = sn.z
+        const sn = snapObject3DField(g.orig.x + dx, g.orig.z + dz, new Set(g.moving.map((m) => m.id)))
+        dx = sn.x - g.orig.x
+        dz = sn.z - g.orig.z
         setObject3dSnapGuides(sn.guides)
       } else if (object3dSnapGuides.length) setObject3dSnapGuides([])
-      editObject3D(g, { x: nx, z: nz })
+      updateElements(
+        g.moving.map((m) => {
+          const before: Partial<Object3DElement> = { x: m.x, z: m.z }
+          const after: Partial<Object3DElement> = { x: m.x + dx, z: m.z + dz }
+          return { id: m.id, before, after }
+        }),
+      )
     } else {
       // Rotate: the handle points toward the pointer's ground direction from the center.
       editObject3D(g, { rotation: Math.atan2(ground.x - g.orig.x, ground.z - g.orig.z) })
@@ -746,7 +804,12 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const g = lassoRef.current
     if (!g) return
     for (const el of doc.elements) {
-      if (g.ids.has(el.id) || (el.type === 'arrow3d' || el.type === 'object3d')) continue // already selected, or a 3D arrow (no SVG box)
+      if (g.ids.has(el.id) || el.type === 'arrow3d') continue // already selected, or a 3D arrow (no SVG box)
+      // A 3D object is caught when its base centre falls inside the lasso loop.
+      if (el.type === 'object3d') {
+        if (pointInPolygon(object3dToBoard(el.x, 0, el.z), g.pts)) g.ids.add(el.id)
+        continue
+      }
       const b = unionBounds([el])
       if (b && lassoHitsBox(g.pts, b)) g.ids.add(el.id)
     }
@@ -1309,11 +1372,27 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       if (objId) {
         const el = doc.elements.find((x) => x.id === objId)
         if (el?.type === 'object3d') {
-          setSelection(e.shiftKey ? [...new Set([...selectedIds, objId])] : [objId])
+          // Shift toggles selection membership without starting a drag.
+          if (e.shiftKey) {
+            setSelection(selectedIds.includes(objId) ? selectedIds.filter((i) => i !== objId) : [...selectedIds, objId])
+            try {
+              containerRef.current?.setPointerCapture(e.pointerId)
+            } catch {
+              /* best-effort */
+            }
+            return
+          }
+          // Clicking an already-selected object keeps the whole selection, so a
+          // drag moves every selected 3D object together; else select just this.
+          const sel = selectedIds.includes(objId) ? selectedIds : [objId]
+          setSelection(sel)
           const ground = arrow3dGround(p)
           // The transaction begins on engagement (past the drag threshold), not
           // here — so a bare click doesn't create an empty edit / duplicate.
-          if (ground) setObject3dGesture({ id: objId, kind: 'move', orig: el, grabGround: ground, start: p, engaged: false, alt: e.altKey })
+          if (ground) {
+            const moving = object3dElements.filter((x) => sel.includes(x.id)).map((x) => ({ id: x.id, x: x.x, z: x.z }))
+            setObject3dGesture({ id: objId, kind: 'move', orig: el, grabGround: ground, start: p, engaged: false, alt: e.altKey, moving })
+          }
           try {
             containerRef.current?.setPointerCapture(e.pointerId)
           } catch {
@@ -1333,7 +1412,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const p = svgRef.current ? clientToBoard(svgRef.current, e.clientX, e.clientY) : { x: 0, y: 0 }
     const ground = arrow3dGround(p) ?? { x: el.x, z: el.z }
     beginTransaction()
-    setObject3dGesture({ id: el.id, kind: 'rotate', orig: el, grabGround: ground, start: p, engaged: true, alt: false })
+    setObject3dGesture({ id: el.id, kind: 'rotate', orig: el, grabGround: ground, start: p, engaged: true, alt: false, moving: [{ id: el.id, x: el.x, z: el.z }] })
     try {
       containerRef.current?.setPointerCapture(e.pointerId)
     } catch {
@@ -1361,7 +1440,12 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const contain = m.current.y >= m.start.y
     const hits = doc.elements
       .filter((el) => {
-        if ((el.type === 'arrow3d' || el.type === 'object3d')) return false // 3D arrows aren't marquee-selectable (no SVG box)
+        if (el.type === 'arrow3d') return false // 3D arrows have no SVG box
+        // A 3D object is picked by its base centre projected to the board.
+        if (el.type === 'object3d') {
+          const c = object3dToBoard(el.x, 0, el.z)
+          return c.x >= box.x && c.x <= box.x + box.width && c.y >= box.y && c.y <= box.y + box.height
+        }
         const b = getElementBounds(el)
         return contain ? boxContains(box, b) : boxesIntersect(b, box)
       })
@@ -1631,12 +1715,20 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         if (Math.hypot(p.x - g.start.x, p.y - g.start.y) * scale < OBJECT3D_MOVE_PX) return
         const ground = arrow3dGround(p) ?? g.grabGround
         if (g.alt) {
-          // Option+drag: drop a copy at the original spot and drag THAT (the
-          // original stays put); one 'add' undo step + the move on release.
-          const copy = { ...g.orig, id: crypto.randomUUID() }
-          createFigure(copy)
+          // Option+drag: drop a copy of every moving object at its original spot
+          // and drag the copies (the originals stay put).
+          const copies: Object3DElement[] = []
+          for (const m of g.moving) {
+            const src = object3dElements.find((x) => x.id === m.id)
+            if (!src) continue
+            const copy = { ...src, id: crypto.randomUUID() }
+            createFigure(copy)
+            copies.push(copy)
+          }
           beginTransaction()
-          setObject3dGesture({ id: copy.id, kind: 'move', orig: copy, grabGround: ground, start: g.start, engaged: true, alt: true })
+          const primary = copies[g.moving.findIndex((m) => m.id === g.id)] ?? copies[0] ?? { ...g.orig, id: crypto.randomUUID() }
+          setSelection(copies.map((c) => c.id))
+          setObject3dGesture({ id: primary.id, kind: 'move', orig: primary, grabGround: ground, start: g.start, engaged: true, alt: true, moving: copies.map((c) => ({ id: c.id, x: c.x, z: c.z })) })
         } else {
           beginTransaction()
           setObject3dGesture({ ...g, engaged: true, grabGround: ground })
@@ -2279,7 +2371,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         </svg>
       )}
       {/* Selected 3D object: a rotate handle (about Y) sticking out from its centre. */}
-      {selectedObject3D && !object3dGesture && object3dCentreBoard && object3dRotBoard && (
+      {selectedObject3D && isObject3DRotatable(selectedObject3D.objectId) && !object3dGesture && object3dCentreBoard && object3dRotBoard && (
         <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           <line x1={object3dCentreBoard.x} y1={object3dCentreBoard.y} x2={object3dRotBoard.x} y2={object3dRotBoard.y} stroke="#ffffff" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
           <circle

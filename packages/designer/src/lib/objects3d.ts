@@ -63,6 +63,13 @@ export function defaultObject3DSize(objectId: string, fallback: number): number 
   return fallback
 }
 
+// Rotationally symmetric objects: a Y-axis rotation has no visible effect, so
+// their rotation handle is hidden and rotation is left at 0.
+const ROTATION_SYMMETRIC = new Set<string>(['ball', 'cone', 'high_cone', 'balance_dome', 'mannequin'])
+export function isObject3DRotatable(objectId: string): boolean {
+  return !ROTATION_SYMMETRIC.has(objectId)
+}
+
 /** A simple soccer-ball texture: white with scattered black pentagons. */
 function soccerTexture(): THREE.Texture {
   const c = document.createElement('canvas')
