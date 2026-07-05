@@ -411,15 +411,21 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* Zone category (Top View / Perspective) — the "jump to type" list
+                control, styled like the players/materials sub-category selector. */}
             {zoneCats.length > 1 && (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex-1 justify-between font-normal">
-                    <span className="truncate">{zoneCats.find((c) => c.id === effectiveZoneCat)?.label ?? 'View'}</span>
-                    <ChevronDown />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon-sm" aria-label="View">
+                        <List />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>{zoneCats.find((c) => c.id === effectiveZoneCat)?.label ?? 'View'}</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
                   {zoneCats.map((c) => (
                     <DropdownMenuItem key={c.id} onSelect={() => setZoneCategory(c.id)}>
                       <span className="flex-1">{c.label}</span>
