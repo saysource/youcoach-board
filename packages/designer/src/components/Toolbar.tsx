@@ -376,7 +376,7 @@ function MoreToolsMenu({
         </DropdownMenuItem>
         {/* Enters background-edit mode (its own toolbar + fields-only drawer). */}
         <DropdownMenuItem onSelect={onEditBackground}>
-          <SoccerFieldIcon /> Edit Background
+          <SoccerFieldIcon /> Change Field
         </DropdownMenuItem>
         {/* Calibrate the field-perspective homography (dev/authoring tool). */}
         <DropdownMenuItem onSelect={onFieldHomography}>
