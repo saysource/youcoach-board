@@ -46,6 +46,9 @@ export type ArrowTip = 'none' | 'arrow'
 
 interface BaseElement {
   id: string
+  /** When true, the element is protected: it can be selected (to unlock) but not
+   *  moved, resized, rotated, edited or deleted from the canvas. */
+  locked?: boolean
   transform: ElementTransform
   /** Stroke color (CSS color). */
   stroke: string
@@ -830,6 +833,7 @@ export function parseElement(raw: unknown): BoardElement | null {
   if (!id) return null
   const base = {
     id,
+    locked: o.locked === true,
     transform: parseTransform(o.transform),
     stroke: str(o.stroke, '#000000'),
     strokeWidth: num(o.strokeWidth) ?? 3,

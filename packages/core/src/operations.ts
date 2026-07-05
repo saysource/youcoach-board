@@ -19,6 +19,7 @@ import type { ArrowTip, BoardElement, ElementTransform, TextAlign, TokenFill } f
  *  replaced wholesale (the patch carries the full transform), so applying is a
  *  plain shallow merge — no deep-merge ambiguity. `id`/`type` are immutable. */
 export interface ElementPatch {
+  locked?: boolean
   transform?: ElementTransform
   stroke?: string
   strokeWidth?: number

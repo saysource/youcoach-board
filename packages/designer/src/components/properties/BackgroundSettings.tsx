@@ -2,6 +2,7 @@ import { type LogoPosition } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { Slider } from '../ui/slider'
+import { Switch } from '../ui/switch'
 import { Segmented } from './PropertyControls'
 import { ColorPickerWidget } from './ColorPickerWidget'
 import { LogoTopLeftIcon, LogoTopRightIcon, LogoCenterIcon, LogoBottomLeftIcon, LogoBottomRightIcon } from '../icons'
@@ -73,6 +74,11 @@ export function BackgroundSettings() {
             setBackground({ objectScale: v })
           }}
         />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">Goals</span>
+        <Switch checked={bg.showGoals} onCheckedChange={(v) => setBackground({ showGoals: v })} />
       </div>
 
       <div className="grid gap-1.5">

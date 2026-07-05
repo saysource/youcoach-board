@@ -200,6 +200,8 @@ export interface EditorState {
   paste: () => void
   /** Select every element on the board. */
   selectAll: () => void
+  /** Lock/unlock the selection: locks all if any is unlocked, else unlocks all. */
+  toggleLock: () => void
   /** Move the selected elements by (dx, dy) board units (one undoable op). */
   nudgeSelected: (dx: number, dy: number) => void
   /** Scale the selected elements by a factor about their own centers. */
@@ -381,7 +383,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         // transaction's inverse re-adds them low-to-high (see operations.ts).
         const entries = selectedIds
           .map((id) => ({ index: doc.elements.findIndex((e) => e.id === id) }))
-          .filter((e) => e.index >= 0)
+          .filter((e) => e.index >= 0 && !doc.elements[e.index].locked) // locked elements are protected from delete
           .sort((a, b) => b.index - a.index)
         if (entries.length === 0) return
         const ops: Operation[] = entries.map(({ index }) => ({
@@ -591,9 +593,18 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         get().setSelection(doc.elements.map((e) => e.id))
       },
 
-      nudgeSelected: (dx, dy) => {
+      toggleLock: () => {
         const { doc, selectedIds } = get()
         const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
+        if (sel.length === 0) return
+        const lock = sel.some((e) => !e.locked) // any unlocked → lock all; else unlock all
+        const changes = sel.filter((e) => !!e.locked !== lock).map((e) => ({ id: e.id, before: { locked: e.locked }, after: { locked: lock } }))
+        if (changes.length) get().updateElements(changes)
+      },
+
+      nudgeSelected: (dx, dy) => {
+        const { doc, selectedIds } = get()
+        const sel = doc.elements.filter((e) => selectedIds.includes(e.id) && !e.locked)
         if (sel.length === 0) return
         get().updateElements(
           sel.map((e) => ({
@@ -606,7 +617,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       resizeSelected: (factor) => {
         const { doc, selectedIds } = get()
-        const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
+        const sel = doc.elements.filter((e) => selectedIds.includes(e.id) && !e.locked)
         if (sel.length === 0) return
         get().updateElements(
           sel.map((e) => {
@@ -618,7 +629,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       flipSelected: () => {
         const { doc, selectedIds } = get()
-        const figs = doc.elements.filter((e) => selectedIds.includes(e.id) && e.type === 'figure') as Extract<BoardElement, { type: 'figure' }>[]
+        const figs = doc.elements.filter((e) => selectedIds.includes(e.id) && !e.locked && e.type === 'figure') as Extract<BoardElement, { type: 'figure' }>[]
         if (figs.length === 0) return
         get().updateElements(
           figs.map((e) => ({ id: e.id, before: { mirror: e.mirror }, after: { mirror: !e.mirror } })),

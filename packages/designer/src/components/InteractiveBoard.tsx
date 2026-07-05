@@ -1213,12 +1213,15 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     // ⌥-drag duplicates first: the clones aren't in `doc` yet this render, so their
     // origins are passed in explicitly.
     const origins: Record<string, ElementTransform> = presetOrigins ?? {}
+    // Locked elements stay put — drop them from the move (they remain selected).
+    const movable = presetOrigins ? ids : ids.filter((id) => !doc.elements.find((e) => e.id === id)?.locked)
+    if (movable.length === 0) return
     if (!presetOrigins)
-      for (const id of ids) {
+      for (const id of movable) {
         const el = doc.elements.find((e) => e.id === id)
         if (el) origins[id] = el.transform
       }
-    setMove({ ids, start: from, current: from, origins, engaged: false })
+    setMove({ ids: movable, start: from, current: from, origins, engaged: false })
     containerRef.current?.setPointerCapture(pointerId)
   }
 
@@ -1395,9 +1398,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           const ground = arrow3dGround(p)
           // The transaction begins on engagement (past the drag threshold), not
           // here — so a bare click doesn't create an empty edit / duplicate.
-          if (ground) {
-            const moving = object3dElements.filter((x) => sel.includes(x.id)).map((x) => ({ id: x.id, x: x.x, z: x.z }))
-            setObject3dGesture({ id: objId, kind: 'move', orig: el, grabGround: ground, start: p, engaged: false, alt: e.altKey, moving })
+          // Locked objects stay put — don't include them in the drag (a locked
+          // clicked object just selects); only start a gesture if something moves.
+          if (ground && !el.locked) {
+            const moving = object3dElements.filter((x) => sel.includes(x.id) && !x.locked).map((x) => ({ id: x.id, x: x.x, z: x.z }))
+            if (moving.length) setObject3dGesture({ id: objId, kind: 'move', orig: el, grabGround: ground, start: p, engaged: false, alt: e.altKey, moving })
           }
           try {
             containerRef.current?.setPointerCapture(e.pointerId)
@@ -1414,6 +1419,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   // Start dragging a selected 3D object's rotate handle.
   function onObject3DRotateDown(el: Object3DElement, e: React.PointerEvent) {
+    if (el.locked) return
     e.stopPropagation()
     const p = svgRef.current ? clientToBoard(svgRef.current, e.clientX, e.clientY) : { x: 0, y: 0 }
     const ground = arrow3dGround(p) ?? { x: el.x, z: el.z }
@@ -1496,6 +1502,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     // Touch long-press on a token → inline edit (fires only if the finger stays
     // put; any drag/up clears the timer). Double-click is the pointer path.
     cancelLongPress()
+    if (el.locked) return // locked → no inline edit
     if (el.type === 'token') {
       const field = pressTokenFieldRef.current
       longPressRef.current = setTimeout(() => startTokenEdit(el, field), 500)
@@ -1524,7 +1531,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   }
 
   function startTokenEdit(el: BoardElement, field: EditField) {
-    if (el.type !== 'token') return
+    if (el.type !== 'token' || el.locked) return
     if (field === 'label' && !el.showLabel) return // nothing to edit if hidden
     cancelLongPress()
     setSelection([el.id])
@@ -1574,7 +1581,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // undo transaction, so it feels like editing the SVG directly. Enter inserts a
   // newline; blur commits; Escape restores the original.
   function startTextEdit(el: BoardElement, created = false) {
-    if (el.type !== 'text') return
+    // A newly created text is briefly unselected/inert; a locked existing one never edits.
+    if (el.type !== 'text' || (el.locked && !created)) return
     cancelLongPress()
     setSelection([el.id])
     setEditPos(null) // text uses its own overlay (computed from the live element)
@@ -1646,8 +1654,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     if (!svg) return
     const u = unionBounds(liveSelected)
     if (!u) return
+    // Locked members keep the frame's size but are excluded from t0, so they
+    // neither preview-transform nor commit (group resize/rotate skips them).
     const t0: Record<string, ElementTransform> = {}
-    for (const el of liveSelected) t0[el.id] = el.transform
+    for (const el of liveSelected) if (!el.locked) t0[el.id] = el.transform
     const p = clientToBoard(svg, e.clientX, e.clientY)
     setGroupGesture({ kind: handle === 'rotate' ? 'rotate' : 'resize', handle, box0: u, start: p, current: p, snap: e.shiftKey, t0 })
     containerRef.current?.setPointerCapture(e.pointerId)
@@ -2081,7 +2091,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     >
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
-      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} renderTick={editing3d} />}
+      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} renderTick={editing3d} />}
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
@@ -2132,7 +2142,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                   key={`sel-${el.id}`}
                   element={el}
                   scale={scale}
-                  onHandleDown={single ? (handle, e) => onHandleDown(handle, e, el) : undefined}
+                  onHandleDown={single && !el.locked ? (handle, e) => onHandleDown(handle, e, el) : undefined}
                   hideFrame={gesture?.id === el.id && (gesture.kind === 'point' || gesture.kind === 'anchor')}
                 />
               ))}
@@ -2377,7 +2387,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         </svg>
       )}
       {/* Selected 3D object: a rotate handle (about Y) sticking out from its centre. */}
-      {selectedObject3D && isObject3DRotatable(selectedObject3D.objectId) && !object3dGesture && object3dCentreBoard && object3dRotBoard && (
+      {selectedObject3D && !selectedObject3D.locked && isObject3DRotatable(selectedObject3D.objectId) && !object3dGesture && object3dCentreBoard && object3dRotBoard && (
         <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           <line x1={object3dCentreBoard.x} y1={object3dCentreBoard.y} x2={object3dRotBoard.x} y2={object3dRotBoard.y} stroke="#ffffff" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
           <circle

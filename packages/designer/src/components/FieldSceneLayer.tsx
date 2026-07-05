@@ -18,6 +18,8 @@ interface Props {
   color: string
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
+  /** Whether the two goals at the ends of the pitch are shown. */
+  showGoals?: boolean
   /** Bump/flip to force an on-demand redraw when neither camera nor viewport
    *  changed but the layout might have (e.g. entering/leaving Edit-Background) —
    *  avoids a stale pitch until the next camera move. */
@@ -29,10 +31,11 @@ interface Ctx {
   scene: THREE.Scene
   cam: THREE.PerspectiveCamera
   lines: THREE.Mesh | null
+  goals: THREE.Object3D | null
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -67,7 +70,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const group = buildFieldGroup()
     scene.add(group)
 
-    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, lineW: 0 }
+    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, lineW: 0 }
     return ctxRef.current
   }
 
@@ -88,9 +91,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport })
+  const propsRef = useRef({ camera, viewport, showGoals })
   useEffect(() => {
-    propsRef.current = { camera, viewport }
+    propsRef.current = { camera, viewport, showGoals }
   })
 
   function render() {
@@ -99,6 +102,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const rect = boardRect()
     if (!ctx || !canvas || !rect || rect.width < 1) return
     const { camera: cam, viewport: vp } = propsRef.current
+    if (ctx.goals) ctx.goals.visible = propsRef.current.showGoals
     for (const el of [canvas, bgRef.current]) {
       if (!el) continue
       el.style.left = `${rect.left}px`
@@ -129,7 +133,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick])
+  }, [camera, viewport, renderTick, showGoals])
 
   useEffect(() => {
     const container = containerRef.current

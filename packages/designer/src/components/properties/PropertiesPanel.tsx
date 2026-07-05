@@ -17,6 +17,8 @@ import {
   Minus,
   MoveRight,
   RotateCcw,
+  Lock,
+  Unlock,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -160,6 +162,7 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
         {p.count > 0 && (
           <>
             <span className="my-0.5 h-px w-6 bg-border" />
+            <LockButton />
             <ActionsMenu side="right" />
           </>
         )}
@@ -303,6 +306,27 @@ function Arrow3DControls({ side }: { side: 'right' | 'top' }) {
         </PopoverContent>
       </Popover>
     </>
+  )
+}
+
+// A lock/unlock toggle for the current selection. Locked elements can be selected
+// (to unlock here) but not moved, resized, rotated, inline-edited or deleted on the
+// canvas. Shows an open padlock to lock, a closed one (highlighted) to unlock.
+function LockButton() {
+  const doc = useEditorStore((s) => s.doc)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
+  const toggleLock = useEditorStore((s) => s.toggleLock)
+  const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
+  const allLocked = sel.length > 0 && sel.every((e) => e.locked)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button size="icon" aria-label={allLocked ? 'Unlock' : 'Lock'} aria-pressed={allLocked} onClick={toggleLock} className={cn(allLocked && 'text-primary')}>
+          {allLocked ? <Lock /> : <Unlock />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{allLocked ? 'Unlock' : 'Lock'}</TooltipContent>
+    </Tooltip>
   )
 }
 

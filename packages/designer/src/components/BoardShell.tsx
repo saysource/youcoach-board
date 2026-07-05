@@ -247,7 +247,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // opens and ball quick-add are wired to the shell's callbacks; grid/zoom/help
   // are added by later phases.
   const playersCat = catalog?.groups.find((g) => g.id === 'players')?.categories[0] ?? null
-  const materialsCat = catalog?.groups.find((g) => g.id === 'materials')?.categories[0] ?? null
+  // M opens the 3D materials (cones, hurdles, goals…), not the flat 2D materials.
+  const materialsCat = catalog?.groups.find((g) => g.id === 'materials3d')?.categories[0] ?? null
   useDesignerHotkeys({
     storeApi: store,
     bgEditing,

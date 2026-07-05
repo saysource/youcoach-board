@@ -53,6 +53,8 @@ export interface BoardBackground {
    *  are authored at real metric size; this multiplies them so small props stay
    *  visible on a top-down board. 1 = real size, up to 8×. */
   objectScale: number
+  /** Whether the two 3D goals at the ends of the pitch are shown. */
+  showGoals: boolean
   /** YouCoach logo placement over the background, or null for none. */
   logo: LogoPosition | null
 }
@@ -87,6 +89,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   position: [0, 0],
   figureScale: 1,
   objectScale: 1,
+  showGoals: true,
   logo: 'center',
 }
 
@@ -142,6 +145,7 @@ function parseBackground(raw: unknown): BoardBackground {
     position: [num(pos[0], 0), num(pos[1], 0)],
     figureScale: num(o.figureScale, DEFAULT_BACKGROUND.figureScale),
     objectScale: num(o.objectScale, DEFAULT_BACKGROUND.objectScale),
+    showGoals: o.showGoals !== false,
     // Absent → default (center); explicit null → no logo; valid → that position.
     logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : o.logo === null ? null : DEFAULT_BACKGROUND.logo,
   }

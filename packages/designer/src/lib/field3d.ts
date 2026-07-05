@@ -163,7 +163,7 @@ function makeFlag(x: number, z: number): THREE.Group {
 /** Build the pitch as one group in the corner-origin world frame (0..105 × 0..68).
  *  The ground is transparent (the board background shows through); only the white
  *  lines + translucent shading bands are drawn, plus goals + flags. */
-export function buildFieldGroup(opts: { flags?: boolean } = {}): THREE.Group {
+export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean } = {}): THREE.Group {
   const group = new THREE.Group()
 
   // Transparent ground that still catches the goals' soft shadows.
@@ -185,7 +185,12 @@ export function buildFieldGroup(opts: { flags?: boolean } = {}): THREE.Group {
   lines.position.y = LINE_Y
   group.add(lines)
 
-  group.add(makeGoal(-1), makeGoal(1))
+  // Goals in a named subgroup so the layer can toggle their visibility live.
+  const goals = new THREE.Group()
+  goals.name = 'field-goals'
+  goals.add(makeGoal(-1), makeGoal(1))
+  goals.visible = opts.goals ?? true
+  group.add(goals)
 
   if (opts.flags ?? true) {
     for (const x of [-HALF_L, HALF_L]) for (const z of [-HALF_W, HALF_W]) group.add(makeFlag(x, z))
