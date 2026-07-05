@@ -19,9 +19,10 @@ const ZONE_THUMBS = Object.fromEntries(
   Object.entries(import.meta.glob('../assets/zones/*.png', { eager: true, query: '?url', import: 'default' })).map(([path, url]) => [path.split('/').pop()!.replace('.png', ''), url as string]),
 ) as Record<string, string>
 
-// Bundled 3D-object palette thumbnails, keyed by object id (…/materials3d/<id>.svg).
+// Bundled 3D-object palette thumbnails, keyed by object id (…/materials3d/<id>.svg,
+// or .png for the rendered 3D-player previews).
 const OBJECT3D_THUMBS = Object.fromEntries(
-  Object.entries(import.meta.glob('../assets/materials3d/*.svg', { eager: true, query: '?url', import: 'default' })).map(([path, url]) => [path.split('/').pop()!.replace('.svg', ''), url as string]),
+  Object.entries(import.meta.glob('../assets/materials3d/*.{svg,png}', { eager: true, query: '?url', import: 'default' })).map(([path, url]) => [path.split('/').pop()!.replace(/\.(svg|png)$/, ''), url as string]),
 ) as Record<string, string>
 
 // Movement (px) below which a press is a tap, not a drag; touch hold (ms) to start.

@@ -50,6 +50,13 @@
    ]
   },
   {
+   "id": "players3d",
+   "name": "Players 3D",
+   "categories": [
+    "players3d"
+   ]
+  },
+  {
    "id": "fields",
    "name": "Fields and Background",
    "categories": [
@@ -17608,6 +17615,12 @@
      "h": 100
     },
     {
+     "object3d": "flag_pole",
+     "thumb": "materials3d/flag_pole",
+     "w": 100,
+     "h": 100
+    },
+    {
      "object3d": "goal_full",
      "thumb": "materials3d/goal_full",
      "w": 100,
@@ -17634,6 +17647,48 @@
     {
      "object3d": "goal_small",
      "thumb": "materials3d/goal_small",
+     "w": 100,
+     "h": 100
+    }
+   ]
+  },
+  "players3d": {
+   "name": "Players 3D",
+   "kind": "figure",
+   "figures": [
+    {
+     "object3d": "player_man_a",
+     "thumb": "materials3d/player_man_a",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "player_man_b",
+     "thumb": "materials3d/player_man_b",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "player_man_c",
+     "thumb": "materials3d/player_man_c",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "player_woman_a",
+     "thumb": "materials3d/player_woman_a",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "player_woman_b",
+     "thumb": "materials3d/player_woman_b",
+     "w": 100,
+     "h": 100
+    },
+    {
+     "object3d": "player_woman_c",
+     "thumb": "materials3d/player_woman_c",
      "w": 100,
      "h": 100
     }

@@ -8,7 +8,7 @@ import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement } from '@youcoach-board
 import { makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
 import { SUN_POSITION, SUN_TARGET } from '../lib/field3d'
-import { buildObject3D, isObject3DColorable, isObject3DGoal, object3dDefaultColor } from '../lib/objects3d'
+import { buildObject3D, isObject3DColorable, isObject3DGoal, object3dDefaultColor, onObject3DAssetReady } from '../lib/objects3d'
 
 /** Imperative API to hit-test 3D objects (they aren't SVG, so InteractiveBoard
  *  can't click them through the normal element handlers). */
@@ -245,6 +245,11 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-render when a lazily-decoded asset (a player's kit texture) becomes ready —
+  // the layer only renders on state changes, so the decode finishing wouldn't
+  // otherwise repaint an already-placed player.
+  useEffect(() => onObject3DAssetReady(() => renderRef.current()), [])
 
   useImperativeHandle(ref, () => ({
     pick(boardX: number, boardY: number): string | null {

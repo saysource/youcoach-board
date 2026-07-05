@@ -23,9 +23,24 @@ import { WALL_MANNEQUIN_GLB_BASE64 } from './wall-mannequin-glb'
 import { BALANCE_DOME_GLB_BASE64 } from './balance-dome-glb'
 import { AGILITY_POLE_GLB_BASE64 } from './agility-pole-glb'
 import { BALL_GLB_BASE64 } from './ball-glb'
+import { PLAYER_MAN_A_GLB_BASE64 } from './player-man-a-glb'
+import { PLAYER_MAN_B_GLB_BASE64 } from './player-man-b-glb'
+import { PLAYER_MAN_C_GLB_BASE64 } from './player-man-c-glb'
+import { PLAYER_WOMAN_A_GLB_BASE64 } from './player-woman-a-glb'
+import { PLAYER_WOMAN_B_GLB_BASE64 } from './player-woman-b-glb'
+import { PLAYER_WOMAN_C_GLB_BASE64 } from './player-woman-c-glb'
 // The inflatable mannequin's "fake defender" drawing — a single black line-art
 // path, printed onto the front of the (tintable) mannequin body as a decal.
 import mannequinDecalRaw from '../assets/materials3d/mannequin_decal.svg?raw'
+// Per-player kit atlases (1024×128 flat-colour strips, ~8 KB each), inlined as
+// data URIs so they ship inside the bundle like the models. The GLBs carry UVs
+// but no image — the kit is applied here at runtime (recolorable in a later phase).
+import playerManATex from '../assets/players3d/player_man_a.png?inline'
+import playerManBTex from '../assets/players3d/player_man_b.png?inline'
+import playerManCTex from '../assets/players3d/player_man_c.png?inline'
+import playerWomanATex from '../assets/players3d/player_woman_a.png?inline'
+import playerWomanBTex from '../assets/players3d/player_woman_b.png?inline'
+import playerWomanCTex from '../assets/players3d/player_woman_c.png?inline'
 
 // GLB-backed objects: embedded model bytes + toon colour. The models are authored
 // at real metric scale with their base on the ground (y=0), so they render as-is
@@ -44,6 +59,17 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   agility_pole: { data: AGILITY_POLE_GLB_BASE64, color: 0xdc3838 }, // slalom pole; recolorable
 }
 
+// 3D players: static Studio Ochi character meshes baked in a neutral standing
+// pose, textured with their own kit atlas. Real metric height (~1.5–1.8 m).
+const PLAYER_GLBS: Record<string, { data: string; texture: string }> = {
+  player_man_a: { data: PLAYER_MAN_A_GLB_BASE64, texture: playerManATex },
+  player_man_b: { data: PLAYER_MAN_B_GLB_BASE64, texture: playerManBTex },
+  player_man_c: { data: PLAYER_MAN_C_GLB_BASE64, texture: playerManCTex },
+  player_woman_a: { data: PLAYER_WOMAN_A_GLB_BASE64, texture: playerWomanATex },
+  player_woman_b: { data: PLAYER_WOMAN_B_GLB_BASE64, texture: playerWomanBTex },
+  player_woman_c: { data: PLAYER_WOMAN_C_GLB_BASE64, texture: playerWomanCTex },
+}
+
 // Procedural goals. Built at their real metric size (feet → metres), so they're
 // placed with `size` = 1 (see OBJECT3D_SIZES) rather than the unit-scaled default.
 const FT = 0.3048
@@ -55,7 +81,7 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small', 'player_man_a', 'player_man_b', 'player_man_c', 'player_woman_a', 'player_woman_b', 'player_woman_c'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
@@ -65,7 +91,7 @@ export function isKnownObject(id: string): id is Object3DKind {
 // at real metric size, so they drop in at ×1; the procedural ball/cube fall back
 // to the caller's nominal default.
 export function defaultObject3DSize(objectId: string, fallback: number): number {
-  if (objectId in GLB_OBJECTS || objectId in GOALS) return 1
+  if (objectId in GLB_OBJECTS || objectId in GOALS || objectId in PLAYER_GLBS) return 1
   return fallback
 }
 
@@ -121,6 +147,7 @@ interface GlbJson {
   bufferViews: Array<{ byteOffset?: number; byteLength: number }>
 }
 
+
 /** Minimal, synchronous GLB → BufferGeometry parser for our un-compressed assets
  *  (POSITION + NORMAL + indices). Merges ALL primitives of the first mesh into a
  *  single geometry — models split by material (e.g. a hurdle's frame + bars, a
@@ -150,24 +177,29 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
     return new comp.array(bin!, byteOffset, acc.count * NUM_COMPONENTS[acc.type])
   }
 
-  // Gather every primitive, then concatenate into one position/normal/index set.
+  // Gather every primitive, then concatenate into one position/normal/uv/index set.
   const prims = json.meshes[0].primitives.map((p) => ({
     pos: read(p.attributes.POSITION) as Float32Array,
     nrm: p.attributes.NORMAL != null ? (read(p.attributes.NORMAL) as Float32Array) : null,
+    uv: p.attributes.TEXCOORD_0 != null ? (read(p.attributes.TEXCOORD_0) as Float32Array) : null,
     idx: p.indices != null ? read(p.indices) : null,
   }))
   const totalVerts = prims.reduce((n, p) => n + p.pos.length / 3, 0)
   const totalIdx = prims.reduce((n, p) => n + (p.idx ? p.idx.length : 0), 0)
   const positions = new Float32Array(totalVerts * 3)
   const normals = new Float32Array(totalVerts * 3)
+  const uvs = new Float32Array(totalVerts * 2)
   const indices = new Uint32Array(totalIdx)
   let vOff = 0
   let iOff = 0
   let hasNormals = true
+  let hasUvs = true
   for (const p of prims) {
     positions.set(p.pos, vOff * 3)
     if (p.nrm) normals.set(p.nrm, vOff * 3)
     else hasNormals = false
+    if (p.uv) uvs.set(p.uv, vOff * 2)
+    else hasUvs = false
     if (p.idx) {
       for (let k = 0; k < p.idx.length; k++) indices[iOff + k] = p.idx[k] + vOff
       iOff += p.idx.length
@@ -178,6 +210,7 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
   const geom = new THREE.BufferGeometry()
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   if (hasNormals) geom.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
+  if (hasUvs) geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
   if (totalIdx) geom.setIndex(new THREE.BufferAttribute(indices, 1))
   if (!hasNormals) geom.computeVertexNormals()
   return geom
@@ -389,6 +422,31 @@ function mannequinDecal(geom: THREE.BufferGeometry, pushOut: number): THREE.Mesh
   return mesh
 }
 
+/* ---- 3D-player kit textures --------------------------------------------------
+ * The player GLBs ship UVs but no image; the kit atlas (a tiny inlined PNG) is
+ * loaded into a shared texture per character. Decoding a data URI is async, so a
+ * player placed before its kit finishes decoding renders untextured for a frame —
+ * subscribers (Object3DLayer) are notified to re-render when a kit becomes ready. */
+const kitTextures = new Map<string, THREE.Texture>()
+const assetReadyCbs = new Set<() => void>()
+/** Subscribe to "a lazily-decoded 3D asset became ready" (returns unsubscribe). */
+export function onObject3DAssetReady(cb: () => void): () => void {
+  assetReadyCbs.add(cb)
+  return () => assetReadyCbs.delete(cb)
+}
+function playerKitTexture(objectId: string): THREE.Texture {
+  let tex = kitTextures.get(objectId)
+  if (!tex) {
+    tex = new THREE.TextureLoader().load(PLAYER_GLBS[objectId].texture, () => {
+      for (const cb of assetReadyCbs) cb()
+    })
+    tex.flipY = false // glTF UV convention (v origin at the top)
+    tex.colorSpace = THREE.SRGBColorSpace
+    kitTextures.set(objectId, tex)
+  }
+  return tex
+}
+
 /** Build the renderable for a 3D object id. GLB/primitive kinds are a single
  *  real-size Mesh (base on the ground); goals are a real-size Group. `userData
  *  .outlineOffset` is the ink thickness in world metres, so the layer can lift
@@ -400,6 +458,22 @@ export function buildObject3D(objectId: string): THREE.Object3D {
     // the sloped-back goals run back ~0.9× their height.
     const depth = goal.height * (goal.style === 'box' ? 0.82 : 0.9)
     return buildGoal({ width: goal.width, height: goal.height, depth, style: goal.style })
+  }
+  const player = PLAYER_GLBS[objectId]
+  if (player) {
+    const geom = glbGeometry(objectId, player.data)
+    const s = geom.boundingBox!.getSize(new THREE.Vector3())
+    const median = [s.x, s.y, s.z].sort((a, b) => a - b)[1]
+    const outlineOffset = OUTLINE_FRACTION * (median || 1)
+    // Kit atlas over a white toon base — the texture's flat colours pick up the
+    // same banded toon lighting as the other materials.
+    const mat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradientMap(), map: playerKitTexture(objectId) })
+    const mesh = new THREE.Mesh(geom, mat)
+    mesh.castShadow = true
+    mesh.add(toonOutline(geom, outlineOffset)) // silhouette ink only — crease strokes
+    // would ink every facet seam of the organic low-poly body (noise, not style)
+    mesh.userData.outlineOffset = outlineOffset
+    return mesh
   }
   const glb = GLB_OBJECTS[objectId]
   if (glb) {

@@ -30,6 +30,15 @@ const MODELS = [
   ['wall_mannequin.glb', 'wall_mannequin.glb', 'WALL_MANNEQUIN_GLB_BASE64', 'wall-mannequin-glb.ts'],
   ['balance_dome.glb', 'balance_dome.glb', 'BALANCE_DOME_GLB_BASE64', 'balance-dome-glb.ts'],
   ['agility_pole.glb', 'agility_pole.glb', 'AGILITY_POLE_GLB_BASE64', 'agility-pole-glb.ts'],
+  // 3D players: static meshes baked in the neutral standing pose (armature applied)
+  // from the Studio Ochi pack. assets/players3d/players3d.glb keeps the skinned +
+  // animated source for a future animation phase.
+  ['../players3d/static/player_man_a.glb', 'player_man_a.glb', 'PLAYER_MAN_A_GLB_BASE64', 'player-man-a-glb.ts'],
+  ['../players3d/static/player_man_b.glb', 'player_man_b.glb', 'PLAYER_MAN_B_GLB_BASE64', 'player-man-b-glb.ts'],
+  ['../players3d/static/player_man_c.glb', 'player_man_c.glb', 'PLAYER_MAN_C_GLB_BASE64', 'player-man-c-glb.ts'],
+  ['../players3d/static/player_woman_a.glb', 'player_woman_a.glb', 'PLAYER_WOMAN_A_GLB_BASE64', 'player-woman-a-glb.ts'],
+  ['../players3d/static/player_woman_b.glb', 'player_woman_b.glb', 'PLAYER_WOMAN_B_GLB_BASE64', 'player-woman-b-glb.ts'],
+  ['../players3d/static/player_woman_c.glb', 'player_woman_c.glb', 'PLAYER_WOMAN_C_GLB_BASE64', 'player-woman-c-glb.ts'],
 ]
 
 let done = 0
