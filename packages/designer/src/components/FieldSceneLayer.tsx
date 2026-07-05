@@ -24,6 +24,8 @@ interface Props {
   bands?: FieldBands
   /** Which playing surface to render (markings + goals). */
   fieldType?: FieldType
+  /** Training area: show the two divider lines + shaded external end-zones. */
+  endZones?: boolean
   /** Bump/flip to force an on-demand redraw when neither camera nor viewport
    *  changed but the layout might have (e.g. entering/leaving Edit-Background) —
    *  avoids a stale pitch until the next camera move. */
@@ -40,10 +42,11 @@ interface Ctx {
   bands: THREE.Mesh | null
   bandsOrient: FieldBands
   fieldType: FieldType
+  endZones: boolean
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', endZones = false, renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -75,10 +78,10 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     sun.shadow.bias = -0.0004
     scene.add(sun)
     scene.add(sun.target)
-    const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands })
+    const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, endZones: propsRef.current.endZones })
     scene.add(group)
 
-    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, fieldType: propsRef.current.fieldType, lineW: 0 }
+    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, fieldType: propsRef.current.fieldType, endZones: propsRef.current.endZones, lineW: 0 }
     return ctxRef.current
   }
 
@@ -99,9 +102,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport, showGoals, bands, fieldType })
+  const propsRef = useRef({ camera, viewport, showGoals, bands, fieldType, endZones })
   useEffect(() => {
-    propsRef.current = { camera, viewport, showGoals, bands, fieldType }
+    propsRef.current = { camera, viewport, showGoals, bands, fieldType, endZones }
   })
 
   function render() {
@@ -110,9 +113,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const rect = boardRect()
     if (!ctx || !canvas || !rect || rect.width < 1) return
     const { camera: cam, viewport: vp } = propsRef.current
-    // Field type changed → rebuild the whole field group (markings/goals/bands all
-    // depend on it), then re-grab the named sub-objects and reset the caches.
-    if (propsRef.current.fieldType !== ctx.fieldType) {
+    // Field type or end-zones changed → rebuild the whole field group (markings/
+    // goals/bands all depend on them), re-grab the named sub-objects, reset caches.
+    if (propsRef.current.fieldType !== ctx.fieldType || propsRef.current.endZones !== ctx.endZones) {
       ctx.scene.remove(ctx.group)
       ctx.group.traverse((o) => {
         const m = o as Partial<THREE.Mesh>
@@ -120,7 +123,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
         const mat = (o as THREE.Mesh).material
         if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((x) => x.dispose())
       })
-      const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands })
+      const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, endZones: propsRef.current.endZones })
       ctx.scene.add(group)
       ctx.group = group
       ctx.lines = (group.getObjectByName('field-lines') as THREE.Mesh) ?? null
@@ -128,13 +131,14 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       ctx.bands = (group.getObjectByName('field-bands') as THREE.Mesh) ?? null
       ctx.bandsOrient = propsRef.current.bands
       ctx.fieldType = propsRef.current.fieldType
+      ctx.endZones = propsRef.current.endZones
       ctx.lineW = 0
     }
     if (ctx.goals) ctx.goals.visible = propsRef.current.showGoals
     // Rebuild the shading bands when the orientation changes (cheap flat geometry).
     if (ctx.bands && propsRef.current.bands !== ctx.bandsOrient) {
       ctx.bands.geometry.dispose()
-      ctx.bands.geometry = bandsGeometry(propsRef.current.bands, FIELD_DIMS[ctx.fieldType].halfL, FIELD_DIMS[ctx.fieldType].halfW, ctx.fieldType)
+      ctx.bands.geometry = bandsGeometry(propsRef.current.bands, FIELD_DIMS[ctx.fieldType].halfL, FIELD_DIMS[ctx.fieldType].halfW, ctx.fieldType, ctx.endZones)
       ctx.bandsOrient = propsRef.current.bands
     }
     for (const el of [canvas, bgRef.current]) {
@@ -151,7 +155,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       const w = lineWidthForDistance(dist)
       if (Math.abs(w - ctx.lineW) > 0.004) {
         ctx.lines.geometry.dispose()
-        ctx.lines.geometry = markingsGeometry(w, ctx.fieldType)
+        ctx.lines.geometry = markingsGeometry(w, ctx.fieldType, ctx.endZones)
         ctx.lineW = w
       }
     }
@@ -167,7 +171,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick, showGoals, bands, fieldType])
+  }, [camera, viewport, renderTick, showGoals, bands, fieldType, endZones])
 
   useEffect(() => {
     const container = containerRef.current

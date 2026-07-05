@@ -2091,7 +2091,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     >
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
-      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} fieldType={doc.background.fieldType} renderTick={editing3d} />}
+      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} fieldType={doc.background.fieldType} endZones={doc.background.endZones} renderTick={editing3d} />}
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
