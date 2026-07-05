@@ -28,6 +28,7 @@ import {
   type Box,
   type Arrow3DElement,
   type Object3DElement,
+  type FieldView,
   ARROW3D_DEFAULTS,
   IDENTITY_TRANSFORM,
 } from '@youcoach-board/core'
@@ -304,7 +305,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navPose = null, onNavPose }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navPose?: FieldView | null; onNavPose?: (p: FieldView) => void }) {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -514,7 +515,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // works unchanged; homography still uses its own custom projection.
   // A real 3D field (background.field3d) wins over the legacy per-field calibrated
   // camera, which wins over the homography, which wins over the fixed camera.
-  const field3d = doc.background.field3d
+  // In navigation mode the SESSION pose (navPose) overrides the drawing's saved
+  // pose for rendering only — the whole scene projects through it, without changing
+  // background.field3d (Store persists it; Reset restores the saved pose).
+  const field3d = !backgroundMode && navPose ? navPose : doc.background.field3d
   const fieldCamCfg = field3d ?? fieldCamera(doc.background.fieldSvg)
   const fieldH = fieldHomography(doc.background.fieldSvg)
   const useHomography = !!fieldH && !fieldCamCfg
@@ -2333,6 +2337,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {zoneMode && field3d && <FieldZoneTool field3d={field3d} viewBox={viewBox} />}
       {/* 3D-field pose editor: OrbitControls + numbered zone markers (bg-edit). */}
       {editing3d && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={panMode} onExitPan={() => setView('orbit')} onPose={(p) => setBackground({ field3d: p })} />}
+      {/* Navigation mode: the same orbit controls in normal mode, mirroring to the
+          SESSION pose (navPose) instead of the drawing's saved pose. */}
+      {navigating && !backgroundMode && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={false} onExitPan={() => {}} onPose={(p) => onNavPose?.(p)} />}
       {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
       {backgroundMode && field3d && (
         <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">

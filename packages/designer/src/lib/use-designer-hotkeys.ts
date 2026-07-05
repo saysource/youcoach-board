@@ -30,6 +30,8 @@ export interface HotkeyDeps {
   /** Open the players / materials library drawer. */
   openPlayers: () => void
   openMaterials: () => void
+  /** Toggle 3D scene navigation (orbit) mode — bound to P. */
+  onToggleNav?: () => void
   /** Quick-add a ball at board center. */
   addBall: () => void
   /** Toggle the alignment grid (optional until implemented). */
@@ -131,7 +133,8 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       if (lower === 'f') { e.preventDefault(); if (deps.bgEditing) deps.finishBackground(); else deps.editBackground(); return }
       if (lower === 'g' && deps.toggleGrid) { e.preventDefault(); deps.toggleGrid(); return }
       if (lower === 'b') { deps.addBall(); return }
-      if (lower === 'p') { deps.openPlayers(); return }
+      // P toggles 3D scene navigation (orbit) mode.
+      if (lower === 'p' && deps.onToggleNav) { e.preventDefault(); deps.onToggleNav(); return }
       if (lower === 'm') { deps.openMaterials(); return }
       if (key === '?' && deps.showHelp) { e.preventDefault(); deps.showHelp(); return }
 

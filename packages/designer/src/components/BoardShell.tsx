@@ -4,7 +4,7 @@ import { Check } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { Button } from './ui/button'
 import { BoardRootProvider } from '../lib/board-root'
-import { BOARD_ASPECT } from '@youcoach-board/core'
+import { BOARD_ASPECT, type FieldView } from '@youcoach-board/core'
 import { useTheme, type ThemeSetting } from '../lib/use-theme'
 import { useElementSize } from '../lib/use-element-size'
 import type { Breakpoint } from '../lib/use-breakpoint'
@@ -20,6 +20,7 @@ import { TopRightControls } from './TopRightControls'
 import { LibraryDrawer } from './LibraryDrawer'
 import { ZoomBar } from './ZoomBar'
 import { UndoRedoBar } from './UndoRedoBar'
+import { NavBar } from './NavBar'
 import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
 import { GameSystemDialog } from './GameSystemDialog'
@@ -159,6 +160,40 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // which otherwise kept a hard-coded default and ignored the catalog value).
   const fieldSvg = useEditorStore((s) => s.doc.background.fieldSvg)
   const setBackground = useEditorStore((s) => s.setBackground)
+
+  // Navigation mode: a free-orbit view of the 3D scene that changes the VIEW only,
+  // via the session `navPose`, without touching the drawing's saved pose
+  // (background.field3d). Store persists it; Reset restores the saved pose; P
+  // toggles the mode (exiting keeps the current view). Only when a 3D field exists.
+  const savedField3d = useEditorStore((s) => s.doc.background.field3d)
+  const [navigating, setNavigating] = useState(false)
+  const [navPose, setNavPose] = useState<FieldView | null>(null)
+  const navAvailable = !!savedField3d && !bgEditing && !homographyEditing && !cameraEditing && !zoneEditing
+  function toggleNav() {
+    if (navigating) {
+      setNavigating(false) // exit — keep the current view (navPose stays)
+      return
+    }
+    if (!navAvailable) return
+    setNavPose((p) => p ?? savedField3d) // start from the drawing's current pose
+    setNavigating(true)
+  }
+  function resetNav() {
+    setNavPose(savedField3d) // back to the drawing's saved pose
+  }
+  function storeNav() {
+    if (navPose) setBackground({ field3d: navPose }) // this pose becomes the default
+  }
+  // Editing the background owns the pose directly — leave navigation and drop the
+  // session view (render-phase sync) so finishing shows the freshly-edited saved pose.
+  const [navBgSeen, setNavBgSeen] = useState(bgEditing)
+  if (bgEditing !== navBgSeen) {
+    setNavBgSeen(bgEditing)
+    if (bgEditing) {
+      setNavigating(false)
+      setNavPose(null)
+    }
+  }
   useEffect(() => {
     const s = fieldFigureScale(catalog, fieldSvg)
     if (s !== undefined && s !== figureScale) setBackground({ figureScale: s })
@@ -256,6 +291,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     editBackground,
     openPlayers: () => playersCat && openCategory(playersCat),
     openMaterials: () => materialsCat && openCategory(materialsCat),
+    onToggleNav: toggleNav,
     addBall: () => addBall(catalog, store),
     showHelp: () => setShortcutsOpen(true),
     toggleGrid: () => setShowGrid((v) => !v),
@@ -297,12 +333,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} />
+            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navPose={navPose} onNavPose={setNavPose} />
           </div>
 
-          {/* Top-left menu */}
-          <div className="absolute left-3 top-3 z-30">
+          {/* Top-left menu (+ the navigation control below it on mobile). */}
+          <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
             <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} />
+            {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} />}
           </div>
 
           {/* Main toolbar — top-center, or bottom-center in mobile mode. In
@@ -376,6 +413,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
               <ZoomBar />
               <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
+              <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} />
             </div>
           )}
 
