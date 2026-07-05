@@ -224,7 +224,7 @@ function creaseEdges(geometry: THREE.BufferGeometry, thresholdAngle = 24): THREE
 // largest) so it stays proportional to the object's cross-section, not its length
 // — a long, thin ladder was getting an outline thicker than its own bars. Stored
 // per object so the layer can lift by it (keeping the underside above the y=0 clip).
-export const OUTLINE_FRACTION = 0.009
+export const OUTLINE_FRACTION = 0.013
 
 /** The back-faces-only black "ink" outline shell. Instead of a uniform scale
  *  (which displaces the shell sideways on thin, off-centre parts like a hurdle
