@@ -341,8 +341,9 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           >
             <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navPose={navPose} navMarkers={navMarkers} onNavPose={setNavPose} />
             {/* Navigation-active indicator: an orbit watermark in the working-area
-                top-right corner (decorative, doesn't block input). */}
-            {navigating && <Orbit aria-hidden className="pointer-events-none absolute z-20 text-foreground" style={{ top: fieldTopGap + 8, right: fieldRightGap + 8, width: 100, height: 100, opacity: 0.25 }} />}
+                top-right corner (decorative, doesn't block input). Kept mounted so
+                it fades in/out with navigation mode. */}
+            <Orbit aria-hidden className="pointer-events-none absolute z-20 text-foreground transition-opacity duration-300" style={{ top: fieldTopGap + 8, right: fieldRightGap + 8, width: 100, height: 100, opacity: navigating ? 0.25 : 0 }} />
           </div>
 
           {/* Top-left menu (+ the navigation control below it on mobile). */}
