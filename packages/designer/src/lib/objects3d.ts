@@ -21,6 +21,9 @@ import { SPEED_LADDER_GLB_BASE64 } from './speed-ladder-glb'
 import { MANNEQUIN_GLB_BASE64 } from './mannequin-glb'
 import { WALL_MANNEQUIN_GLB_BASE64 } from './wall-mannequin-glb'
 import { BALANCE_DOME_GLB_BASE64 } from './balance-dome-glb'
+// The inflatable mannequin's "fake defender" drawing — a single black line-art
+// path, printed onto the front of the (tintable) mannequin body as a decal.
+import mannequinDecalRaw from '../assets/materials3d/mannequin_decal.svg?raw'
 
 // GLB-backed objects: embedded model bytes + toon colour. The models are authored
 // at real metric scale with their base on the ground (y=0), so they render as-is
@@ -33,7 +36,7 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   hurdle: { data: HURDLE_GLB_BASE64, color: 0xf2c200 },
   hurdle_high: { data: HURDLE_HIGH_GLB_BASE64, color: 0xf2c200 },
   speed_ladder: { data: SPEED_LADDER_GLB_BASE64, color: 0xf2c200 },
-  mannequin: { data: MANNEQUIN_GLB_BASE64, color: 0x2c3e50 },
+  mannequin: { data: MANNEQUIN_GLB_BASE64, color: 0xe7eaed }, // off-white inflatable; recolorable
   wall_mannequin: { data: WALL_MANNEQUIN_GLB_BASE64, color: 0x9aa3ab },
   balance_dome: { data: BALANCE_DOME_GLB_BASE64, color: 0x2aa8a8 },
 }
@@ -65,7 +68,9 @@ export function defaultObject3DSize(objectId: string, fallback: number): number 
 
 // Rotationally symmetric objects: a Y-axis rotation has no visible effect, so
 // their rotation handle is hidden and rotation is left at 0.
-const ROTATION_SYMMETRIC = new Set<string>(['ball', 'cone', 'high_cone', 'balance_dome', 'mannequin'])
+// The mannequin carries a front-facing print, so a Y-rotation IS visible (it turns
+// the fake defender to face a different way) — it stays rotatable.
+const ROTATION_SYMMETRIC = new Set<string>(['ball', 'cone', 'high_cone', 'balance_dome'])
 export function isObject3DRotatable(objectId: string): boolean {
   return !ROTATION_SYMMETRIC.has(objectId)
 }
@@ -263,6 +268,98 @@ function toonOutline(geometry: THREE.BufferGeometry, thickness: number): THREE.M
   return outline
 }
 
+/* ---- inflatable mannequin decal --------------------------------------------- *
+ * The GLB carries no UVs, so we can't map an image through the model's own
+ * texture coordinates. Instead we rasterize the line-art SVG to a canvas texture
+ * (synchronously, via Path2D — no async image load) and PROJECT it onto the
+ * front of the body in a small shader: a planar projection (X→u, Y→v) masked by
+ * the surface normal so the print lands only on the front hemisphere and fades
+ * toward the sides, the way a graphic wraps a real inflatable. The body stays a
+ * plain tintable toon mesh; the decal is a fixed-colour overlay on top.          */
+
+let decalTex: THREE.CanvasTexture | null = null
+function mannequinDecalTexture(): THREE.CanvasTexture {
+  if (decalTex) return decalTex
+  const vb = mannequinDecalRaw.match(/viewBox="([\d.\s-]+)"/)
+  const [, , vw, vh] = (vb ? vb[1].trim().split(/\s+/).map(Number) : [0, 0, 1604, 4775]) as number[]
+  const d = mannequinDecalRaw.match(/\sd="([^"]+)"/)?.[1] ?? ''
+  const W = 512
+  const H = Math.round((W * vh) / vw)
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const g = canvas.getContext('2d')!
+  g.scale(W / vw, H / vh)
+  g.fillStyle = '#141414' // fixed dark ink — the drawing does NOT take the body tint
+  if (d) g.fill(new Path2D(d))
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
+  decalTex = tex
+  return tex
+}
+
+/** The projected front decal, sharing the body geometry so it hugs the curvature.
+ *  `pushOut` lifts it a hair off the skin (along the normal) so it doesn't z-fight
+ *  the body. Clipping-plane aware (matches the toon body / outline at the y=0 clip). */
+function mannequinDecal(geom: THREE.BufferGeometry, pushOut: number): THREE.Mesh {
+  const bb = geom.boundingBox!
+  const tex = mannequinDecalTexture()
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: tex },
+      bboxMin: { value: bb.min.clone() },
+      bboxSize: { value: bb.getSize(new THREE.Vector3()) },
+      imageAspect: { value: tex.image.width / tex.image.height },
+      frontDir: { value: new THREE.Vector3(0, 0, 1) },
+      pushOut: { value: pushOut },
+    },
+    transparent: true,
+    depthWrite: false,
+    clipping: true,
+    side: THREE.FrontSide,
+    vertexShader: `
+      #include <clipping_planes_pars_vertex>
+      uniform vec3 bboxMin; uniform vec3 bboxSize; uniform float imageAspect;
+      uniform vec3 frontDir; uniform float pushOut;
+      varying vec2 vUv; varying float vMask;
+      void main() {
+        float ny = (position.y - bboxMin.y) / bboxSize.y;       // 0..1, bottom→top
+        float nx = (position.x - bboxMin.x) / bboxSize.x - 0.5; // -0.5..0.5
+        float bandFracX = (bboxSize.y * imageAspect) / bboxSize.x; // aspect-correct band
+        // CanvasTexture flipY=true → image-top samples at v=1, so the model top
+        // (ny=1 = the head) must map to v=1: vUv.y = ny (NOT 1-ny, else upside-down).
+        vUv = vec2(nx / bandFracX + 0.5, ny);
+        vMask = dot(normalize(normal), normalize(frontDir));
+        vec3 p = position + normalize(normal) * pushOut;
+        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <clipping_planes_vertex>
+      }
+    `,
+    fragmentShader: `
+      #include <clipping_planes_pars_fragment>
+      uniform sampler2D map;
+      varying vec2 vUv; varying float vMask;
+      void main() {
+        #include <clipping_planes_fragment>
+        if (vUv.x < 0.0 || vUv.x > 1.0 || vUv.y < 0.0 || vUv.y > 1.0) discard;
+        float m = smoothstep(0.15, 0.5, vMask); // front-facing only; fades to the sides
+        if (m <= 0.001) discard;
+        vec4 tex = texture2D(map, vUv);
+        float a = tex.a * m;
+        if (a < 0.02) discard;
+        gl_FragColor = vec4(tex.rgb, a);
+      }
+    `,
+  })
+  const mesh = new THREE.Mesh(geom, mat)
+  mesh.name = 'mannequinDecal'
+  mesh.renderOrder = 2
+  mesh.raycast = () => {} // decorative — pick the body, not the print
+  return mesh
+}
+
 /** Build the renderable for a 3D object id. GLB/primitive kinds are a single
  *  real-size Mesh (base on the ground); goals are a real-size Group. `userData
  *  .outlineOffset` is the ink thickness in world metres, so the layer can lift
@@ -285,6 +382,8 @@ export function buildObject3D(objectId: string): THREE.Object3D {
     mesh.castShadow = true
     mesh.add(toonOutline(geom, outlineOffset)) // silhouette ink (shares the mesh geometry)
     mesh.add(creaseEdges(geom)) // internal strokes along the rim/creases
+    // The inflatable mannequin also carries a printed "fake defender" on its front.
+    if (objectId === 'mannequin') mesh.add(mannequinDecal(geom, outlineOffset * 0.5))
     mesh.userData.outlineOffset = outlineOffset
     return mesh
   }
