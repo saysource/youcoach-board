@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import '../styles/board.css'
-import { Check } from 'lucide-react'
+import { Check, Orbit } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { Button } from './ui/button'
 import { BoardRootProvider } from '../lib/board-root'
@@ -26,7 +26,6 @@ import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
 import { GameSystemDialog } from './GameSystemDialog'
 import { PropertiesPanel, MobileBar } from './properties/PropertiesPanel'
-import gyroscopeIcon from '../assets/gyroscope.svg'
 
 // Board area padding (px) and the space reserved on the left for the full
 // properties panel (panel width + margins).
@@ -280,6 +279,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const targetRight = Math.max(leftPad + fieldW, Math.min(naturalRight, width - DRAWER_WIDTH))
   const boardPaddingRight = overlayOpen ? Math.max(BOARD_RIGHT_PAD, width + leftPad - 2 * targetRight + fieldW) : BOARD_RIGHT_PAD
   const reserveRight = drawerOpen && drawerPinned
+  // The rendered field's top-right corner (gaps from the board container's top/right
+  // edges, accounting for the 4:3 letterbox) — where the nav watermark sits.
+  const fieldTopGap = BOARD_TOP_PAD + Math.max(0, (innerH - fieldW / BOARD_ASPECT) / 2)
+  const fieldRightGap = boardPaddingRight + Math.max(0, (availWidth - fieldW) / 2)
 
   // Global keyboard shortcuts (see useDesignerHotkeys for the full map). Drawer
   // opens and ball quick-add are wired to the shell's callbacks; grid/zoom/help
@@ -337,9 +340,9 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             }}
           >
             <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navPose={navPose} navMarkers={navMarkers} onNavPose={setNavPose} />
-            {/* Navigation-active indicator: a gyroscope watermark in the working-area
+            {/* Navigation-active indicator: an orbit watermark in the working-area
                 top-right corner (decorative, doesn't block input). */}
-            {navigating && <img src={gyroscopeIcon} alt="" aria-hidden draggable={false} className="pointer-events-none absolute z-20" style={{ top: BOARD_TOP_PAD, right: boardPaddingRight, width: 100, height: 100, opacity: 0.5 }} />}
+            {navigating && <Orbit aria-hidden className="pointer-events-none absolute z-20 text-foreground" style={{ top: fieldTopGap + 8, right: fieldRightGap + 8, width: 100, height: 100, opacity: 0.25 }} />}
           </div>
 
           {/* Top-left menu (+ the navigation control below it on mobile). */}
@@ -425,7 +428,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
 
           {/* Navigation controls hint (desktop only — touch gestures come later). */}
           {navigating && !mobile && (
-            <div className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2">
+            <div className="pointer-events-none absolute bottom-3 right-2">
               <NavHints />
             </div>
           )}

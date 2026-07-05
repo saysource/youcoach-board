@@ -9,7 +9,7 @@ function Kbd({ children }: { children: ReactNode }) {
 // only — touch gestures come later). Blender-style content, Excalidraw-style look.
 export function NavHints() {
   return (
-    <div className="pointer-events-none flex items-center gap-3 rounded-lg border border-border/60 bg-card/80 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm backdrop-blur-sm">
+    <div className="pointer-events-none flex items-center gap-3 px-3 py-1.5 text-[11px] text-muted-foreground">
       <span className="flex items-center gap-1"><Kbd>Drag</Kbd> rotate</span>
       <span className="text-border">·</span>
       <span className="flex items-center gap-1"><Kbd>Scroll</Kbd> zoom</span>
