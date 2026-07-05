@@ -1254,7 +1254,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function onContainerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only the LEFT button drives interactions (touch/pen primary press is 0 too).
     if (e.button !== 0) return
-    if (backgroundMode || homographyMode || cameraMode || zoneMode) return // calibration modes: only their own handles are active
+    if (backgroundMode || homographyMode || cameraMode || zoneMode || navigating) return // calibration/navigation: only their own handles are active
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
@@ -1471,7 +1471,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   function onElementPointerDown(e: React.PointerEvent, el: BoardElement) {
     if (e.button !== 0) return
-    if (creating || backgroundMode || homographyMode || cameraMode || zoneMode) return // calibration modes: elements are inert
+    if (creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating) return // calibration/navigation: elements are inert
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
@@ -2306,7 +2306,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           </>
         }
       >
-        <g style={{ pointerEvents: creating || backgroundMode || homographyMode || cameraMode || zoneMode || eraserTool || lassoTool ? 'none' : 'auto' }}>
+        <g style={{ pointerEvents: creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || eraserTool || lassoTool ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
             const live = liveElement(el)
             const erasing = erase?.ids.has(el.id)
