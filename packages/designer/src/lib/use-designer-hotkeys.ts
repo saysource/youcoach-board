@@ -30,8 +30,10 @@ export interface HotkeyDeps {
   /** Open the players / materials library drawer. */
   openPlayers: () => void
   openMaterials: () => void
-  /** Toggle 3D scene navigation (orbit) mode — bound to P. */
+  /** Toggle 3D scene navigation (orbit) mode — bound to W. */
   onToggleNav?: () => void
+  /** Whether scene navigation is currently active (so ESC can exit it). */
+  navigating?: boolean
   /** Quick-add a ball at board center. */
   addBall: () => void
   /** Toggle the alignment grid (optional until implemented). */
@@ -64,11 +66,16 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       // ⌥ combos: on macOS `e.key` becomes a special glyph (⌥S → "ß"), so match
       // the physical key via `e.code` (layout-independent, "KeyS").
 
-      // ── ESC: background mode → creation tool → clear selection ──────────────
+      // ── ESC: background mode → navigation → creation tool → clear selection ─
       if (key === 'Escape') {
         if (deps.bgEditing) {
           e.preventDefault()
           deps.finishBackground()
+          return
+        }
+        if (deps.navigating && deps.onToggleNav) {
+          e.preventDefault()
+          deps.onToggleNav() // exit scene navigation
           return
         }
         if (isCreationTool(s.activeTool)) s.setActiveTool('select')
@@ -133,8 +140,8 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       if (lower === 'f') { e.preventDefault(); if (deps.bgEditing) deps.finishBackground(); else deps.editBackground(); return }
       if (lower === 'g' && deps.toggleGrid) { e.preventDefault(); deps.toggleGrid(); return }
       if (lower === 'b') { deps.addBall(); return }
-      // P toggles 3D scene navigation (orbit) mode.
-      if (lower === 'p' && deps.onToggleNav) { e.preventDefault(); deps.onToggleNav(); return }
+      // W toggles 3D scene navigation (orbit) mode (left-hand-friendly).
+      if (lower === 'w' && deps.onToggleNav) { e.preventDefault(); deps.onToggleNav(); return }
       if (lower === 'm') { deps.openMaterials(); return }
       if (key === '?' && deps.showHelp) { e.preventDefault(); deps.showHelp(); return }
 

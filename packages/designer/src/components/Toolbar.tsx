@@ -154,7 +154,10 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
         </ToolButton>
       ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onEditBackground={onEditBackground} onFieldHomography={onFieldHomography} onFieldCamera={onFieldCamera} onFieldZones={onFieldZones} onPickFormation={onPickFormation} {...menuProps('more')} />
+      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onFieldHomography={onFieldHomography} onFieldCamera={onFieldCamera} onFieldZones={onFieldZones} onPickFormation={onPickFormation} {...menuProps('more')} />
+      <ToolButton label="Change field and edit background settings" onClick={onEditBackground}>
+        <SoccerFieldIcon />
+      </ToolButton>
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ToolButton label="Eraser" active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
         <Eraser />
@@ -283,7 +286,6 @@ function LinesMenu({
 function MoreToolsMenu({
   onToolChange,
   onOpenCategory,
-  onEditBackground,
   onFieldHomography,
   onFieldCamera,
   onFieldZones,
@@ -293,7 +295,6 @@ function MoreToolsMenu({
 }: {
   onToolChange: (tool: ToolId) => void
   onOpenCategory: (catId: string) => void
-  onEditBackground: () => void
   onFieldHomography: () => void
   onFieldCamera: () => void
   onFieldZones: () => void
@@ -328,8 +329,8 @@ function MoreToolsMenu({
         <TooltipContent>More tools</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-44">
-        {/* Figure macro-groups jump the drawer to a category. Fields are handled
-            by "Edit Background" below. */}
+        {/* Figure macro-groups jump the drawer to a category. Fields have their
+            own first-class "Change field" button in the toolbar. */}
         {catalog?.groups
           .filter((g) => g.id !== 'fields')
           .map((g) => {
@@ -374,10 +375,7 @@ function MoreToolsMenu({
         <DropdownMenuItem onSelect={() => onToolChange('lasso')}>
           <Lasso /> Lasso select
         </DropdownMenuItem>
-        {/* Enters background-edit mode (its own toolbar + fields-only drawer). */}
-        <DropdownMenuItem onSelect={onEditBackground}>
-          <SoccerFieldIcon /> Change Field
-        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {/* Calibrate the field-perspective homography (dev/authoring tool). */}
         <DropdownMenuItem onSelect={onFieldHomography}>
           <Grid3x3 /> Field homography

@@ -305,6 +305,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     openPlayers: () => playersCat && openCategory(playersCat),
     openMaterials: () => materialsCat && openCategory(materialsCat),
     onToggleNav: toggleNav,
+    navigating,
     addBall: () => addBall(catalog, store),
     showHelp: () => setShortcutsOpen(true),
     toggleGrid: () => setShowGrid((v) => !v),

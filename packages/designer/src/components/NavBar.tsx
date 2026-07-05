@@ -7,7 +7,7 @@ interface NavBarProps {
   /** Only shown when the drawing has a 3D field to navigate. */
   available: boolean
   navigating: boolean
-  /** Toggle navigation mode (also the P shortcut). */
+  /** Toggle navigation mode (also the W shortcut). */
   onToggle: () => void
   /** Restore the drawing's saved pose (the one set in Edit Background). */
   onReset: () => void
@@ -28,11 +28,11 @@ export function NavBar({ available, navigating, onToggle, onReset, onStore, mark
     <div className="pointer-events-auto flex items-center rounded-lg border border-border bg-card shadow-md">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" aria-label={navigating ? 'Exit navigation (P)' : 'Navigate scene (P)'} aria-pressed={navigating} onClick={onToggle} className={cn(navigating && 'text-primary')}>
+          <Button size="icon-sm" aria-label={navigating ? 'Exit navigation (W)' : 'Navigate scene (W)'} aria-pressed={navigating} onClick={onToggle} className={cn(navigating && 'text-primary')}>
             <Orbit />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{navigating ? 'Exit navigation (P)' : 'Navigate scene (P)'}</TooltipContent>
+        <TooltipContent>{navigating ? 'Exit navigation (W)' : 'Navigate scene (W)'}</TooltipContent>
       </Tooltip>
       {navigating && (
         <>

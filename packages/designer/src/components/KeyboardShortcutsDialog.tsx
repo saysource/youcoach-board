@@ -35,6 +35,7 @@ const TOOLS: Section = {
     { label: 'Materials drawer', combos: [['M']] },
     { label: 'Add ball', combos: [['B']] },
     { label: 'Edit background (field)', combos: [['F']] },
+    { label: 'Navigate scene (orbit)', combos: [['W']] },
     { label: 'Keep tool active', combos: [['Q']] },
   ],
 }
