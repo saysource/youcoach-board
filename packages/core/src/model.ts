@@ -51,7 +51,7 @@ export interface BoardBackground {
   figureScale: number
   /** Display scale for placed 3D objects (cones, hurdles, goals, …). The models
    *  are authored at real metric size; this multiplies them so small props stay
-   *  visible on a top-down board. 1 = real size, up to 4×. */
+   *  visible on a top-down board. 1 = real size, up to 8×. */
   objectScale: number
   /** YouCoach logo placement over the background, or null for none. */
   logo: LogoPosition | null

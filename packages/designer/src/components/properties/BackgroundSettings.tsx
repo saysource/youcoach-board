@@ -62,10 +62,10 @@ export function BackgroundSettings() {
           <span className="text-[11px] font-medium text-muted-foreground">Object size</span>
           <span className="text-[11px] tabular-nums text-muted-foreground">{bg.objectScale}× {bg.objectScale === 1 ? '(real)' : ''}</span>
         </div>
-        {/* Stepped 1×–4×: models are real-size, this scales them up for a top-down board. */}
+        {/* Stepped 1×–8×: models are real-size, this scales them up for a top-down board. */}
         <Slider
           min={1}
-          max={4}
+          max={8}
           step={1}
           value={[bg.objectScale]}
           onValueChange={([v]) => {
