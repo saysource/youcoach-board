@@ -361,6 +361,12 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                   <Check /> Finish editing background
                 </Button>
               </div>
+            ) : navigating ? (
+              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+                <Button size="sm" onClick={toggleNav} className="font-medium">
+                  <Orbit /> Exit navigation mode
+                </Button>
+              </div>
             ) : homographyEditing ? (
               <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishHomography} className="font-medium">
@@ -445,6 +451,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             categoryId={libraryCatId}
             onCategoryChange={selectCategory}
             fieldsOnly={bgEditing}
+            navPose={navPose}
           />
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />

@@ -11,7 +11,7 @@ import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
 import { makeCalibratedCamera } from '../lib/field-camera'
 import { zonesForField, categoriesForField, defaultZoneForField, FIELD_TYPE_OPTIONS, type ZoneCategory, type Zone } from '../lib/field-zones'
 import { useEditorStore } from '../store/context'
-import type { FieldType } from '@youcoach-board/core'
+import type { FieldType, FieldView } from '@youcoach-board/core'
 
 // Bundled zone preview thumbnails (generated from each zone's default pose),
 // keyed by zone id (…/zones/<id>.png).
@@ -54,6 +54,9 @@ interface LibraryDrawerProps {
   onCategoryChange: (id: string) => void
   /** Background-edit mode: restrict the category list to field categories. */
   fieldsOnly?: boolean
+  /** Session navigation pose (overrides the saved field3d for the current view), so
+   *  drops project through the pose the user actually sees. */
+  navPose?: FieldView | null
 }
 
 // Right-side figures library. Header hosts the relocated AI / fill-viewport / pin
@@ -61,7 +64,7 @@ interface LibraryDrawerProps {
 // list) over the selected category's element palette: facet filters (action /
 // facing, or material type) + a thumbnail grid; clicking a thumbnail drops the
 // figure centered on the board. Categories come from the catalog (assets).
-export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, fieldsOnly = false }: LibraryDrawerProps) {
+export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, fieldsOnly = false, navPose = null }: LibraryDrawerProps) {
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
   const setBackground = useEditorStore((s) => s.setBackground)
@@ -292,7 +295,10 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
         bx = clamp(p.x, 0, BOARD_WIDTH)
         by = clamp(p.y, 0, BOARD_HEIGHT)
       }
-      const cam = field3d ? makeCalibratedCamera(field3d) : makeArrow3DCamera()
+      // Project through the pose the user actually sees (nav override wins), so the
+      // ground spot matches the drop point on screen.
+      const eff = navPose ?? field3d
+      const cam = eff ? makeCalibratedCamera(eff) : makeArrow3DCamera()
       const g = boardToGround(bx, by, cam) ?? { x: 52.5, z: 34 }
       createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z))
       return
