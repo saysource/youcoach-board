@@ -142,6 +142,7 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       if (lower === 'b') { deps.addBall(); return }
       // W toggles 3D scene navigation (orbit) mode (left-hand-friendly).
       if (lower === 'w' && deps.onToggleNav) { e.preventDefault(); deps.onToggleNav(); return }
+      if (lower === 'p') { deps.openPlayers(); return }
       if (lower === 'm') { deps.openMaterials(); return }
       if (key === '?' && deps.showHelp) { e.preventDefault(); deps.showHelp(); return }
 
