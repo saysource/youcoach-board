@@ -339,7 +339,7 @@ function Object3DControls({ side }: { side: 'right' | 'top' }) {
   const p = usePropertyEditing()
   return (
     <>
-      {p.allObject3DColor && <ColorButton kind="stroke" label="Color" value={p.values.object3dColor} onChange={p.setObject3DColor} side={side} showOpacity={false} />}
+      {p.allObject3DColor && <ColorButton kind="fill" label="Color" value={p.values.object3dColor} onChange={p.setObject3DColor} side={side} showOpacity={false} />}
       <Object3DSettingsButton side={side} />
     </>
   )
