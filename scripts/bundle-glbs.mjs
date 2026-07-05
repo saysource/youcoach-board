@@ -18,6 +18,7 @@ const DEST = join(root, 'packages/designer/src/assets/objects')
 const LIB = join(root, 'packages/designer/src/lib')
 
 const MODELS = [
+  ['ball.glb', 'ball.glb', 'BALL_GLB_BASE64', 'ball-glb.ts'],
   ['cone.glb', 'cone.glb', 'CONE_GLB_BASE64', 'cone-glb.ts'],
   ['heigh_cone.glb', 'high_cone.glb', 'HIGH_CONE_GLB_BASE64', 'high-cone-glb.ts'],
   ['cone_hardle.glb', 'cone_hurdle.glb', 'CONE_HURDLE_GLB_BASE64', 'cone-hurdle-glb.ts'],

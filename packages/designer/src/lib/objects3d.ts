@@ -21,6 +21,7 @@ import { SPEED_LADDER_GLB_BASE64 } from './speed-ladder-glb'
 import { MANNEQUIN_GLB_BASE64 } from './mannequin-glb'
 import { WALL_MANNEQUIN_GLB_BASE64 } from './wall-mannequin-glb'
 import { BALANCE_DOME_GLB_BASE64 } from './balance-dome-glb'
+import { BALL_GLB_BASE64 } from './ball-glb'
 // The inflatable mannequin's "fake defender" drawing — a single black line-art
 // path, printed onto the front of the (tintable) mannequin body as a decal.
 import mannequinDecalRaw from '../assets/materials3d/mannequin_decal.svg?raw'
@@ -94,38 +95,6 @@ export function isObject3DRotatable(objectId: string): boolean {
   return !ROTATION_SYMMETRIC.has(objectId)
 }
 
-/** A simple soccer-ball texture: white with scattered black pentagons. */
-function soccerTexture(): THREE.Texture {
-  const c = document.createElement('canvas')
-  c.width = c.height = 256
-  const g = c.getContext('2d')!
-  g.fillStyle = '#fafafa'
-  g.fillRect(0, 0, 256, 256)
-  g.fillStyle = '#141414'
-  const penta = (cx: number, cy: number, r: number, rot: number) => {
-    g.beginPath()
-    for (let i = 0; i < 5; i++) {
-      const a = rot + (i * 2 * Math.PI) / 5 - Math.PI / 2
-      const x = cx + r * Math.cos(a)
-      const y = cy + r * Math.sin(a)
-      if (i) g.lineTo(x, y)
-      else g.moveTo(x, y)
-    }
-    g.closePath()
-    g.fill()
-  }
-  // A spread of pentagons (wraps around the sphere's UV — approximate but reads
-  // clearly as a soccer ball).
-  const spots: Array<[number, number]> = [
-    [46, 60], [128, 34], [210, 66], [88, 128], [172, 132], [40, 200], [128, 214], [216, 196],
-  ]
-  spots.forEach(([x, y], i) => penta(x, y, 26, i * 0.7))
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.anisotropy = 4
-  return tex
-}
-
 /** Decode a base64 string into an ArrayBuffer (sync — no fetch). */
 function base64ToArrayBuffer(b64: string): ArrayBuffer {
   const bin = atob(b64)
@@ -144,7 +113,8 @@ const COMPONENT: Record<number, { array: Float32ArrayConstructor | Uint16ArrayCo
 const NUM_COMPONENTS: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }
 
 interface GlbJson {
-  meshes: Array<{ primitives: Array<{ attributes: Record<string, number>; indices?: number }> }>
+  meshes: Array<{ primitives: Array<{ attributes: Record<string, number>; indices?: number; material?: number }> }>
+  materials?: Array<{ pbrMetallicRoughness?: { baseColorFactor?: number[] } }>
   accessors: Array<{ bufferView: number; componentType: number; count: number; type: string; byteOffset?: number }>
   bufferViews: Array<{ byteOffset?: number; byteLength: number }>
 }
@@ -209,6 +179,44 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
   if (totalIdx) geom.setIndex(new THREE.BufferAttribute(indices, 1))
   if (!hasNormals) geom.computeVertexNormals()
   return geom
+}
+
+/** Like parseGlbGeometry but keeps each primitive SEPARATE, paired with its
+ *  material's base colour — for multi-material models we render one mesh per
+ *  material (e.g. the two-tone soccer ball's white shell + black patches). */
+function parseGlbByMaterial(buf: ArrayBuffer): { geometry: THREE.BufferGeometry; color: THREE.Color }[] {
+  const dv = new DataView(buf)
+  let json: GlbJson | null = null
+  let bin: ArrayBuffer | null = null
+  let off = 12
+  while (off < dv.byteLength) {
+    const len = dv.getUint32(off, true)
+    const type = dv.getUint32(off + 4, true)
+    const start = off + 8
+    if (type === 0x4e4f534a) json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, start, len))) as GlbJson
+    else if (type === 0x004e4942) bin = buf.slice(start, start + len)
+    off = start + len + ((4 - (len % 4)) % 4)
+  }
+  if (!json || !bin) throw new Error('glb: missing JSON or BIN chunk')
+  const read = (accessorIndex: number) => {
+    const acc = json!.accessors[accessorIndex]
+    const bv = json!.bufferViews[acc.bufferView]
+    const comp = COMPONENT[acc.componentType]
+    const byteOffset = (bv.byteOffset ?? 0) + (acc.byteOffset ?? 0)
+    return new comp.array(bin!, byteOffset, acc.count * NUM_COMPONENTS[acc.type])
+  }
+  return json.meshes[0].primitives.map((p) => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(read(p.attributes.POSITION) as Float32Array, 3))
+    if (p.attributes.NORMAL != null) geometry.setAttribute('normal', new THREE.BufferAttribute(read(p.attributes.NORMAL) as Float32Array, 3))
+    else geometry.computeVertexNormals()
+    if (p.indices != null) geometry.setIndex(new THREE.BufferAttribute(read(p.indices), 1))
+    geometry.computeBoundingBox()
+    const f = json!.materials?.[p.material ?? -1]?.pbrMetallicRoughness?.baseColorFactor
+    // Use the base colour as the toon display colour (crisp white / near-black patches).
+    const color = f ? new THREE.Color().setRGB(f[0], f[1], f[2], THREE.SRGBColorSpace) : new THREE.Color(0xffffff)
+    return { geometry, color }
+  })
 }
 
 // Parse a GLB object once per id, lazily, at its authored REAL metric size with
@@ -412,9 +420,29 @@ export function buildObject3D(objectId: string): THREE.Object3D {
     mesh.castShadow = true
     return mesh
   }
-  // ball (default)
-  const mat = new THREE.MeshToonMaterial({ color: 0xffffff, map: soccerTexture() })
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 40, 28), mat)
-  mesh.castShadow = true
-  return mesh
+  return buildBall() // ball (default)
+}
+
+// The real (GLB) soccer ball: a two-tone toon model (white shell + black patches),
+// authored to rest with its ORIGIN on the ground and its CENTRE ~0.10 m up, so the
+// whole ball sits a little above the surface (never half-buried by the y=0 clip).
+let ballPrims: { geometry: THREE.BufferGeometry; color: THREE.Color }[] | null = null
+function buildBall(): THREE.Group {
+  if (!ballPrims) ballPrims = parseGlbByMaterial(base64ToArrayBuffer(BALL_GLB_BASE64))
+  const group = new THREE.Group()
+  let shell: THREE.BufferGeometry | null = null // largest primitive → silhouette ink
+  for (const { geometry, color } of ballPrims) {
+    const g = geometry.clone()
+    const mesh = new THREE.Mesh(g, extremeToon(color.getHex(THREE.SRGBColorSpace)))
+    mesh.castShadow = true
+    group.add(mesh)
+    if (!shell || g.boundingBox!.getSize(new THREE.Vector3()).length() > shell.boundingBox!.getSize(new THREE.Vector3()).length()) shell = g
+  }
+  if (shell) {
+    const s = shell.boundingBox!.getSize(new THREE.Vector3())
+    const outlineOffset = OUTLINE_FRACTION * ([s.x, s.y, s.z].sort((a, b) => a - b)[1] || 1)
+    group.add(toonOutline(shell, outlineOffset))
+  }
+  group.userData.originAtGround = true // keep the authored height (don't re-rest)
+  return group
 }

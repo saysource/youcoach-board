@@ -140,7 +140,11 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         // crease shells, which would lift it a few cm and leave a floating gap).
         // Groups (goals) have no single geometry → use the full box.
         const asMesh = obj as THREE.Mesh
-        if (asMesh.isMesh && asMesh.geometry) {
+        if (obj.userData.originAtGround) {
+          // Authored to sit on the ground via its own origin (e.g. the ball, whose
+          // centre is ~0.10 m up) — keep that height instead of re-resting it.
+          obj.userData.baseMinY = 0
+        } else if (asMesh.isMesh && asMesh.geometry) {
           if (!asMesh.geometry.boundingBox) asMesh.geometry.computeBoundingBox()
           // Lift so the outline's underside clears the y=0 clip plane (the outline
           // dips ~outlineOffset below the mesh; ×1.4 gives a touch of clearance so
