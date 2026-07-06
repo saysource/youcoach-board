@@ -15,7 +15,7 @@ import {
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
 import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox, nextTokenText } from '../lib/draw'
-import { reprojectChanges } from '../lib/field-anchor'
+import { reprojectChanges, withGroundAnchors } from '../lib/field-anchor'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -483,7 +483,9 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         const after3d = next.field3d
         const reproj =
           'field3d' in patch && before3d && after3d && JSON.stringify(before3d) !== JSON.stringify(after3d)
-            ? reprojectChanges(doc.elements, before3d, after3d, { tokenPerspective: get().tokenPerspective })
+            // Derive ground anchors on the fly so EVERY pinnable element remaps to the
+            // new pose — not only those already pinned via Edit-Background.
+            ? reprojectChanges(withGroundAnchors(doc.elements, before3d), before3d, after3d, { tokenPerspective: get().tokenPerspective })
             : []
         if (txn) {
           // Capture the pre-transaction background once; apply live (no stack push).

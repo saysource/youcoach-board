@@ -77,7 +77,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, reprojectChanges, withGroundAnchors } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -546,6 +546,25 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     return () => commitTransaction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing3d])
+
+  // Entering navigation pins elements to the field the same way (ONE undoable step,
+  // no transaction): it converts rectangles/ovals to warp-able polylines and derives
+  // every element's ground anchor, so ALL of them (not just figures/lines) reproject
+  // as the view orbits and get remapped onto the pose kept on exit.
+  const navPinnedRef = useRef(false)
+  useEffect(() => {
+    if (!navigating) {
+      navPinnedRef.current = false
+      return
+    }
+    if (navPinnedRef.current) return
+    navPinnedRef.current = true
+    const cam = doc.background.field3d
+    if (!cam) return
+    const refTokenId = selectedIds.find((id) => doc.elements.find((e) => e.id === id)?.type === 'token')
+    pinSetup(buildPinOps(doc.elements, cam, { syncTokenSizes, refTokenId }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigating])
 
   // Toggling a token preference (perspective / sync) re-sizes all tokens at once
   // for the current camera — so the change is visible immediately, not only on the
@@ -1212,6 +1231,21 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   const selectedEls = doc.elements.filter((e) => selectedSet.has(e.id))
   const liveSelected = selectedEls.map(liveElement)
+
+  // Navigation is view-only: it changes the session pose (navPose) without touching
+  // the drawing's saved pose, so the 2D SVG elements (figures/tokens/arrows/lines)
+  // would stay frozen at their saved-pose spots while the 3D field + 3D objects/
+  // arrows orbit to navPose. Reproject the ground-pinned ones to navPose at RENDER
+  // time (non-destructive — no doc mutation) so the whole scene orbits together.
+  const navReproject = useMemo(() => {
+    const saved = doc.background.field3d
+    if (!navigating || !navPose || !saved || JSON.stringify(navPose) === JSON.stringify(saved)) return null
+    const map = new Map<string, ReturnType<typeof reprojectChanges>[number]['after']>()
+    // Derive ground anchors on the fly for elements that never went through a pin
+    // pass (Edit-Background), so ALL figures/polylines follow the orbiting field.
+    for (const ch of reprojectChanges(withGroundAnchors(doc.elements, saved), saved, navPose, { tokenPerspective })) map.set(ch.id, ch.after)
+    return map
+  }, [navigating, navPose, doc.background.field3d, doc.elements, tokenPerspective])
 
   function startMove(ids: string[], from: Point, pointerId: number, presetOrigins?: Record<string, ElementTransform>) {
     // ⌥-drag duplicates first: the clones aren't in `doc` yet this render, so their
@@ -2310,7 +2344,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       >
         <g style={{ pointerEvents: creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || eraserTool || lassoTool ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
-            const live = liveElement(el)
+            const base = liveElement(el)
+            // Follow the orbiting field during navigation (render-only reprojection).
+            const navPatch = navReproject?.get(el.id)
+            const live = navPatch ? ({ ...base, ...navPatch } as BoardElement) : base
             const erasing = erase?.ids.has(el.id)
             // Hide the token field being edited (the HTML input shows the live
             // value) ONLY in the rendered element — the selection chrome still

@@ -207,6 +207,29 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera, opts?: {
   return ops
 }
 
+/** Return `elements` with each figure/token/polyline's ground anchor derived under
+ *  `cfg` when it lacks one (figures/tokens also gain `sizeM`), so they can be
+ *  reprojected without a prior Edit-Background pin pass — e.g. to follow the
+ *  orbiting field during (view-only) navigation. Elements that already carry a
+ *  ground anchor, and non-pinnable types, are returned unchanged. */
+export function withGroundAnchors(elements: BoardElement[], cfg: PosedCamera): BoardElement[] {
+  const cam = makeCalibratedCamera(cfg)
+  return elements.map((el) => {
+    if ((el.type === 'figure' || el.type === 'token') && !el.ground) {
+      const bc = bottomCenterBoard(el)
+      const g = boardToGround(bc.x, bc.y, cam)
+      if (!g) return el
+      const sizeM = (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
+      return { ...el, ground: [g.x, g.z] as [number, number], sizeM }
+    }
+    if (el.type === 'polyline' && !el.ground) {
+      const g = polylineGround(el, cam)
+      return g ? { ...el, ground: g } : el
+    }
+    return el
+  })
+}
+
 /** Reproject every pinned element from the `before` camera to `after`:
  *   - figure/token: reposition its bottom-center to `projectGround(ground)` and
  *     resize ABSOLUTELY from its stored metric height (`sizeM × ground-ppm`), so

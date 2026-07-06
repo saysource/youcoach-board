@@ -12,6 +12,7 @@ import { cn } from '../lib/cn'
 import { useAssets, figureColorInfo, figureIndex, figureBaseSize, fieldFigureScale } from '../lib/assets'
 import { playerSvgs, PLAYER_SLOTS } from '../lib/player-kit'
 import { isObject3DPlayer } from '../lib/objects3d'
+import { topViewForField } from '../lib/field-zones'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
 import { addBall } from '../lib/quick-add'
@@ -168,6 +169,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // (background.field3d). Store persists it; Reset restores the saved pose; P
   // toggles the mode (exiting keeps the current view). Only when a 3D field exists.
   const savedField3d = useEditorStore((s) => s.doc.background.field3d)
+  const navFieldType = useEditorStore((s) => s.doc.background.fieldType)
   const [navigating, setNavigating] = useState(false)
   const [navPose, setNavPose] = useState<FieldView | null>(null)
   const [navMarkers, setNavMarkers] = useState(false) // numbered position markers, off by default
@@ -175,7 +177,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const navAvailable = !!savedField3d && !bgEditing && !homographyEditing && !cameraEditing && !zoneEditing
   function toggleNav() {
     if (navigating) {
-      setNavigating(false) // exit — keep the current view (navPose stays)
+      // Exit keeps the navigated view, so make it the drawing's actual pose: this
+      // remaps the 2D elements onto it (their 3D ground anchor drives the 2D spot).
+      // Otherwise the field stays at the temp pose while the elements snap back to
+      // the saved-pose coordinates — i.e. the wrong place.
+      if (navPose && JSON.stringify(navPose) !== JSON.stringify(savedField3d)) setBackground({ field3d: navPose })
+      setNavPose(null)
+      setNavigating(false)
       return
     }
     if (!navAvailable) return
@@ -188,6 +196,11 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   }
   function storeNav() {
     if (navPose) setBackground({ field3d: navPose }) // this pose becomes the default
+  }
+  // Snap straight down to a top view of the current field (the overlay flies to it).
+  function topViewNav() {
+    const ref = (navPose ?? savedField3d)?.ref ?? 'soccer11'
+    setNavPose(topViewForField(navFieldType, ref))
   }
   // A bare click (no drag) while navigating nudges the Exit button, since editing
   // works differently here and users may expect to click the scene to select/move.
@@ -365,7 +378,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {/* Top-left menu (+ the navigation control below it on mobile). */}
           <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
             <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} />
-            {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} />}
+            {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} onTopView={topViewNav} />}
           </div>
 
           {/* Main toolbar — top-center, or bottom-center in mobile mode. In
@@ -445,7 +458,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
               <ZoomBar />
               <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
-              <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} />
+              <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} onTopView={topViewNav} />
             </div>
           )}
 

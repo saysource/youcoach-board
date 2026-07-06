@@ -8,7 +8,7 @@
 // carry BACKGROUND overrides (goals on/off, bands) applied when it's selected — so
 // e.g. a training area can offer "with goals" and "without goals" presets.
 
-import type { FieldType, FieldBands, TrainingLayout } from '@youcoach-board/core'
+import type { FieldType, FieldBands, TrainingLayout, FieldView } from '@youcoach-board/core'
 import type { CameraConfig } from './field-camera'
 
 export type ZoneCategory = 'top' | 'perspective'
@@ -97,6 +97,16 @@ const CATEGORY_LABELS: Record<ZoneCategory, string> = { top: 'Top View', perspec
 // TYPE changes (so tuning the slider or re-picking a layout isn't clobbered).
 export function defaultObjectScaleForField(fieldType: FieldType): number {
   return fieldType === 'training' ? 8 : 4
+}
+
+// A straight-down "top view" pose framing the whole field of a given type (reuses
+// the tested full-top / training-top heights). The camera sits directly above the
+// centre with a hair of z-offset so the field reads horizontally and OrbitControls
+// keeps a stable "up". Used by the navigation toolbar's top-view shortcut; keeps
+// the current pitch `ref`.
+export function topViewForField(fieldType: FieldType, ref = 'soccer11'): FieldView {
+  const h = fieldType === 'training' ? 38 : 100
+  return { ref, position: [52.5, h, 34.5], target: [52.5, 0, 34], fov: 50 }
 }
 
 /** Zones for a field type. */
