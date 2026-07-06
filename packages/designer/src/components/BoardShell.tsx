@@ -11,6 +11,7 @@ import type { Breakpoint } from '../lib/use-breakpoint'
 import { cn } from '../lib/cn'
 import { useAssets, figureColorInfo, figureIndex, figureBaseSize, fieldFigureScale } from '../lib/assets'
 import { playerSvgs, PLAYER_SLOTS } from '../lib/player-kit'
+import { isObject3DPlayer } from '../lib/objects3d'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
 import { addBall } from '../lib/quick-add'
@@ -214,6 +215,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     const remember = () => {
       if (selectedIds.length !== 1) return
       const el = elements.find((e) => e.id === selectedIds[0])
+      // A selected 3D player's skin/kit slots become the next player's defaults too.
+      if (el?.type === 'object3d' && isObject3DPlayer(el.objectId) && el.colors) {
+        const kit: Record<string, string> = {}
+        for (const slot of PLAYER_SLOTS) if (el.colors[slot]) kit[slot] = el.colors[slot]
+        if (Object.keys(kit).length) rememberPlayerColors(kit)
+        return
+      }
       if (!el || el.type !== 'figure') return
       const info = figureColorInfo(catalog).get(el.figureId)
       if (info?.action && info.slots.length) {

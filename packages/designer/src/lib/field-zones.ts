@@ -90,6 +90,15 @@ export const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
 
 const CATEGORY_LABELS: Record<ZoneCategory, string> = { top: 'Top View', perspective: 'Perspective' }
 
+// Default "materials scale" (background.objectScale) per field type. The full pitch
+// is ~105×68 m so real-size 3D materials/players need 4× to read; the training area
+// is ~40×30 m (≈2.6× smaller), where the same pieces look tiny — start it larger so
+// a drill's cones/players/goals are legible by default. Applied only when the field
+// TYPE changes (so tuning the slider or re-picking a layout isn't clobbered).
+export function defaultObjectScaleForField(fieldType: FieldType): number {
+  return fieldType === 'training' ? 8 : 4
+}
+
 /** Zones for a field type. */
 export function zonesForField(fieldType: FieldType): Zone[] {
   return FIELD_ZONES.filter((z) => z.fieldType === fieldType)

@@ -1,6 +1,7 @@
 import { type ComponentType, type ReactNode } from 'react'
 import {
   SlidersHorizontal,
+  Box,
   MoreHorizontal,
   CopyPlus,
   FlipHorizontal2,
@@ -138,8 +139,13 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
             <TextSettingsButton side="right" />
           </>
         ) : p.allPlayer ? (
-          // Player: skin/kit editors + opacity in one settings popover.
-          <PlayerSettingsButton side="right" />
+          // Player: skin/kit editors + opacity in one settings popover. 3D player
+          // characters additionally keep the object size controls (no body color —
+          // their look is the skin/kit, not a tint).
+          <>
+            <PlayerSettingsButton side="right" />
+            {p.allObject3D && <Object3DSettingsButton side="right" />}
+          </>
         ) : p.allArrow3d ? (
           // 3D arrow: colour + a settings popover (opacity + geometry).
           <Arrow3DControls side="right" />
@@ -340,6 +346,10 @@ function Object3DControls({ side }: { side: 'right' | 'top' }) {
   return (
     <>
       {p.allObject3DColor && <ColorButton kind="fill" label="Color" value={p.values.object3dColor} onChange={p.setObject3DColor} side={side} showOpacity={false} />}
+      {/* Per-part colors for multi-material objects (e.g. flag pole: Pole + Flag). */}
+      {p.object3dSlots.map((s) => (
+        <ColorButton key={s.id} kind="fill" label={s.label} value={p.values.object3dSlotColors[s.id]} onChange={(c) => p.setObject3DSlotColor(s.id, c)} side={side} showOpacity={false} />
+      ))}
       <Object3DSettingsButton side={side} />
     </>
   )
@@ -368,7 +378,7 @@ function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <Button size="icon" aria-label="Object size">
-              <SlidersHorizontal />
+              <Box />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>

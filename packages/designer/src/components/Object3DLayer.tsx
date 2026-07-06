@@ -8,7 +8,12 @@ import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement } from '@youcoach-board
 import { makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
 import { SUN_POSITION, SUN_TARGET } from '../lib/field3d'
-import { buildObject3D, isObject3DColorable, isObject3DGoal, object3dDefaultColor, onObject3DAssetReady } from '../lib/objects3d'
+import { buildObject3D, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots } from '../lib/objects3d'
+
+// A 3D player is near real human height, so it reads well at a modest multiplier;
+// beyond this the materials scale would make players cartoonishly large (esp. on
+// the small training area). Cones/hurdles/etc. keep the full materials scale.
+const PLAYER_SCALE_CAP = 4
 
 /** Imperative API to hit-test 3D objects (they aren't SVG, so InteractiveBoard
  *  can't click them through the normal element handlers). */
@@ -160,7 +165,12 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       // mesh, floored at ×1 (never smaller than real). Goals are real-metric
       // structural objects, so they ignore the global "make materials bigger" scale.
       const rel = e.useGlobalSize ? 1 : e.size
-      const scale = isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(1, rel * objectScale)
+      // Goals are real-metric structural objects (ignore the global scale). 3D
+      // players are near real height, so they'd balloon at a high materials scale
+      // (e.g. the training area's) — cap their multiplier so raising the materials
+      // default enlarges cones/hurdles without turning players into giants.
+      const mult = isObject3DPlayer(e.objectId) ? Math.min(objectScale, PLAYER_SCALE_CAP) : objectScale
+      const scale = isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(1, rel * mult)
       obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
       obj.position.set(e.x, -baseMinY * scale, e.z)
@@ -174,6 +184,22 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         if (m instanceof THREE.MeshToonMaterial) {
           const c = e.fill && e.fill !== 'transparent' ? e.fill : object3dDefaultColor(e.objectId)
           m.color.set(c)
+        }
+      }
+      // Live per-part recolor for multi-material objects (flag pole: pole + flag).
+      if (isObject3DMultiColor(e.objectId)) recolorObject3DSlots(obj, e.objectId, e.colors)
+      // Live kit for 3D players: swap the material's atlas when the element's
+      // recolor slots change. Cheap per sync — looks are cached + shared, and
+      // while the base images still decode this returns the plain-atlas stand-in
+      // (the asset-ready re-render then lands the real one).
+      if (isObject3DPlayer(e.objectId)) {
+        const m = (obj as THREE.Mesh).material
+        if (m instanceof THREE.MeshToonMaterial) {
+          const kit = playerKitTexture(e.objectId, e.colors)
+          if (m.map !== kit) {
+            m.map = kit
+            m.needsUpdate = true
+          }
         }
       }
     }

@@ -42,6 +42,9 @@ import playerManCTex from '../assets/players3d/player_man_c.png?inline'
 import playerWomanATex from '../assets/players3d/player_woman_a.png?inline'
 import playerWomanBTex from '../assets/players3d/player_woman_b.png?inline'
 import playerWomanCTex from '../assets/players3d/player_woman_c.png?inline'
+// The "PLAYER 10" prints (white, alpha elsewhere), extracted from the pack's
+// hi-res atlas — drawn back on top after the kit blocks are recolored.
+import playerKitPrint from '../assets/players3d/kit_print.png?inline'
 
 // GLB-backed objects: embedded model bytes + toon colour. The models are authored
 // at real metric scale with their base on the ground (y=0), so they render as-is
@@ -58,7 +61,56 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   wall_mannequin: { data: WALL_MANNEQUIN_GLB_BASE64, color: 0x9aa3ab },
   balance_dome: { data: BALANCE_DOME_GLB_BASE64, color: 0x2aa8a8 },
   agility_pole: { data: AGILITY_POLE_GLB_BASE64, color: 0xdc3838 }, // slalom pole; recolorable
-  flag_pole: { data: FLAG_POLE_GLB_BASE64, color: 0x2f74d0 }, // pole + cloth flag; recolorable
+}
+
+// Multi-material GLBs rendered with their AUTHORED per-material toon colours (one
+// mesh per primitive), so a model can carry more than one colour — e.g. the flag
+// pole's pole vs cloth. Unlike GLB_OBJECTS these are NOT recolorable in the picker
+// (the colours live in the model's materials); real-metric size like GLB_OBJECTS.
+const MULTI_GLB_OBJECTS: Record<string, string> = {
+  flag_pole: FLAG_POLE_GLB_BASE64,
+}
+
+// Per-part recolor slots for a multi-material object: each slot maps to the GLB
+// primitive whose MATERIAL NAME contains the slot id (e.g. slot "pole" ← material
+// "Material.Pole"), and carries a default CSS colour. The element stores overrides
+// in `colors[slotId]`; absent → the default. Exposed to the properties panel.
+export interface Object3DColorSlot {
+  id: string
+  label: string
+  default: string
+}
+const MULTI_SLOTS: Record<string, Object3DColorSlot[]> = {
+  flag_pole: [
+    { id: 'pole', label: 'Pole', default: '#f2c200' }, // yellow
+    { id: 'flag', label: 'Flag', default: '#dc3838' }, // red
+  ],
+}
+
+/** The recolor slots a multi-material object exposes (empty if none). */
+export function object3dColorSlots(objectId: string): Object3DColorSlot[] {
+  return MULTI_SLOTS[objectId] ?? []
+}
+export function isObject3DMultiColor(objectId: string): boolean {
+  return objectId in MULTI_SLOTS
+}
+/** The default CSS colour for one of an object's slots. */
+export function object3dSlotDefault(objectId: string, slot: string): string {
+  return MULTI_SLOTS[objectId]?.find((s) => s.id === slot)?.default ?? '#ffffff'
+}
+
+/** Live-recolor a multi-material object's per-slot toon meshes from the element's
+ *  `colors` overrides (missing slot → its default). Outline/crease children carry
+ *  no slot tag and keep their black ink. Called by Object3DLayer each sync. */
+export function recolorObject3DSlots(obj: THREE.Object3D, objectId: string, colors: Record<string, string> | undefined): void {
+  const slots = MULTI_SLOTS[objectId]
+  if (!slots) return
+  obj.traverse((o) => {
+    const slot = (o.userData as { slot?: string }).slot
+    if (!slot) return
+    const mat = (o as THREE.Mesh).material
+    if (mat instanceof THREE.MeshToonMaterial) mat.color.set(colors?.[slot] ?? object3dSlotDefault(objectId, slot))
+  })
 }
 
 // 3D players: static Studio Ochi character meshes baked in a neutral standing
@@ -93,7 +145,7 @@ export function isKnownObject(id: string): id is Object3DKind {
 // at real metric size, so they drop in at ×1; the procedural ball/cube fall back
 // to the caller's nominal default.
 export function defaultObject3DSize(objectId: string, fallback: number): number {
-  if (objectId in GLB_OBJECTS || objectId in GOALS || objectId in PLAYER_GLBS) return 1
+  if (objectId in GLB_OBJECTS || objectId in GOALS || objectId in PLAYER_GLBS || objectId in MULTI_GLB_OBJECTS) return 1
   return fallback
 }
 
@@ -107,6 +159,12 @@ export function isObject3DColorable(objectId: string): boolean {
 // the "make materials bigger" default doesn't balloon regulation goals.
 export function isObject3DGoal(objectId: string): boolean {
   return objectId in GOALS
+}
+
+// A 3D player character: no body tint, but skin/hair + kit recoloring via the
+// element's `colors` slots (the same slot names as the 2D figure players).
+export function isObject3DPlayer(objectId: string): boolean {
+  return objectId in PLAYER_GLBS
 }
 
 // The authored default tint for a colorable object (as a CSS hex), used to seed a
@@ -144,7 +202,7 @@ const NUM_COMPONENTS: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VE
 
 interface GlbJson {
   meshes: Array<{ primitives: Array<{ attributes: Record<string, number>; indices?: number; material?: number }> }>
-  materials?: Array<{ pbrMetallicRoughness?: { baseColorFactor?: number[] } }>
+  materials?: Array<{ name?: string; pbrMetallicRoughness?: { baseColorFactor?: number[] }; doubleSided?: boolean }>
   accessors: Array<{ bufferView: number; componentType: number; count: number; type: string; byteOffset?: number }>
   bufferViews: Array<{ byteOffset?: number; byteLength: number }>
   nodes?: Array<{ mesh?: number; children?: number[]; matrix?: number[]; translation?: number[]; rotation?: number[]; scale?: number[] }>
@@ -250,7 +308,7 @@ function parseGlbGeometry(buf: ArrayBuffer): THREE.BufferGeometry {
 /** Like parseGlbGeometry but keeps each primitive SEPARATE, paired with its
  *  material's base colour — for multi-material models we render one mesh per
  *  material (e.g. the two-tone soccer ball's white shell + black patches). */
-function parseGlbByMaterial(buf: ArrayBuffer): { geometry: THREE.BufferGeometry; color: THREE.Color }[] {
+function parseGlbByMaterial(buf: ArrayBuffer): { geometry: THREE.BufferGeometry; color: THREE.Color; doubleSided: boolean; name: string }[] {
   const dv = new DataView(buf)
   let json: GlbJson | null = null
   let bin: ArrayBuffer | null = null
@@ -280,10 +338,11 @@ function parseGlbByMaterial(buf: ArrayBuffer): { geometry: THREE.BufferGeometry;
     if (p.indices != null) geometry.setIndex(new THREE.BufferAttribute(read(p.indices), 1))
     geometry.applyMatrix4(nodeMat)
     geometry.computeBoundingBox()
-    const f = json!.materials?.[p.material ?? -1]?.pbrMetallicRoughness?.baseColorFactor
+    const mat = json!.materials?.[p.material ?? -1]
+    const f = mat?.pbrMetallicRoughness?.baseColorFactor
     // Use the base colour as the toon display colour (crisp white / near-black patches).
     const color = f ? new THREE.Color().setRGB(f[0], f[1], f[2], THREE.SRGBColorSpace) : new THREE.Color(0xffffff)
-    return { geometry, color }
+    return { geometry, color, doubleSided: !!mat?.doubleSided, name: mat?.name ?? '' }
   })
 }
 
@@ -305,8 +364,8 @@ function glbGeometry(id: string, data: string): THREE.BufferGeometry {
 
 /** An extreme cel-shaded toon material: a hard, high-contrast 3-tone gradient
  *  that splits the surface into bold light/mid/shadow bands. */
-function extremeToon(color: number): THREE.MeshToonMaterial {
-  return new THREE.MeshToonMaterial({ color, gradientMap: toonGradientMap() })
+function extremeToon(color: number, side: THREE.Side = THREE.FrontSide): THREE.MeshToonMaterial {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonGradientMap(), side })
 }
 
 /** Black ink strokes along the geometry's hard edges (creases/rims — e.g. the
@@ -456,27 +515,160 @@ function mannequinDecal(geom: THREE.BufferGeometry, pushOut: number): THREE.Mesh
 }
 
 /* ---- 3D-player kit textures --------------------------------------------------
- * The player GLBs ship UVs but no image; the kit atlas (a tiny inlined PNG) is
- * loaded into a shared texture per character. Decoding a data URI is async, so a
- * player placed before its kit finishes decoding renders untextured for a frame —
- * subscribers (Object3DLayer) are notified to re-render when a kit becomes ready. */
-const kitTextures = new Map<string, THREE.Texture>()
+ * The player GLBs ship UVs but no image. The kit is applied at runtime: the
+ * character's own atlas (a tiny inlined 1024×128 strip of flat-colour blocks)
+ * is the base look, and the element's `colors` slots recolor its blocks on a
+ * canvas. The atlas layout (empirically mapped, identical for all six
+ * characters; 8 blocks of 128px):
+ *   0 hair · 1 skin · 2 sleeves+socks · 3 jersey back (big print) ·
+ *   4 jersey front (small print) · 5 shorts · 6 shoes · 7 unused
+ * The white "PLAYER 10" prints live in a separate alpha overlay (kit_print.png)
+ * drawn back on top, so recoloring never erases them. Texture-space vertical is
+ * body-vertical, so stripe styles draw exactly as named.
+ *
+ * Decoding data-URI images is async — a player placed before its images decode
+ * renders with a stand-in for a frame; subscribers (Object3DLayer) are notified
+ * to re-render when assets become ready. */
+const KIT_W = 1024
+const KIT_H = 128
+const BLOCK = KIT_W / 8
+const HAIR_BLOCK = 0
+const SKIN_BLOCK = 1
+const SOCKS_BLOCK = 2
+const JERSEY_BLOCKS = [3, 4] // back (big print) + front (small print)
+const SHORTS_BLOCK = 5
+// The sleeve caps/long sleeves: the pack UV'd them inconsistently (into the socks
+// block on some characters, the shorts block on others), so our GLB exports remap
+// every character's sleeve faces to the last half-block (col 15, unused by the
+// pack) — a first-class region we control. Sleeves follow the JERSEY colour.
+const SLEEVE_X = 960 // .. KIT_W
+// The jersey UV islands span this sub-range of their 128px block (measured from
+// the meshes). Vertical stripes are drawn across the ISLAND, not the block, so
+// front and back patterns meet continuously at the side seams.
+const JERSEY_ISLAND_X0 = 14
+const JERSEY_ISLAND_X1 = 114
+const V_STRIPE_BANDS = 6 // 3 jersey + 3 stripe
+
+// The recolor slots (same names as the 2D figure players — see player-kit.ts).
+const SLOT_SKIN = 'yc-skin'
+const SLOT_HAIR = 'yc-hair'
+const SLOT_JERSEY = 'yc-color-1'
+const SLOT_SHORTS = 'yc-color-2'
+const SLOT_VSTRIPE = 'v_stripe'
+const SLOT_HSTRIPE = 'h_stripe'
+const SLOT_SOCKS = 'socks'
+const KIT_SLOTS = [SLOT_SKIN, SLOT_HAIR, SLOT_JERSEY, SLOT_SHORTS, SLOT_VSTRIPE, SLOT_HSTRIPE, SLOT_SOCKS]
+
 const assetReadyCbs = new Set<() => void>()
 /** Subscribe to "a lazily-decoded 3D asset became ready" (returns unsubscribe). */
 export function onObject3DAssetReady(cb: () => void): () => void {
   assetReadyCbs.add(cb)
   return () => assetReadyCbs.delete(cb)
 }
-function playerKitTexture(objectId: string): THREE.Texture {
-  let tex = kitTextures.get(objectId)
-  if (!tex) {
-    tex = new THREE.TextureLoader().load(PLAYER_GLBS[objectId].texture, () => {
-      for (const cb of assetReadyCbs) cb()
-    })
+function notifyAssetReady() {
+  for (const cb of assetReadyCbs) cb()
+}
+
+// Decoded base images: character atlases + the print overlay, keyed by id.
+const kitImages = new Map<string, HTMLImageElement>()
+function kitImage(key: string, dataUri: string): HTMLImageElement | null {
+  let img = kitImages.get(key)
+  if (!img) {
+    img = new Image()
+    img.onload = notifyAssetReady
+    img.src = dataUri
+    kitImages.set(key, img)
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null
+}
+
+/** The cache key a set of colors resolves to (order-stable, kit slots only). */
+export function playerKitKey(objectId: string, colors: Record<string, string> | undefined): string {
+  if (!colors) return objectId
+  return objectId + '|' + KIT_SLOTS.map((s) => colors[s] ?? '').join('|')
+}
+
+// One texture per distinct (character, colors) look, shared across instances.
+const kitTextures = new Map<string, THREE.Texture>()
+
+/** A stripe color counts only when it's real (older docs stored the jersey color
+ *  or 'transparent' in inactive stripe slots — same rule as the 2D kit editor). */
+function activeStripe(c: string | undefined, jersey: string | undefined): string | undefined {
+  return c && c !== 'transparent' && c !== 'none' && c !== jersey ? c : undefined
+}
+
+/** The kit texture for a character + optional recolor slots. Cached by look.
+ *  Falls back to the plain character atlas while images are still decoding
+ *  (subscribers re-render when they're ready). */
+export function playerKitTexture(objectId: string, colors?: Record<string, string>): THREE.Texture {
+  const hasCustom = !!colors && KIT_SLOTS.some((s) => colors[s])
+  const key = hasCustom ? playerKitKey(objectId, colors) : objectId
+  const cached = kitTextures.get(key)
+  if (cached) return cached
+
+  // Plain look: the character's own atlas, straight from the PNG.
+  if (!hasCustom) {
+    const tex = new THREE.TextureLoader().load(PLAYER_GLBS[objectId].texture, notifyAssetReady)
     tex.flipY = false // glTF UV convention (v origin at the top)
     tex.colorSpace = THREE.SRGBColorSpace
-    kitTextures.set(objectId, tex)
+    kitTextures.set(key, tex)
+    return tex
   }
+
+  // Custom look: needs the decoded base atlas + print overlay; until then serve
+  // the plain texture (not cached under this key, so we regenerate when ready).
+  const base = kitImage(objectId, PLAYER_GLBS[objectId].texture)
+  const print = kitImage('print', playerKitPrint)
+  if (!base || !print) return playerKitTexture(objectId)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = KIT_W
+  canvas.height = KIT_H
+  const g = canvas.getContext('2d')!
+  g.drawImage(base, 0, 0, KIT_W, KIT_H) // defaults for untouched blocks (shoes …)
+
+  const fillBlock = (b: number, color: string) => {
+    g.fillStyle = color
+    g.fillRect(b * BLOCK, 0, BLOCK, KIT_H)
+  }
+  if (colors![SLOT_HAIR]) fillBlock(HAIR_BLOCK, colors![SLOT_HAIR])
+  if (colors![SLOT_SKIN]) fillBlock(SKIN_BLOCK, colors![SLOT_SKIN])
+  if (colors![SLOT_SOCKS]) fillBlock(SOCKS_BLOCK, colors![SLOT_SOCKS])
+  if (colors![SLOT_SHORTS]) fillBlock(SHORTS_BLOCK, colors![SLOT_SHORTS])
+
+  const jersey = colors![SLOT_JERSEY]
+  const v = activeStripe(colors![SLOT_VSTRIPE], jersey)
+  const h = activeStripe(colors![SLOT_HSTRIPE], jersey)
+  if (jersey) {
+    for (const b of JERSEY_BLOCKS) {
+      fillBlock(b, jersey)
+      // Vertical stripes: 6 bands (3 per colour) across the jersey ISLAND, so the
+      // pattern meets continuously at the side seams (verified in Blender).
+      if (v) {
+        g.fillStyle = v
+        const span = JERSEY_ISLAND_X1 - JERSEY_ISLAND_X0
+        for (let i = 1; i < V_STRIPE_BANDS; i += 2) {
+          const x0 = JERSEY_ISLAND_X0 + (span * i) / V_STRIPE_BANDS
+          g.fillRect(b * BLOCK + x0, 0, span / V_STRIPE_BANDS, KIT_H)
+        }
+      }
+      // Horizontal hoops: 16px bands over the block height (body-horizontal).
+      if (h) {
+        g.fillStyle = h
+        const BAND = 16
+        for (let y = BAND; y < KIT_H; y += BAND * 2) g.fillRect(b * BLOCK, y, BLOCK, BAND)
+      }
+    }
+    // Sleeve caps / long sleeves follow the jersey base colour.
+    g.fillStyle = jersey
+    g.fillRect(SLEEVE_X, 0, KIT_W - SLEEVE_X, KIT_H)
+  }
+  g.drawImage(print, 0, 0, KIT_W, KIT_H) // restore the "PLAYER 10" prints
+
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.flipY = false
+  tex.colorSpace = THREE.SRGBColorSpace
+  kitTextures.set(key, tex)
   return tex
 }
 
@@ -523,6 +715,8 @@ export function buildObject3D(objectId: string): THREE.Object3D {
     mesh.userData.outlineOffset = outlineOffset
     return mesh
   }
+  const multi = MULTI_GLB_OBJECTS[objectId]
+  if (multi) return buildMultiGlb(objectId, multi)
   if (objectId === 'cube') {
     const mat = new THREE.MeshToonMaterial({ color: 0xff8c42 })
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat)
@@ -557,5 +751,43 @@ function buildBall(): THREE.Group {
   const outlineOffset = OUTLINE_FRACTION * 3 * ([s.x, s.y, s.z].sort((a, b) => a - b)[1] || 1)
   group.add(toonOutline(ballShell.clone(), outlineOffset))
   group.userData.originAtGround = true // keep the authored height (don't re-rest)
+  return group
+}
+
+// A multi-material GLB (e.g. the flag pole): one toon mesh per primitive, each in
+// its material's authored colour and side (double-sided cloth shows on both faces),
+// plus ONE whole-object silhouette + crease ink from the merged geometry. Cached
+// per id. Rests on the ground via its bbox (no originAtGround).
+const multiPrimsCache = new Map<string, ReturnType<typeof parseGlbByMaterial>>()
+const multiShellCache = new Map<string, THREE.BufferGeometry>()
+function buildMultiGlb(id: string, data: string): THREE.Group {
+  let prims = multiPrimsCache.get(id)
+  if (!prims) {
+    prims = parseGlbByMaterial(base64ToArrayBuffer(data))
+    multiPrimsCache.set(id, prims)
+  }
+  let shell = multiShellCache.get(id)
+  if (!shell) {
+    shell = parseGlbGeometry(base64ToArrayBuffer(data)) // merged, for a clean silhouette
+    shell.computeBoundingBox()
+    multiShellCache.set(id, shell)
+  }
+  const slots = MULTI_SLOTS[id]
+  const group = new THREE.Group()
+  for (const { geometry, color, doubleSided, name } of prims) {
+    // Map the primitive to a recolor slot by its material name (e.g. "Material.Pole"
+    // → "pole"); a slotted mesh starts at its slot default (Object3DLayer then
+    // applies the element's per-slot overrides live).
+    const slot = slots?.find((s) => name.toLowerCase().includes(s.id))
+    const c = slot ? new THREE.Color(slot.default).getHex() : color.getHex(THREE.SRGBColorSpace)
+    const mesh = new THREE.Mesh(geometry.clone(), extremeToon(c, doubleSided ? THREE.DoubleSide : THREE.FrontSide))
+    mesh.castShadow = true
+    if (slot) mesh.userData.slot = slot.id
+    group.add(mesh)
+  }
+  const s = shell.boundingBox!.getSize(new THREE.Vector3())
+  const outlineOffset = OUTLINE_FRACTION * ([s.x, s.y, s.z].sort((a, b) => a - b)[1] || 1)
+  group.add(toonOutline(shell.clone(), outlineOffset)) // one silhouette around the whole model
+  group.add(creaseEdges(shell)) // fold / edge strokes
   return group
 }

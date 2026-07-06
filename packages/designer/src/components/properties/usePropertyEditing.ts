@@ -11,7 +11,7 @@ import { isCreationTool } from '../../store/editorStore'
 import { toolCreatesClosed, nextTokenText, measureTextBox } from '../../lib/draw'
 import { useAssets } from '../../lib/assets'
 import { playerSvgs, SKIN_SLOT, HAIR_SLOT, JERSEY_SLOT, SHORTS_SLOT, VSTRIPE_SLOT, HSTRIPE_SLOT, SOCKS_SLOT, DEFAULT_SKIN, DEFAULT_HAIR, stripeFills, type KitStyle, type PlayerKit } from '../../lib/player-kit'
-import { isObject3DColorable, object3dDefaultColor } from '../../lib/objects3d'
+import { isObject3DColorable, isObject3DMultiColor, isObject3DPlayer, object3dColorSlots, object3dDefaultColor, object3dSlotDefault, type Object3DColorSlot } from '../../lib/objects3d'
 
 /** Closed shapes can be filled (background color); open ones can't. */
 export function isClosed(el: BoardElement): boolean {
@@ -81,6 +81,7 @@ export function usePropertyEditing() {
       allArrow3d: false,
       allObject3D: false,
       allObject3DColor: false,
+      object3dSlots: [] as Object3DColorSlot[],
       values: {
         stroke: toolDefaults.stroke as string | undefined,
         strokeWidth: toolDefaults.strokeWidth as number | undefined,
@@ -120,6 +121,7 @@ export function usePropertyEditing() {
         object3dColor: undefined as string | undefined,
         object3dSize: undefined as number | undefined,
         object3dUseGlobal: undefined as boolean | undefined,
+        object3dSlotColors: {} as Record<string, string>,
       },
       setStroke: (stroke: string) => setToolDefaults({ stroke }),
       setStrokeWidth: (strokeWidth: number) => setToolDefaults({ strokeWidth }),
@@ -159,6 +161,7 @@ export function usePropertyEditing() {
       setObject3DColor: () => {},
       setObject3DUseGlobal: () => {},
       setObject3DSize: () => {},
+      setObject3DSlotColor: () => {},
       setSkin: () => {},
       setHair: () => {},
       setSkinHair: () => {},
@@ -187,6 +190,13 @@ export function usePropertyEditing() {
   // Colorable = every selected object3d is a tintable material (cones, hurdles…).
   const allObject3DColor = allObject3D && object3ds.every((e) => isObject3DColorable(e.objectId))
   const firstObject3D = object3ds[0]
+  // Per-part recolor slots (e.g. flag pole: pole + flag), when the whole selection
+  // is the SAME multi-material object. Each slot's shown value is the element's
+  // override or the slot default.
+  const multiObjectId = firstObject3D && isObject3DMultiColor(firstObject3D.objectId) && object3ds.every((e) => e.objectId === firstObject3D.objectId) ? firstObject3D.objectId : null
+  const object3dSlots = multiObjectId ? object3dColorSlots(multiObjectId) : []
+  const object3dSlotColors: Record<string, string> = {}
+  if (multiObjectId && firstObject3D) for (const s of object3dSlots) object3dSlotColors[s.id] = firstObject3D.colors?.[s.id] ?? object3dSlotDefault(multiObjectId, s.id)
   // Each displayed value is the FIRST selected element's (not blanked when mixed).
   const first = els[0]
   const firstPoly = first.type === 'polyline' ? first : undefined
@@ -198,10 +208,13 @@ export function usePropertyEditing() {
   // The slot the single color selector edits (the first custom color of the first figure).
   const materialSlot = firstFigure ? figureColorSlots.get(firstFigure.figureId)?.[0] : undefined
 
-  // Players (players category only) get the skin/kit editors.
+  // Players (2D players category + 3D player characters) get the skin/kit editors.
   const playerSet = playerSvgs(catalog)
-  const allPlayer = els.length > 0 && els.every((e) => e.type === 'figure' && playerSet.has(e.figureId))
-  const pc = firstFigure?.colors ?? {}
+  const player3ds = object3ds.filter((e) => isObject3DPlayer(e.objectId))
+  const isPlayerEl = (e: BoardElement) => (e.type === 'figure' && playerSet.has(e.figureId)) || (e.type === 'object3d' && isObject3DPlayer(e.objectId))
+  const allPlayer = els.length > 0 && els.every(isPlayerEl)
+  const playerEls = [...figures, ...player3ds]
+  const pc = (firstFigure ?? (firstObject3D && isObject3DPlayer(firstObject3D.objectId) ? firstObject3D : undefined))?.colors ?? {}
   const kitJersey = pc[JERSEY_SLOT] ?? '#ff0000'
   // A stripe slot is "active" only when it carries a real color — inactive stripes
   // are transparent (older docs used the jersey color, so exclude that too).
@@ -216,6 +229,9 @@ export function usePropertyEditing() {
     stripe: kitV ?? kitH ?? '#1e1e1e',
     style: kitStyle,
   }
+
+  // Recolor slots of a player element (figures and 3D players both carry them).
+  const colorsOf = (e: BoardElement) => (e as { colors?: Record<string, string> }).colors
 
   function patch(targets: BoardElement[], make: (el: BoardElement) => { before: ElementPatch; after: ElementPatch }) {
     if (targets.length === 0) return
@@ -243,6 +259,7 @@ export function usePropertyEditing() {
     allArrow3d,
     allObject3D,
     allObject3DColor,
+    object3dSlots,
     values: {
       stroke: first.stroke,
       strokeWidth: first.strokeWidth,
@@ -283,6 +300,7 @@ export function usePropertyEditing() {
       object3dColor: firstObject3D ? (firstObject3D.fill && firstObject3D.fill !== 'transparent' ? firstObject3D.fill : object3dDefaultColor(firstObject3D.objectId)) : undefined,
       object3dSize: firstObject3D?.size,
       object3dUseGlobal: firstObject3D?.useGlobalSize,
+      object3dSlotColors,
     },
     setStroke: (stroke: string) => {
       patch(els, (e) => ({ before: { stroke: e.stroke }, after: { stroke } }))
@@ -341,19 +359,20 @@ export function usePropertyEditing() {
     // Follow the global object scale, or use a custom relative size.
     setObject3DUseGlobal: (useGlobalSize: boolean) => patch(object3ds, (e) => ({ before: { useGlobalSize: (e as Extract<BoardElement, { type: 'object3d' }>).useGlobalSize }, after: { useGlobalSize } })),
     setObject3DSize: (size: number) => patch(object3ds, (e) => ({ before: { size: (e as Extract<BoardElement, { type: 'object3d' }>).size }, after: { size } })),
-    // Player skin/kit: patch the relevant color slots on the selected player(s).
+    setObject3DSlotColor: (slot: string, color: string) => patch(object3ds, (e) => ({ before: { colors: colorsOf(e) }, after: { colors: { ...colorsOf(e), [slot]: color } } })),
+    // Player skin/kit: patch the relevant color slots on the selected player(s) —
+    // 2D figures and 3D player characters alike (both carry `colors` slots).
     // (The remember-effect re-captures them, so new players inherit the change.)
-    setSkin: (skin: string) => patch(figures, (e) => ({ before: { colors: (e as Extract<BoardElement, { type: 'figure' }>).colors }, after: { colors: { ...(e as Extract<BoardElement, { type: 'figure' }>).colors, [SKIN_SLOT]: skin } } })),
-    setHair: (hair: string) => patch(figures, (e) => ({ before: { colors: (e as Extract<BoardElement, { type: 'figure' }>).colors }, after: { colors: { ...(e as Extract<BoardElement, { type: 'figure' }>).colors, [HAIR_SLOT]: hair } } })),
+    setSkin: (skin: string) => patch(playerEls, (e) => ({ before: { colors: colorsOf(e) }, after: { colors: { ...colorsOf(e), [SKIN_SLOT]: skin } } })),
+    setHair: (hair: string) => patch(playerEls, (e) => ({ before: { colors: colorsOf(e) }, after: { colors: { ...colorsOf(e), [HAIR_SLOT]: hair } } })),
     setSkinHair: (skin: string, hair: string) =>
-      patch(figures, (e) => ({ before: { colors: (e as Extract<BoardElement, { type: 'figure' }>).colors }, after: { colors: { ...(e as Extract<BoardElement, { type: 'figure' }>).colors, [SKIN_SLOT]: skin, [HAIR_SLOT]: hair } } })),
+      patch(playerEls, (e) => ({ before: { colors: colorsOf(e) }, after: { colors: { ...colorsOf(e), [SKIN_SLOT]: skin, [HAIR_SLOT]: hair } } })),
     setKit: (kit: PlayerKit) =>
-      patch(figures, (e) => {
-        const f = e as Extract<BoardElement, { type: 'figure' }>
+      patch(playerEls, (e) => {
         const { v, h } = stripeFills(kit.style, kit.stripe)
         return {
-          before: { colors: f.colors },
-          after: { colors: { ...f.colors, [JERSEY_SLOT]: kit.jersey, [SHORTS_SLOT]: kit.shorts, [SOCKS_SLOT]: kit.socks, [VSTRIPE_SLOT]: v, [HSTRIPE_SLOT]: h } },
+          before: { colors: colorsOf(e) },
+          after: { colors: { ...colorsOf(e), [JERSEY_SLOT]: kit.jersey, [SHORTS_SLOT]: kit.shorts, [SOCKS_SLOT]: kit.socks, [VSTRIPE_SLOT]: v, [HSTRIPE_SLOT]: h } },
         }
       }),
     // Editing a selected token also updates the next-token defaults (so the next

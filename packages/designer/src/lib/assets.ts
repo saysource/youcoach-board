@@ -199,8 +199,9 @@ export interface FigureDragData {
   object3d?: string
 }
 
-/** Build a placed 3D-object element sitting on the pitch at ground (x, z) metres. */
-export function buildObject3DElement(objectId: string, x: number, z: number): BoardElement {
+/** Build a placed 3D-object element sitting on the pitch at ground (x, z) metres.
+ *  `colors` seeds a 3D player's recolor slots (the last player's look). */
+export function buildObject3DElement(objectId: string, x: number, z: number, colors?: Record<string, string>): BoardElement {
   return {
     id: crypto.randomUUID(),
     type: 'object3d',
@@ -210,6 +211,7 @@ export function buildObject3DElement(objectId: string, x: number, z: number): Bo
     rotation: OBJECT3D_DEFAULTS.rotation,
     size: defaultObject3DSize(objectId, OBJECT3D_DEFAULTS.size),
     useGlobalSize: true,
+    colors: colors && Object.keys(colors).length ? { ...colors } : undefined,
     transform: { ...IDENTITY_TRANSFORM },
     stroke: '#1e1e1e',
     strokeWidth: 3,

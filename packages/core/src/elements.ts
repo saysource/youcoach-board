@@ -277,6 +277,9 @@ export interface Object3DElement extends BaseElement {
    *  (background.objectScale) and `size` is ignored. When false, it uses its own
    *  custom `size`. */
   useGlobalSize: boolean
+  /** Recolor slots (3D players: skin/hair/kit), the same slot names as figure
+   *  players (yc-skin, yc-hair, yc-color-1 …). Absent → the authored look. */
+  colors?: Record<string, string>
 }
 
 export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement | Object3DElement
@@ -990,6 +993,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       rotation: num(o.rotation) ?? OBJECT3D_DEFAULTS.rotation,
       size: num(o.size) ?? OBJECT3D_DEFAULTS.size,
       useGlobalSize: o.useGlobalSize !== false,
+      colors: parseColors(o.colors),
     }
   }
   return null

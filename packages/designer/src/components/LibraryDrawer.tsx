@@ -8,8 +8,9 @@ import { cn } from '../lib/cn'
 import { useAssets, buildFigureElement, buildObject3DElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { clientToBoard } from '../lib/draw'
 import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
+import { isObject3DPlayer } from '../lib/objects3d'
 import { makeCalibratedCamera } from '../lib/field-camera'
-import { zonesForField, categoriesForField, defaultZoneForField, FIELD_TYPE_OPTIONS, type ZoneCategory, type Zone } from '../lib/field-zones'
+import { zonesForField, categoriesForField, defaultZoneForField, defaultObjectScaleForField, FIELD_TYPE_OPTIONS, type ZoneCategory, type Zone } from '../lib/field-zones'
 import { useEditorStore } from '../store/context'
 import type { FieldType, FieldView } from '@youcoach-board/core'
 
@@ -91,13 +92,19 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
   const zoneCats = fieldsOnly ? categoriesForField(fieldType) : []
   // Clicking a zone flies the camera there and applies the zone's background presets
   // (trainingLayout is normalised so a plain pose always resets the training variant).
+  // Changing the field TYPE seeds that type's default materials scale (real-size
+  // pieces read tiny on the smaller training area); staying in-type leaves the
+  // user's current scale untouched.
+  function scaleForType(ft: FieldType) {
+    return ft !== fieldType ? { objectScale: defaultObjectScaleForField(ft) } : {}
+  }
   function applyZone(z: Zone) {
-    setBackground({ field3d: z.camera, fieldSvg: null, fieldType: z.fieldType, ...z.background, trainingLayout: z.background?.trainingLayout ?? 'plain' })
+    setBackground({ field3d: z.camera, fieldSvg: null, fieldType: z.fieldType, ...scaleForType(z.fieldType), ...z.background, trainingLayout: z.background?.trainingLayout ?? 'plain' })
   }
   // Switching field type jumps to that type's default zone.
   function selectFieldType(ft: FieldType) {
     const z = defaultZoneForField(ft)
-    setBackground({ fieldType: ft, fieldSvg: null, trainingLayout: z?.background?.trainingLayout ?? 'plain', ...(z ? { field3d: z.camera, ...z.background } : {}) })
+    setBackground({ fieldType: ft, fieldSvg: null, ...scaleForType(ft), trainingLayout: z?.background?.trainingLayout ?? 'plain', ...(z ? { field3d: z.camera, ...z.background } : {}) })
   }
   // Scroll to a category's group of poses (and flash its header), like "jump to type".
   function jumpToZoneCat(id: ZoneCategory) {
@@ -301,7 +308,8 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
       const eff = navPose ?? field3d
       const cam = eff ? makeCalibratedCamera(eff) : makeArrow3DCamera()
       const g = boardToGround(bx, by, cam) ?? { x: 52.5, z: 34 }
-      createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z))
+      // 3D players inherit the last player's skin/kit slots (like 2D players).
+      createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z, isObject3DPlayer(d.desc.object3d) ? playerColors : undefined))
       return
     }
     if (atPoint) {
