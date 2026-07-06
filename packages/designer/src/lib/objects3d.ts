@@ -642,14 +642,17 @@ export function playerKitTexture(objectId: string, colors?: Record<string, strin
   if (jersey) {
     for (const b of JERSEY_BLOCKS) {
       fillBlock(b, jersey)
-      // Vertical stripes: 6 bands (3 per colour) across the jersey ISLAND, so the
-      // pattern meets continuously at the side seams (verified in Blender).
+      // Vertical stripes: 6 bands (3 per colour) across the jersey ISLAND, with
+      // half-width jersey bands at the edges so the pattern is SYMMETRIC about the
+      // island centre. The back island is mirrored, so symmetry is what makes the
+      // stripes continuous over the shoulders; the edge halves merge into full
+      // bands at the side seams (verified in Blender).
       if (v) {
         g.fillStyle = v
         const span = JERSEY_ISLAND_X1 - JERSEY_ISLAND_X0
-        for (let i = 1; i < V_STRIPE_BANDS; i += 2) {
-          const x0 = JERSEY_ISLAND_X0 + (span * i) / V_STRIPE_BANDS
-          g.fillRect(b * BLOCK + x0, 0, span / V_STRIPE_BANDS, KIT_H)
+        const w = span / V_STRIPE_BANDS
+        for (const t of [0.5, 2.5, 4.5]) {
+          g.fillRect(b * BLOCK + JERSEY_ISLAND_X0 + t * w, 0, w, KIT_H)
         }
       }
       // Horizontal hoops: 16px bands over the block height (body-horizontal).
