@@ -23,7 +23,7 @@ import { TopRightControls } from './TopRightControls'
 import { LibraryDrawer } from './LibraryDrawer'
 import { UndoRedoBar } from './UndoRedoBar'
 import { NavBar } from './NavBar'
-import { NavHints } from './NavHints'
+import { NavHints, EditHints } from './NavHints'
 import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
 import { GameSystemDialog } from './GameSystemDialog'
@@ -532,6 +532,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {(navigating || backgroundMode) && !mobile && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
               <NavHints />
+            </div>
+          )}
+          {/* Edit mode (3D field, not navigating/calibrating): the 3D-camera key/
+              mouse shortcuts, so they're discoverable without entering navigation. */}
+          {navAvailable && !navigating && !mobile && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
+              <EditHints />
             </div>
           )}
 
