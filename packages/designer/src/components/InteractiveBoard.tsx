@@ -30,7 +30,6 @@ import {
   type Box,
   type Arrow3DElement,
   type Object3DElement,
-  type FieldView,
   ARROW3D_DEFAULTS,
   IDENTITY_TRANSFORM,
 } from '@youcoach-board/core'
@@ -79,7 +78,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, reprojectChanges, withGroundAnchors, groundDelta, groundMoveElement } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -312,7 +311,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navPose = null, navMarkers = false, onNavPose, onNavTap }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navPose?: FieldView | null; navMarkers?: boolean; onNavPose?: (p: FieldView) => void; onNavTap?: () => void }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void }) {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -459,10 +458,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // works unchanged; homography still uses its own custom projection.
   // A real 3D field (background.field3d) wins over the legacy per-field calibrated
   // camera, which wins over the homography, which wins over the fixed camera.
-  // In navigation mode the SESSION pose (navPose) overrides the drawing's saved
-  // pose for rendering only — the whole scene projects through it, without changing
-  // background.field3d (Store persists it; Reset restores the saved pose).
-  const field3d = !backgroundMode && navPose ? navPose : doc.background.field3d
+  // Navigation edits background.field3d directly (coalesced into one undo step), so
+  // there's no separate session pose — the field pose IS the drawing's stored pose.
+  const field3d = doc.background.field3d
   const fieldCamCfg = field3d ?? fieldCamera(doc.background.fieldSvg)
   const fieldH = fieldHomography(doc.background.fieldSvg)
   const useHomography = !!fieldH && !fieldCamCfg
@@ -490,22 +488,19 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing3d])
 
-  // Entering navigation pins elements to the field the same way (ONE undoable step,
-  // no transaction): it converts rectangles/ovals to warp-able polylines and derives
-  // every element's ground anchor, so ALL of them (not just figures/lines) reproject
-  // as the view orbits and get remapped onto the pose kept on exit.
-  const navPinnedRef = useRef(false)
+  // Entering navigation pins elements to the field (ONE undoable step): convert
+  // rectangles/ovals to warp-able polylines and derive every element's ground anchor
+  // so ALL of them reproject as the view orbits, then coalesce the whole orbit
+  // session (pose + reprojections, written live to background.field3d) into ONE undo
+  // step — begin on enter, commit on exit — exactly like Edit-Background.
   useEffect(() => {
-    if (!navigating) {
-      navPinnedRef.current = false
-      return
-    }
-    if (navPinnedRef.current) return
-    navPinnedRef.current = true
+    if (!navigating) return
     const cam = doc.background.field3d
     if (!cam) return
     const refTokenId = selectedIds.find((id) => doc.elements.find((e) => e.id === id)?.type === 'token')
     pinSetup(buildPinOps(doc.elements, cam, { syncTokenSizes, refTokenId }))
+    beginTransaction()
+    return () => commitTransaction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigating])
 
@@ -1229,21 +1224,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   const selectedEls = doc.elements.filter((e) => selectedSet.has(e.id))
   const liveSelected = selectedEls.map(liveElement)
-
-  // Navigation is view-only: it changes the session pose (navPose) without touching
-  // the drawing's saved pose, so the 2D SVG elements (figures/tokens/arrows/lines)
-  // would stay frozen at their saved-pose spots while the 3D field + 3D objects/
-  // arrows orbit to navPose. Reproject the ground-pinned ones to navPose at RENDER
-  // time (non-destructive — no doc mutation) so the whole scene orbits together.
-  const navReproject = useMemo(() => {
-    const saved = doc.background.field3d
-    if (!navigating || !navPose || !saved || JSON.stringify(navPose) === JSON.stringify(saved)) return null
-    const map = new Map<string, ReturnType<typeof reprojectChanges>[number]['after']>()
-    // Derive ground anchors on the fly for elements that never went through a pin
-    // pass (Edit-Background), so ALL figures/polylines follow the orbiting field.
-    for (const ch of reprojectChanges(withGroundAnchors(doc.elements, saved), saved, navPose, { tokenPerspective })) map.set(ch.id, ch.after)
-    return map
-  }, [navigating, navPose, doc.background.field3d, doc.elements, tokenPerspective])
 
   function startMove(ids: string[], from: Point, pointerId: number, presetOrigins?: Record<string, ElementTransform>) {
     // ⌥-drag duplicates first: the clones aren't in `doc` yet this render, so their
@@ -2377,10 +2357,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       >
         <g style={{ pointerEvents: creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || eraserTool || lassoTool ? 'none' : 'auto' }}>
           {doc.elements.map((el) => {
-            const base = liveElement(el)
-            // Follow the orbiting field during navigation (render-only reprojection).
-            const navPatch = navReproject?.get(el.id)
-            const live = navPatch ? ({ ...base, ...navPatch } as BoardElement) : base
+            const live = liveElement(el)
             const erasing = erase?.ids.has(el.id)
             // Hide the token field being edited (the HTML input shows the live
             // value) ONLY in the rendered element — the selection chrome still
@@ -2409,9 +2386,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {zoneMode && field3d && <FieldZoneTool field3d={field3d} viewBox={viewBox} />}
       {/* 3D-field pose editor: OrbitControls + numbered zone markers (bg-edit). */}
       {editing3d && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={panMode} onExitPan={() => setView('orbit')} onPose={(p) => setBackground({ field3d: p })} />}
-      {/* Navigation mode: the same orbit controls in normal mode, mirroring to the
-          SESSION pose (navPose) instead of the drawing's saved pose. */}
-      {navigating && !backgroundMode && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={false} onExitPan={() => {}} onPose={(p) => onNavPose?.(p)} showMarkers={navMarkers} onTap={onNavTap} />}
+      {/* Navigation mode: the same orbit controls in normal mode, writing the pose
+          straight to background.field3d (coalesced by the nav transaction above). */}
+      {navigating && !backgroundMode && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={false} onExitPan={() => {}} onPose={(p) => setBackground({ field3d: p })} showMarkers={navMarkers} onTap={onNavTap} />}
       {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
       {backgroundMode && field3d && (
         <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">

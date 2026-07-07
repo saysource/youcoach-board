@@ -9,7 +9,7 @@
 // e.g. a training area can offer "with goals" and "without goals" presets.
 
 import type { FieldType, FieldBands, TrainingLayout, FieldView } from '@youcoach-board/core'
-import type { CameraConfig } from './field-camera'
+import { orbitToConfig, type CameraConfig, type PitchType } from './field-camera'
 
 export type ZoneCategory = 'top' | 'perspective'
 
@@ -104,9 +104,14 @@ export function defaultObjectScaleForField(fieldType: FieldType): number {
 // centre with a hair of z-offset so the field reads horizontally and OrbitControls
 // keeps a stable "up". Used by the navigation toolbar's top-view shortcut; keeps
 // the current pitch `ref`.
-export function topViewForField(fieldType: FieldType, ref = 'soccer11'): FieldView {
-  const h = fieldType === 'training' ? 38 : 100
-  return { ref, position: [52.5, h, 34.5], target: [52.5, 0, 34], fov: 50 }
+export function topViewForField(fieldType: FieldType, ref = 'soccer11', orientation: 'landscape' | 'portrait' = 'landscape'): FieldView {
+  // Near-straight-down (elevation just under 90° for a stable OrbitControls "up").
+  // Azimuth orients the pitch: 0 = length horizontal (goals left/right), 90 =
+  // length vertical (goals top/bottom). Portrait needs more distance to fit the
+  // pitch's long axis on the short screen side.
+  const training = fieldType === 'training'
+  const distance = orientation === 'portrait' ? (training ? 52 : 135) : training ? 38 : 100
+  return orbitToConfig({ targetX: 52.5, targetZ: 34, azimuth: orientation === 'portrait' ? 90 : 0, elevation: 89.5, distance, fov: 50 }, ref as PitchType)
 }
 
 /** Zones for a field type. */

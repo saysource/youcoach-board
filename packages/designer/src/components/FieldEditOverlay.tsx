@@ -62,8 +62,13 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
   const controlsRef = useRef<OrbitControls | null>(null)
   const flyRef = useRef<Fly | null>(null)
   const onPoseRef = useRef(onPose)
+  // The latest committed pose, so the loop can skip mirroring a frame that hasn't
+  // meaningfully moved (OrbitControls drifts the pose by epsilon on init) — which
+  // would otherwise write a no-op change and add a spurious undo step.
+  const poseRef = useRef(field3d)
   useEffect(() => {
     onPoseRef.current = onPose
+    poseRef.current = field3d
   })
   // Projected marker positions (board coords), recomputed each frame.
   const [markers, setMarkers] = useState<{ x: number; y: number; behind: boolean }[]>([])
@@ -137,9 +142,16 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
           return { x: b.x, y: b.y, behind: !inFront }
         }),
       )
-      onPoseRef.current({ ref: field3d.ref, position: [cam.position.x, cam.position.y, cam.position.z], target: [controls.target.x, controls.target.y, controls.target.z], fov: FOV })
+      // Only mirror when the pose actually moved from the last committed one, so
+      // merely looking (or init drift) doesn't write a no-op pose change.
+      const c = poseRef.current
+      const moved = Math.abs(cam.position.x - c.position[0]) + Math.abs(cam.position.y - c.position[1]) + Math.abs(cam.position.z - c.position[2]) + Math.abs(controls.target.x - c.target[0]) + Math.abs(controls.target.y - c.target[1]) + Math.abs(controls.target.z - c.target[2])
+      if (moved > 1e-2) onPoseRef.current({ ref: field3d.ref, position: [cam.position.x, cam.position.y, cam.position.z], target: [controls.target.x, controls.target.y, controls.target.z], fov: FOV })
     }
-    loop()
+    // Start on the NEXT frame (not synchronously), so the parent's pose transaction
+    // (begun in its own effect, which runs after this child effect) is already open
+    // when the first onPose writes the pose — avoiding a spurious extra undo step.
+    raf = requestAnimationFrame(loop)
     return () => {
       cancelAnimationFrame(raf)
       controls.dispose()
