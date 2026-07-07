@@ -167,11 +167,13 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
 
   return (
     <>
-      {/* OrbitControls input surface (empty; markers sit above it). */}
+      {/* OrbitControls input surface (empty; markers sit above it). In pan mode
+          (rotation disabled by a top-field view) show the pan hand; otherwise the
+          rotate-3d cursor since a drag orbits the scene. */}
       <div
         ref={surfaceRef}
-        className="absolute inset-0 z-20"
-        style={{ touchAction: 'none', cursor: ROTATE_3D_CURSOR }}
+        className={`absolute inset-0 z-20${panMode ? ' cursor-grab active:cursor-grabbing' : ''}`}
+        style={{ touchAction: 'none', cursor: panMode ? undefined : ROTATE_3D_CURSOR }}
         onPointerDown={(e) => { tapRef.current = { x: e.clientX, y: e.clientY, t: e.timeStamp } }}
         onPointerUp={(e) => {
           const d = tapRef.current
