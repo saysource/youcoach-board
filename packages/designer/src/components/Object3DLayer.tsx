@@ -330,5 +330,5 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   }))
 
   // Pointer-transparent; InteractiveBoard drives interaction (calls `pick`).
-  return <canvas ref={canvasRef} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} />
+  return <canvas ref={canvasRef} data-layer="object3d" style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} />
 })
