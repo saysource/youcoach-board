@@ -594,7 +594,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                 </div>
               )}
 
-              <div ref={gridRef} className="flex-1 overflow-y-auto p-2 pt-0">
+              <div ref={gridRef} className="flex-1 overflow-y-auto p-2 pt-0 dark:bg-[#505a66]">
                 {sections.map((sec, si) => (
                   <div key={sec.id} data-section={sec.id}>
                     {sec.separatorBefore && si > 0 && <div className="-mx-2 my-2 border-t border-border" />}
