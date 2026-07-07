@@ -72,6 +72,10 @@ export interface BoardBackground {
   objectScale: number
   /** Whether the two 3D goals at the ends of the pitch are shown. */
   showGoals: boolean
+  /** Whether the tiled grass ground plane under the pitch is shown. When a solid
+   *  background color is set (color !== 'transparent'), the plane uses that color
+   *  instead of the grass texture. */
+  showGrass: boolean
   /** Orientation of the mown shading bands (or none). */
   bands: FieldBands
   /** YouCoach logo placement over the background, or null for none. */
@@ -111,6 +115,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   figureScale: 1,
   objectScale: 4, // materials are real-size (a cone is a dot on a full pitch); 4× makes them legible by default
   showGoals: true,
+  showGrass: true,
   bands: 'vertical',
   logo: 'center',
 }
@@ -171,6 +176,7 @@ function parseBackground(raw: unknown): BoardBackground {
     figureScale: num(o.figureScale, DEFAULT_BACKGROUND.figureScale),
     objectScale: num(o.objectScale, DEFAULT_BACKGROUND.objectScale),
     showGoals: o.showGoals !== false,
+    showGrass: o.showGrass !== false,
     bands: o.bands === 'horizontal' || o.bands === 'none' ? o.bands : DEFAULT_BACKGROUND.bands,
     // Absent → default (center); explicit null → no logo; valid → that position.
     logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : o.logo === null ? null : DEFAULT_BACKGROUND.logo,
