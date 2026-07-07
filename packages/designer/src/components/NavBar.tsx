@@ -27,11 +27,11 @@ export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV
     <div className="pointer-events-auto flex items-center rounded-lg border border-border bg-card shadow-md">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" aria-label={navigating ? 'Exit navigation (W)' : 'Navigate scene (W)'} aria-pressed={navigating} onClick={onToggle} className={cn(navigating && 'text-primary')}>
+          <Button size="icon-sm" aria-label={navigating ? 'Exit navigation (Space)' : 'Navigate scene (Space)'} aria-pressed={navigating} onClick={onToggle} className={cn(navigating && 'text-primary')}>
             <Rotate3d />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{navigating ? 'Exit navigation (W)' : 'Navigate scene (W)'}</TooltipContent>
+        <TooltipContent>{navigating ? 'Exit navigation (Space)' : 'Navigate scene (Space)'}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>

@@ -153,8 +153,8 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       if (lower === 'f') { e.preventDefault(); if (deps.bgEditing) deps.finishBackground(); else deps.editBackground(); return }
       if (lower === 'g' && deps.toggleGrid) { e.preventDefault(); deps.toggleGrid(); return }
       if (lower === 'b') { deps.addBall(); return }
-      // W toggles 3D scene navigation (orbit) mode (left-hand-friendly).
-      if (lower === 'w' && deps.onToggleNav) { e.preventDefault(); deps.onToggleNav(); return }
+      // Space toggles 3D scene navigation (orbit) mode.
+      if (e.code === 'Space' && deps.onToggleNav) { e.preventDefault(); deps.onToggleNav(); return }
       if (lower === 'p') { deps.openPlayers(); return }
       if (lower === 'm') { deps.openMaterials(); return }
       if (key === '?' && deps.showHelp) { e.preventDefault(); deps.showHelp(); return }
