@@ -16,6 +16,7 @@ const FOV = 50
 const DUR = 500 // fly-to tween (ms)
 const ARROW_STEP_DEG = 3 // degrees the camera orbits per arrow-key press (Shift pans)
 const ZOOM_STEP = 1.15 // distance factor per +/- press (< 1 = zoom in)
+const KEY_FLY_MS = 160 // tween duration for a keyboard camera step
 // The camera must never reach/cross the grass — keep it a little above y=0
 // (metres). Pan/dolly/near-horizon orbit can all push it down, so we clamp.
 const MIN_CAM_Y = 0.5
@@ -42,6 +43,7 @@ interface Fly {
   fromTgt: THREE.Vector3
   toTgt: THREE.Vector3
   start: number
+  dur: number
 }
 
 export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose, onExitPan, showMarkers = true, onTap }: { field3d: FieldView; fieldType: FieldType; viewBox: string; panMode: boolean; onPose: (p: Pose) => void; onExitPan: () => void; showMarkers?: boolean; onTap?: () => void }) {
@@ -66,12 +68,14 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
   // Projected marker positions (board coords), recomputed each frame.
   const [markers, setMarkers] = useState<{ x: number; y: number; behind: boolean }[]>([])
 
-  // Fly the camera to a zone (marker click) or to an externally-set pose (drawer).
-  function flyTo(position: [number, number, number], target: [number, number, number]) {
+  // Fly the camera to a zone (marker click), an externally-set pose (drawer), or a
+  // keyboard step (short `dur`). Always tweens from the CURRENT camera, so rapid
+  // key presses retarget smoothly.
+  function flyTo(position: [number, number, number], target: [number, number, number], dur = DUR) {
     const cam = camRef.current
     const controls = controlsRef.current
     if (!cam || !controls) return
-    flyRef.current = { fromPos: cam.position.clone(), toPos: new THREE.Vector3(...position), fromTgt: controls.target.clone(), toTgt: new THREE.Vector3(...target), start: performance.now() }
+    flyRef.current = { fromPos: cam.position.clone(), toPos: new THREE.Vector3(...position), fromTgt: controls.target.clone(), toTgt: new THREE.Vector3(...target), start: performance.now(), dur }
   }
 
   // Init OrbitControls + the render/mirror loop once.
@@ -104,7 +108,7 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
       raf = requestAnimationFrame(loop)
       const fly = flyRef.current
       if (fly) {
-        const t = Math.min(1, (performance.now() - fly.start) / DUR)
+        const t = Math.min(1, (performance.now() - fly.start) / fly.dur)
         const e = easeInOut(t)
         cam.position.lerpVectors(fly.fromPos, fly.toPos, e)
         controls.target.lerpVectors(fly.fromTgt, fly.toTgt, e)
@@ -192,10 +196,8 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
         : e.shiftKey
           ? panStep(cur, ref, ux, -uy)
           : orbitStep(cur, ref, ux * ARROW_STEP_DEG, -uy * ARROW_STEP_DEG)
-      cam.position.set(next.position[0], next.position[1], next.position[2])
-      controls.target.set(next.target[0], next.target[1], next.target[2])
-      cam.lookAt(controls.target)
-      controls.update()
+      // Tween there (short fly) so the move is animated; a repeat retargets smoothly.
+      flyTo(next.position, next.target, KEY_FLY_MS)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import '../styles/board.css'
 import { Check, Rotate3d } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
@@ -45,6 +45,25 @@ const DRAWER_AUTO_OPEN_WIDTH = 1200
 const CAM_ROTATE_STEP = 3
 // Distance factor the field camera dollies per +/- press (< 1 = zoom in).
 const CAM_ZOOM_STEP = 1.15
+// Normal-mode keyboard camera tween: fraction of the remaining distance covered
+// per frame, and the metric snap threshold that ends the animation.
+const CAM_ANIM_LERP = 0.28
+const CAM_ANIM_EPS = 0.05
+
+const lerpPose = (a: FieldView, b: FieldView, t: number): FieldView => {
+  const l = (x: number, y: number) => x + (y - x) * t
+  return {
+    ref: b.ref,
+    fov: l(a.fov, b.fov),
+    position: [l(a.position[0], b.position[0]), l(a.position[1], b.position[1]), l(a.position[2], b.position[2])],
+    target: [l(a.target[0], b.target[0]), l(a.target[1], b.target[1]), l(a.target[2], b.target[2])],
+  }
+}
+const poseClose = (a: FieldView, b: FieldView): boolean => {
+  let s = Math.abs(a.fov - b.fov)
+  for (let i = 0; i < 3; i++) s += Math.abs(a.position[i] - b.position[i]) + Math.abs(a.target[i] - b.target[i])
+  return s < CAM_ANIM_EPS
+}
 
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
@@ -237,20 +256,56 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // path is NORMAL mode only — navigation + background-edit drive their OrbitControls
   // through FieldEditOverlay's own handler (so its mirrored pose stays in sync).
   function moveCamera(mode: 'orbit' | 'pan', ux: number, uy: number) {
-    const s = store.getState()
-    const cur = s.doc.background.field3d
+    const cur = store.getState().doc.background.field3d
     if (!cur) return
     const ref = (cur.ref ?? 'soccer11') as PitchType
-    s.setBackground({ field3d: mode === 'orbit' ? orbitStep(cur, ref, ux * CAM_ROTATE_STEP, -uy * CAM_ROTATE_STEP) : panStep(cur, ref, ux, -uy) })
+    animateFieldTo(mode === 'orbit' ? orbitStep(cur, ref, ux * CAM_ROTATE_STEP, -uy * CAM_ROTATE_STEP) : panStep(cur, ref, ux, -uy))
   }
   // +/- dolly the 3D field camera (normal mode; nav + bg-edit zoom via the overlay).
   function zoomCamera(dir: 1 | -1) {
-    const s = store.getState()
-    const cur = s.doc.background.field3d
+    const cur = store.getState().doc.background.field3d
     if (!cur) return
     const ref = (cur.ref ?? 'soccer11') as PitchType
-    s.setBackground({ field3d: dollyStep(cur, ref, dir > 0 ? 1 / CAM_ZOOM_STEP : CAM_ZOOM_STEP) })
+    animateFieldTo(dollyStep(cur, ref, dir > 0 ? 1 / CAM_ZOOM_STEP : CAM_ZOOM_STEP))
   }
+  // Smoothly tween the saved field pose toward `to` (rAF, exponential ease-out),
+  // coalescing the whole keyboard gesture into one undo step. A new call while
+  // animating just retargets, so rapid presses chain into continuous motion.
+  const camAnimRef = useRef<{ raf: number; to: FieldView } | null>(null)
+  function animateFieldTo(to: FieldView) {
+    if (camAnimRef.current) {
+      camAnimRef.current.to = to
+      return
+    }
+    store.getState().beginTransaction()
+    const st: { raf: number; to: FieldView } = { raf: 0, to }
+    camAnimRef.current = st
+    const step = () => {
+      const a = camAnimRef.current
+      if (!a) return
+      const s = store.getState()
+      const cur = s.doc.background.field3d
+      if (!cur || poseClose(cur, a.to)) {
+        if (cur) s.setBackground({ field3d: a.to })
+        s.commitTransaction()
+        camAnimRef.current = null
+        return
+      }
+      s.setBackground({ field3d: lerpPose(cur, a.to, CAM_ANIM_LERP) })
+      a.raf = requestAnimationFrame(step)
+    }
+    st.raf = requestAnimationFrame(step)
+  }
+  // Cancel + commit any in-flight camera tween on unmount.
+  useEffect(() => {
+    return () => {
+      if (camAnimRef.current) {
+        cancelAnimationFrame(camAnimRef.current.raf)
+        store.getState().commitTransaction()
+        camAnimRef.current = null
+      }
+    }
+  }, [store])
   // Editing the background owns the pose directly — leave navigation and drop the
   // session view (render-phase sync) so finishing shows the freshly-edited saved pose.
   const [navBgSeen, setNavBgSeen] = useState(bgEditing)
