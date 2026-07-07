@@ -64,7 +64,12 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // toolbar's More-tools menu can jump to a category and open the drawer.
   const { catalog } = useAssets()
   const [libraryCatId, setLibraryCatId] = useState<string | null>(null)
-  if (catalog && libraryCatId === null) setLibraryCatId(catalog.groups[0]?.categories[0] ?? null)
+  // Default to the first NON-field category (Players (Male)); the legacy 'fields'
+  // categories are hidden from the palette and kept only for loading old drawings.
+  if (catalog && libraryCatId === null) {
+    const firstCat = catalog.groups.flatMap((g) => g.categories).find((id) => catalog.categories[id]?.kind !== 'field')
+    setLibraryCatId(firstCat ?? catalog.groups[0]?.categories[0] ?? null)
+  }
   // Remember the last sub-category chosen per group, so re-opening a group (e.g.
   // Players) returns to the user's last pick (Female, Children, …) not the first.
   const [lastCatByGroup, setLastCatByGroup] = useState<Record<string, string>>({})
@@ -89,17 +94,14 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // drawer to fields, and is committed by "Finish" or ESC.
   const [bgEditing, setBgEditing] = useState(false)
   const backgroundMode = bgEditing
-  function firstFieldCat() {
-    for (const g of catalog?.groups ?? []) for (const id of g.categories) if (catalog?.categories[id]?.kind === 'field') return id
-    return null
-  }
   function editBackground() {
     setBgEditing(true)
     const s = store.getState()
     s.setSelection([])
     s.setActiveTool('select')
-    const f = firstFieldCat()
-    if (f) setLibraryCatId(f)
+    // The drawer switches to the 3D-field zone UI (fieldsOnly) on its own; we must
+    // NOT point libraryCatId at the legacy 'fields' catalog category, or exiting
+    // bg-edit would strand the normal drawer on the (hidden) old-fields palette.
     setDrawerOpen(true)
   }
   function finishBackground() {
