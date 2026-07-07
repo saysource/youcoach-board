@@ -11,7 +11,6 @@
 import * as THREE from 'three'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildGoal } from './goal'
-import grassUrl from '../assets/grass.png'
 
 // Pitch dims (metres, ~FIFA), matching field-reference.ts.
 const L = 105
@@ -89,64 +88,10 @@ const POST_R = 0.06
 const LINE_W = 0.45 // base pitch line width (metres); scaled down when zoomed in
 const LINE_W_MIN = 0.18 // thinnest line (close zoom) — ~real pitch line width
 const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
-// Stack heights (metres) so the ground / bands / lines never z-fight.
-const GRASS_Y = -0.02 // the grass ground sits a hair UNDER the lines/bands
+// Stack heights (metres) so the bands / lines never z-fight.
 const BAND_Y = 0.05
 const LINE_Y = 0.15
 const GOAL_Y = 0.18 // lift the goals just above the lines so posts don't collide
-
-// How much the grass extends past the pitch on every side (a 25% border), so the
-// field always rests on grass. One grass.png tile covers a QUARTER of the field
-// (half its length × half its width) — see buildGrassGround.
-const GRASS_MARGIN = 0.25
-
-// The tiled grass texture, loaded once. Subscribers (the scene layer) re-render
-// when it arrives, since TextureLoader resolves after the first paint.
-let grassTex: THREE.Texture | null = null
-const grassReadyCbs = new Set<() => void>()
-export function onGrassReady(cb: () => void): () => void {
-  grassReadyCbs.add(cb)
-  return () => {
-    grassReadyCbs.delete(cb)
-  }
-}
-function grassTexture(): THREE.Texture {
-  if (!grassTex) {
-    grassTex = new THREE.TextureLoader().load(grassUrl, () => grassReadyCbs.forEach((cb) => cb()))
-    grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping
-    grassTex.colorSpace = THREE.SRGBColorSpace
-    grassTex.anisotropy = 8
-  }
-  return grassTex
-}
-
-/** Material for the grass ground: the tiled grass texture, or — when a solid
- *  background color is chosen (color set and not 'transparent') — a flat fill in
- *  that color, so the field can rest on a plain surface instead of grass. */
-export function grassMaterial(color?: string | null): THREE.MeshBasicMaterial {
-  return color && color !== 'transparent'
-    ? new THREE.MeshBasicMaterial({ color: new THREE.Color(color) })
-    : new THREE.MeshBasicMaterial({ map: grassTexture() })
-}
-
-/** A horizontal grass ground: the pitch + a 25% border on each side, tiled with the
- *  grass texture (UVs scaled so tiling is per-plane, not on the shared texture), and
- *  dropped just under the lines to avoid z-fighting. Centred on the field origin.
- *  `color` overrides the texture with a solid fill (see grassMaterial). */
-function buildGrassGround(halfL: number, halfW: number, color?: string | null): THREE.Mesh {
-  const w = halfL * 2 * (1 + 2 * GRASS_MARGIN)
-  const d = halfW * 2 * (1 + 2 * GRASS_MARGIN)
-  const geo = new THREE.PlaneGeometry(w, d)
-  const uv = geo.attributes.uv as THREE.BufferAttribute
-  // One tile = a quarter of the field (halfL × halfW), so the pitch is a 2×2 grid
-  // of tiles and the oversized plane (×1.5) shows 3×3.
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / halfL), uv.getY(i) * (d / halfW))
-  const mesh = new THREE.Mesh(geo, grassMaterial(color))
-  mesh.rotation.x = -Math.PI / 2
-  mesh.position.y = GRASS_Y
-  mesh.name = 'field-grass'
-  return mesh
-}
 
 // One shared sun so the field and the arrow scene cast agreeing shadows.
 export const SUN_POSITION = new THREE.Vector3(120, 165, 70)
@@ -333,17 +278,11 @@ function makeFlag(x: number, z: number): THREE.Group {
  *  field types share the world frame (objects/arrows/cameras). The ground is
  *  transparent; only the white lines + shading bands are drawn, plus goals + flags.
  *  Flags are only meaningful on the full soccer pitch. */
-export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; grass?: boolean; grassColor?: string | null; bands?: FieldBandsOrientation; fieldType?: FieldType; layout?: TrainingLayout } = {}): THREE.Group {
+export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation; fieldType?: FieldType; layout?: TrainingLayout } = {}): THREE.Group {
   const fieldType = opts.fieldType ?? 'soccer11'
   const layout = opts.layout ?? 'plain'
   const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
   const group = new THREE.Group()
-
-  // The grass ground, oversized past the pitch, under everything else. Toggled +
-  // recolored live by the scene layer; kept in the group so it moves with the field.
-  const grass = buildGrassGround(halfL, halfW, opts.grassColor)
-  grass.visible = opts.grass ?? true
-  group.add(grass)
 
   // Transparent ground that still catches the goals' soft shadows.
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.6, W * 1.8), new THREE.ShadowMaterial({ opacity: 0.18 }))

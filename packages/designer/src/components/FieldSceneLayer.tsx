@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldBands, type FieldType, type TrainingLayout } from '@youcoach-board/core'
-import { buildFieldGroup, grassMaterial, markingsGeometry, bandsGeometry, lineWidthForDistance, FIELD_DIMS, SUN_POSITION, SUN_TARGET, onGrassReady } from '../lib/field3d'
+import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, FIELD_DIMS, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
 import { applyViewCamera } from '../lib/field-camera'
 
 // A WebGL layer rendering the real 3D pitch, viewed through the board's field
@@ -20,8 +20,6 @@ interface Props {
   containerRef: React.RefObject<HTMLDivElement | null>
   /** Whether the two goals at the ends of the pitch are shown. */
   showGoals?: boolean
-  /** Whether the grass ground plane is shown (a solid `color` recolors it). */
-  showGrass?: boolean
   /** Orientation of the mown shading bands (or none). */
   bands?: FieldBands
   /** Which playing surface to render (markings + goals). */
@@ -41,8 +39,6 @@ interface Ctx {
   group: THREE.Group
   lines: THREE.Mesh | null
   goals: THREE.Object3D | null
-  grass: THREE.Mesh | null
-  grassColor: string // the current grass fill ('' = tiled texture)
   bands: THREE.Mesh | null
   bandsOrient: FieldBands
   fieldType: FieldType
@@ -50,13 +46,7 @@ interface Ctx {
   lineW: number
 }
 
-// The solid grass fill for the current background, or '' to use the grass texture:
-// an image background (the default) keeps the texture; a chosen solid color fills it.
-function grassColorOf(image: string | null, color: string): string {
-  return !image && color && color !== 'transparent' ? color : ''
-}
-
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, showGrass = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -88,11 +78,10 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     sun.shadow.bias = -0.0004
     scene.add(sun)
     scene.add(sun.target)
-    const gc = grassColorOf(propsRef.current.image, propsRef.current.color)
-    const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, grass: propsRef.current.showGrass, grassColor: gc || null, bands: propsRef.current.bands, layout: propsRef.current.layout })
+    const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, layout: propsRef.current.layout })
     scene.add(group)
 
-    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, grass: (group.getObjectByName('field-grass') as THREE.Mesh) ?? null, grassColor: gc, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, fieldType: propsRef.current.fieldType, layout: propsRef.current.layout, lineW: 0 }
+    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, fieldType: propsRef.current.fieldType, layout: propsRef.current.layout, lineW: 0 }
     return ctxRef.current
   }
 
@@ -113,9 +102,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport, showGoals, showGrass, image, color, bands, fieldType, layout })
+  const propsRef = useRef({ camera, viewport, showGoals, image, color, bands, fieldType, layout })
   useEffect(() => {
-    propsRef.current = { camera, viewport, showGoals, showGrass, image, color, bands, fieldType, layout }
+    propsRef.current = { camera, viewport, showGoals, image, color, bands, fieldType, layout }
   })
 
   function render() {
@@ -134,14 +123,11 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
         const mat = (o as THREE.Mesh).material
         if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((x) => x.dispose())
       })
-      const gc = grassColorOf(propsRef.current.image, propsRef.current.color)
-      const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, grass: propsRef.current.showGrass, grassColor: gc || null, bands: propsRef.current.bands, layout: propsRef.current.layout })
+      const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, layout: propsRef.current.layout })
       ctx.scene.add(group)
       ctx.group = group
       ctx.lines = (group.getObjectByName('field-lines') as THREE.Mesh) ?? null
       ctx.goals = group.getObjectByName('field-goals') ?? null
-      ctx.grass = (group.getObjectByName('field-grass') as THREE.Mesh) ?? null
-      ctx.grassColor = gc
       ctx.bands = (group.getObjectByName('field-bands') as THREE.Mesh) ?? null
       ctx.bandsOrient = propsRef.current.bands
       ctx.fieldType = propsRef.current.fieldType
@@ -149,16 +135,6 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       ctx.lineW = 0
     }
     if (ctx.goals) ctx.goals.visible = propsRef.current.showGoals
-    // Grass: toggle visibility, and swap texture ↔ solid fill when the color changes.
-    if (ctx.grass) {
-      ctx.grass.visible = propsRef.current.showGrass
-      const gc = grassColorOf(propsRef.current.image, propsRef.current.color)
-      if (gc !== ctx.grassColor) {
-        ;(ctx.grass.material as THREE.Material).dispose()
-        ctx.grass.material = grassMaterial(gc || null)
-        ctx.grassColor = gc
-      }
-    }
     // Rebuild the shading bands when the orientation changes (cheap flat geometry).
     if (ctx.bands && propsRef.current.bands !== ctx.bandsOrient) {
       ctx.bands.geometry.dispose()
@@ -195,7 +171,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick, showGoals, showGrass, image, color, bands, fieldType, layout])
+  }, [camera, viewport, renderTick, showGoals, image, color, bands, fieldType, layout])
 
   useEffect(() => {
     const container = containerRef.current
@@ -205,10 +181,6 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // The grass texture resolves after the first paint — re-render when it lands.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => onGrassReady(() => render()), [])
 
   return (
     <>

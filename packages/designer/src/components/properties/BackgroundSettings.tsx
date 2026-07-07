@@ -111,11 +111,6 @@ export function BackgroundSettings() {
         <Switch checked={bg.showGoals} onCheckedChange={(v) => setBackground({ showGoals: v })} />
       </div>
 
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-muted-foreground">Grass</span>
-        <Switch checked={bg.showGrass} onCheckedChange={(v) => setBackground({ showGrass: v })} />
-      </div>
-
       <div className="grid gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">Bands</span>
         <Segmented items={BANDS_OPTIONS} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
