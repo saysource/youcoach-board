@@ -95,9 +95,9 @@ const BAND_Y = 0.05
 const LINE_Y = 0.15
 const GOAL_Y = 0.18 // lift the goals just above the lines so posts don't collide
 
-// Metres covered by one grass.png tile, and how much the grass extends past the
-// pitch on every side (a 25% border), so the field always rests on grass.
-const GRASS_TILE = 1.5
+// How much the grass extends past the pitch on every side (a 25% border), so the
+// field always rests on grass. One grass.png tile covers a QUARTER of the field
+// (half its length × half its width) — see buildGrassGround.
 const GRASS_MARGIN = 0.25
 
 // The tiled grass texture, loaded once. Subscribers (the scene layer) re-render
@@ -138,7 +138,9 @@ function buildGrassGround(halfL: number, halfW: number, color?: string | null): 
   const d = halfW * 2 * (1 + 2 * GRASS_MARGIN)
   const geo = new THREE.PlaneGeometry(w, d)
   const uv = geo.attributes.uv as THREE.BufferAttribute
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / GRASS_TILE), uv.getY(i) * (d / GRASS_TILE))
+  // One tile = a quarter of the field (halfL × halfW), so the pitch is a 2×2 grid
+  // of tiles and the oversized plane (×1.5) shows 3×3.
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / halfL), uv.getY(i) * (d / halfW))
   const mesh = new THREE.Mesh(geo, grassMaterial(color))
   mesh.rotation.x = -Math.PI / 2
   mesh.position.y = GRASS_Y
