@@ -24,6 +24,8 @@ import {
   type ArrowTip,
   type BoardElement,
   type ElementChange,
+  type Operation,
+  type PolylineElement,
   type ElementTransform,
   type Box,
   type Arrow3DElement,
@@ -77,7 +79,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, reprojectChanges, withGroundAnchors } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, reprojectChanges, withGroundAnchors, groundDelta, groundMoveElement } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -1178,6 +1180,14 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     if (move && move.origins[el.id]) {
       if (!move.engaged) return el // not dragged far enough yet — stay put
       const o = move.origins[el.id]
+      // On a 3D field, shapes drag along the ground surface (warp in perspective,
+      // stay true in top view); anything groundMoveElement can't 3D-move (and 2D
+      // fields) falls back to a flat translate.
+      if (fieldCamCfg) {
+        const dg = groundDelta(arrow3dCam, move.start, move.current)
+        const moved = dg && groundMoveElement(el, arrow3dCam, dg.dgx, dg.dgz)
+        if (moved) return moved
+      }
       const d = moveDelta(move)
       return { ...el, transform: { ...o, x: o.x + d.x, y: o.y + d.y } }
     }
@@ -1890,15 +1900,42 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const { ids, origins, engaged } = move
       setMove(null)
       if (engaged) {
-        updateElements(
-          ids
-            .filter((id) => origins[id])
-            .map((id) => ({
-              id,
-              before: { transform: origins[id] },
-              after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } },
-            })),
-        )
+        // 3D field: shapes commit as a ground-surface move — polylines update their
+        // warped points, rectangles/ovals become the equivalent pinned polyline
+        // (remove + add, id kept). Everything else keeps the flat 2D translate. The
+        // whole gesture is one undo step (pinSetup wraps multi-op as a transaction).
+        const dg = fieldCamCfg ? groundDelta(arrow3dCam, move.start, move.current) : null
+        const moved = ids.filter((id) => origins[id]).map((id) => {
+          const orig = doc.elements.find((e) => e.id === id)
+          return { id, orig, m: dg && orig ? groundMoveElement(orig, arrow3dCam, dg.dgx, dg.dgz) : null }
+        })
+        if (dg && moved.some((x) => x.m)) {
+          const ops: Operation[] = []
+          const updates: ElementChange[] = []
+          for (const { id, orig, m } of moved) {
+            if (m && (orig!.type === 'rect' || orig!.type === 'ellipse')) {
+              const index = doc.elements.findIndex((e) => e.id === id)
+              ops.push({ kind: 'remove', element: orig!, index }, { kind: 'add', element: m, index })
+            } else if (m && orig!.type === 'polyline') {
+              const p = orig as PolylineElement
+              updates.push({ id, before: { points: p.points, ground: p.ground, transform: origins[id] }, after: { points: (m as PolylineElement).points, ground: (m as PolylineElement).ground, transform: m.transform } })
+            } else {
+              updates.push({ id, before: { transform: origins[id] }, after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } } })
+            }
+          }
+          if (updates.length) ops.push({ kind: 'update', changes: updates })
+          pinSetup(ops)
+        } else {
+          updateElements(
+            ids
+              .filter((id) => origins[id])
+              .map((id) => ({
+                id,
+                before: { transform: origins[id] },
+                after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } },
+              })),
+          )
+        }
       } else if (ids.length === 1) {
         // A tap (no drag) on a single token: a second one within 400ms opens the
         // inline editor. Detected on pointerup — after the press's default focus

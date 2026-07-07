@@ -27,7 +27,7 @@ import { DEFAULT_ZONE } from './field-zones'
  *  polygon straddling the camera (e.g. a pitch rectangle when zoomed in low)
  *  inverts and covers everything. Clamping w keeps a behind vertex flying off in
  *  its true direction, so the shape just extends off-screen. */
-function projectGround(cam: THREE.Camera, x: number, z: number): [number, number] {
+export function projectGround(cam: THREE.Camera, x: number, z: number): [number, number] {
   const v = new THREE.Vector4(x, 0, z, 1)
   v.applyMatrix4(cam.matrixWorldInverse)
   v.applyMatrix4(cam.projectionMatrix)
@@ -228,6 +228,57 @@ export function withGroundAnchors(elements: BoardElement[], cfg: PosedCamera): B
     }
     return el
   })
+}
+
+/** Pin a freshly-drawn shape to the pitch: capture each point's ground anchor under
+ *  `cfg` so it lives on the 3D surface from birth (warps with the camera, preserves
+ *  its drawn shape in top view). A rectangle/oval is stored as the equivalent
+ *  ground-pinned polyline (only a point-defined shape can warp). Non-shapes and
+ *  points that miss the ground are returned unchanged. */
+export function pinNewShape(el: BoardElement, cfg: PosedCamera): BoardElement {
+  const cam = makeCalibratedCamera(cfg)
+  if (el.type === 'polyline') {
+    const g = polylineGround(el, cam)
+    return g ? { ...el, ground: g } : el
+  }
+  if (el.type === 'rect' || el.type === 'ellipse') {
+    const poly = (el.type === 'rect' ? rectToPolyline(el) : ellipseToPolyline(el)) as PolylineElement
+    const g = polylineGround(poly, cam)
+    // Only convert when it can actually be pinned (on the pitch); off-pitch it stays
+    // an editable rectangle/oval.
+    return g ? { ...poly, ground: g } : el
+  }
+  return el
+}
+
+/** The ground-plane translation (metres, x/z) corresponding to dragging the cursor
+ *  from `from` to `to` on the board under `cam` — the delta a 3D-surface drag moves
+ *  a shape's footprint by. Null if either point doesn't hit the ground (off-pitch /
+ *  above the horizon), so the caller can fall back to a flat 2D translate. */
+export function groundDelta(cam: THREE.Camera, from: { x: number; y: number }, to: { x: number; y: number }): { dgx: number; dgz: number } | null {
+  const g0 = boardToGround(from.x, from.y, cam)
+  const g1 = boardToGround(to.x, to.y, cam)
+  if (!g0 || !g1) return null
+  return { dgx: g1.x - g0.x, dgz: g1.z - g0.z }
+}
+
+/** Move a shape by translating its GROUND footprint by (dgx, dgz) metres and
+ *  reprojecting through `cam` — the 3D-surface drag. A rectangle/oval comes back as
+ *  the equivalent pitch-pinned polyline (only a point-defined shape can warp), so
+ *  its footprint stays a true rectangle in top view while it deforms in perspective.
+ *  Returns null for shapes we don't 3D-move here or when a point leaves the ground,
+ *  so the caller falls back to a flat 2D translate. */
+export function groundMoveElement(el: BoardElement, cam: THREE.Camera, dgx: number, dgz: number): BoardElement | null {
+  const movePoly = (poly: PolylineElement): PolylineElement | null => {
+    const g = polylineGround(poly, cam)
+    if (!g) return null
+    const ground = g.map(([x, z]) => [x + dgx, z + dgz] as [number, number])
+    const points = ground.map(([x, z]) => projectGround(cam, x, z))
+    return { ...poly, points, ground, transform: { ...poly.transform, x: 0, y: 0, rotate: 0, scale: 1 } }
+  }
+  if (el.type === 'polyline') return movePoly(el)
+  if (el.type === 'rect' || el.type === 'ellipse') return movePoly((el.type === 'rect' ? rectToPolyline(el) : ellipseToPolyline(el)) as PolylineElement)
+  return null
 }
 
 /** Reproject every pinned element from the `before` camera to `after`:

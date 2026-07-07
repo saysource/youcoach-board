@@ -13,7 +13,7 @@ import {
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
 import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox, nextTokenText } from '../lib/draw'
-import { reprojectChanges, withGroundAnchors } from '../lib/field-anchor'
+import { reprojectChanges, withGroundAnchors, pinNewShape } from '../lib/field-anchor'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -321,9 +321,12 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       createFigure: (element) => {
         const { doc, keepToolActive, activeTool } = get()
-        push({ kind: 'add', element, index: doc.elements.length })
+        // On a 3D field, pin a freshly-drawn shape to the pitch so it lives on the
+        // surface from birth (rect/oval become a ground-pinned polyline). id is kept.
+        const el = doc.background.field3d ? pinNewShape(element, doc.background.field3d) : element
+        push({ kind: 'add', element: el, index: doc.elements.length })
         set((s) => ({
-          selectedIds: [element.id],
+          selectedIds: [el.id],
           lastTokenId: element.type === 'token' ? element.id : s.lastTokenId,
           tokenDefaults:
             element.type === 'token'
