@@ -1,4 +1,4 @@
-import { Orbit, RotateCcw, Save, MapPin, Grid2x2 } from 'lucide-react'
+import { Rotate3d, RotateCcw, Save, MapPin, Grid2x2 } from 'lucide-react'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/cn'
@@ -31,7 +31,7 @@ export function NavBar({ available, navigating, onToggle, onReset, onStore, mark
       <Tooltip>
         <TooltipTrigger asChild>
           <Button size="icon-sm" aria-label={navigating ? 'Exit navigation (W)' : 'Navigate scene (W)'} aria-pressed={navigating} onClick={onToggle} className={cn(navigating && 'text-primary')}>
-            <Orbit />
+            <Rotate3d />
           </Button>
         </TooltipTrigger>
         <TooltipContent>{navigating ? 'Exit navigation (W)' : 'Navigate scene (W)'}</TooltipContent>

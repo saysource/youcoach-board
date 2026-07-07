@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import '../styles/board.css'
-import { Check, Orbit } from 'lucide-react'
+import { Check, Rotate3d } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { Button } from './ui/button'
 import { BoardRootProvider } from '../lib/board-root'
@@ -364,7 +364,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             {/* Navigation-active indicator: an orbit watermark in the working-area
                 top-right corner (decorative, doesn't block input). Kept mounted so
                 it fades in/out with navigation mode. */}
-            <Orbit aria-hidden className="pointer-events-none absolute z-20 text-foreground transition-opacity duration-300" style={{ top: fieldTopGap + 8, right: fieldRightGap + 8, width: 100, height: 100, opacity: navigating ? 0.25 : 0 }} />
+            <Rotate3d aria-hidden className="pointer-events-none absolute z-20 text-foreground transition-opacity duration-300" style={{ top: fieldTopGap + 8, right: fieldRightGap + 8, width: 100, height: 100, opacity: navigating ? 0.25 : 0 }} />
           </div>
 
           {/* Top-left menu (+ the navigation control below it on mobile). */}
@@ -385,7 +385,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             ) : navigating ? (
               <div key={navBounce} className={cn('pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md', navBounce > 0 && 'ycb-nav-bounce')}>
                 <Button size="sm" onClick={toggleNav} className="font-medium">
-                  <Orbit /> Exit navigation mode
+                  <Rotate3d /> Exit navigation mode
                 </Button>
               </div>
             ) : homographyEditing ? (
