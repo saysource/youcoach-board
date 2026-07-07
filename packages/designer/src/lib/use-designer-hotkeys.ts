@@ -43,6 +43,8 @@ export interface HotkeyDeps {
    *  rotates like a mouse drag, 'pan' (Shift) slides across the ground. ux/uy are
    *  −1/0/1 from Left/Right and Up/Down. */
   moveCamera?: (mode: 'orbit' | 'pan', ux: number, uy: number) => void
+  /** Dolly the 3D field camera (+/- keys): dir +1 zooms in, −1 zooms out. */
+  zoomCamera?: (dir: 1 | -1) => void
 }
 
 // Whether the event originates from a text field (so we don't hijack typing).
@@ -132,6 +134,16 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
         } else if (!deps.navigating && !deps.bgEditing) {
           e.preventDefault()
           deps.moveCamera?.(shift ? 'pan' : 'orbit', ux, uy)
+        }
+        return
+      }
+
+      // +/- zoom the 3D scene camera (like arrows, navigation + bg-edit go through
+      // the field overlay's own handler). Independent of the selection.
+      if (key === '+' || key === '=' || key === '-' || key === '_') {
+        if (!deps.navigating && !deps.bgEditing) {
+          e.preventDefault()
+          deps.zoomCamera?.(key === '+' || key === '=' ? 1 : -1)
         }
         return
       }

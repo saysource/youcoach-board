@@ -13,7 +13,7 @@ import { useAssets, figureColorInfo, figureIndex, figureBaseSize, fieldFigureSca
 import { playerSvgs, PLAYER_SLOTS } from '../lib/player-kit'
 import { isObject3DPlayer } from '../lib/objects3d'
 import { topViewForField } from '../lib/field-zones'
-import { orbitStep, panStep, type PitchType } from '../lib/field-camera'
+import { orbitStep, panStep, dollyStep, type PitchType } from '../lib/field-camera'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
 import { addBall } from '../lib/quick-add'
@@ -43,6 +43,8 @@ const DRAWER_AUTO_OPEN_WIDTH = 1200
 
 // Degrees the field camera orbits per arrow-key press (Shift pans instead).
 const CAM_ROTATE_STEP = 3
+// Distance factor the field camera dollies per +/- press (< 1 = zoom in).
+const CAM_ZOOM_STEP = 1.15
 
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
@@ -241,6 +243,14 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     const ref = (cur.ref ?? 'soccer11') as PitchType
     s.setBackground({ field3d: mode === 'orbit' ? orbitStep(cur, ref, ux * CAM_ROTATE_STEP, -uy * CAM_ROTATE_STEP) : panStep(cur, ref, ux, -uy) })
   }
+  // +/- dolly the 3D field camera (normal mode; nav + bg-edit zoom via the overlay).
+  function zoomCamera(dir: 1 | -1) {
+    const s = store.getState()
+    const cur = s.doc.background.field3d
+    if (!cur) return
+    const ref = (cur.ref ?? 'soccer11') as PitchType
+    s.setBackground({ field3d: dollyStep(cur, ref, dir > 0 ? 1 / CAM_ZOOM_STEP : CAM_ZOOM_STEP) })
+  }
   // Editing the background owns the pose directly — leave navigation and drop the
   // session view (render-phase sync) so finishing shows the freshly-edited saved pose.
   const [navBgSeen, setNavBgSeen] = useState(bgEditing)
@@ -352,6 +362,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     showHelp: () => setShortcutsOpen(true),
     toggleGrid: () => setShowGrid((v) => !v),
     moveCamera,
+    zoomCamera,
   })
 
   return (

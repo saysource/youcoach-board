@@ -102,10 +102,21 @@ export function configToOrbit(c: PosedCamera): Orbit {
 }
 
 // Keyboard camera nudges (arrow keys), mirroring a mouse drag: orbit rotates,
-// Shift pans. Elevation stays above the grass and short of straight-down.
+// Shift pans, +/- dollies. Elevation stays above the grass and short of
+// straight-down; distance is clamped like OrbitControls.
 const MIN_ELEVATION = 2
 const MAX_ELEVATION = 89.5
+const MIN_DISTANCE = 2
+const MAX_DISTANCE = 400
 const clampDeg = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+/** Dolly the camera toward (factor < 1) or away from (factor > 1) its target,
+ *  keeping the orbit angle. Distance is clamped to [MIN_DISTANCE, MAX_DISTANCE]. */
+export function dollyStep(cam: PosedCamera, ref: PitchType, factor: number): CameraConfig {
+  const o = configToOrbit(cam)
+  o.distance = clampDeg(o.distance * factor, MIN_DISTANCE, MAX_DISTANCE)
+  return orbitToConfig(o, ref)
+}
 
 /** Orbit the camera around its ground target by degree deltas (like a drag-rotate).
  *  Distance / target / fov are unchanged; elevation is clamped above the pitch. */
