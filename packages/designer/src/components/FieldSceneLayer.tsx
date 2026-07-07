@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldBands, type FieldType, type TrainingLayout } from '@youcoach-board/core'
-import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, FIELD_DIMS, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
+import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, FIELD_DIMS, SUN_POSITION, SUN_TARGET, onGrassReady } from '../lib/field3d'
 import { applyViewCamera } from '../lib/field-camera'
 
 // A WebGL layer rendering the real 3D pitch, viewed through the board's field
@@ -181,6 +181,10 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // The grass texture resolves after the first paint — re-render when it lands.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => onGrassReady(() => render()), [])
 
   return (
     <>

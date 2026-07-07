@@ -11,6 +11,7 @@
 import * as THREE from 'three'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildGoal } from './goal'
+import grassUrl from '../assets/grass.png'
 
 // Pitch dims (metres, ~FIFA), matching field-reference.ts.
 const L = 105
@@ -89,9 +90,51 @@ const LINE_W = 0.45 // base pitch line width (metres); scaled down when zoomed i
 const LINE_W_MIN = 0.18 // thinnest line (close zoom) — ~real pitch line width
 const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
 // Stack heights (metres) so the ground / bands / lines never z-fight.
+const GRASS_Y = -0.02 // the grass ground sits a hair UNDER the lines/bands
 const BAND_Y = 0.05
 const LINE_Y = 0.15
 const GOAL_Y = 0.18 // lift the goals just above the lines so posts don't collide
+
+// Metres covered by one grass.png tile, and how much the grass extends past the
+// pitch on every side (a 25% border), so the field always rests on grass.
+const GRASS_TILE = 1.5
+const GRASS_MARGIN = 0.25
+
+// The tiled grass texture, loaded once. Subscribers (the scene layer) re-render
+// when it arrives, since TextureLoader resolves after the first paint.
+let grassTex: THREE.Texture | null = null
+const grassReadyCbs = new Set<() => void>()
+export function onGrassReady(cb: () => void): () => void {
+  grassReadyCbs.add(cb)
+  return () => {
+    grassReadyCbs.delete(cb)
+  }
+}
+function grassTexture(): THREE.Texture {
+  if (!grassTex) {
+    grassTex = new THREE.TextureLoader().load(grassUrl, () => grassReadyCbs.forEach((cb) => cb()))
+    grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping
+    grassTex.colorSpace = THREE.SRGBColorSpace
+    grassTex.anisotropy = 8
+  }
+  return grassTex
+}
+
+/** A horizontal grass ground: the pitch + a 25% border on each side, tiled with the
+ *  grass texture (UVs scaled so tiling is per-plane, not on the shared texture), and
+ *  dropped just under the lines to avoid z-fighting. Centred on the field origin. */
+function buildGrassGround(halfL: number, halfW: number): THREE.Mesh {
+  const w = halfL * 2 * (1 + 2 * GRASS_MARGIN)
+  const d = halfW * 2 * (1 + 2 * GRASS_MARGIN)
+  const geo = new THREE.PlaneGeometry(w, d)
+  const uv = geo.attributes.uv as THREE.BufferAttribute
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / GRASS_TILE), uv.getY(i) * (d / GRASS_TILE))
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: grassTexture() }))
+  mesh.rotation.x = -Math.PI / 2
+  mesh.position.y = GRASS_Y
+  mesh.name = 'field-grass'
+  return mesh
+}
 
 // One shared sun so the field and the arrow scene cast agreeing shadows.
 export const SUN_POSITION = new THREE.Vector3(120, 165, 70)
@@ -284,6 +327,9 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
   const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
   const group = new THREE.Group()
 
+  // The tiled grass ground, oversized past the pitch, under everything else.
+  group.add(buildGrassGround(halfL, halfW))
+
   // Transparent ground that still catches the goals' soft shadows.
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.6, W * 1.8), new THREE.ShadowMaterial({ opacity: 0.18 }))
   shadow.rotation.x = -Math.PI / 2
@@ -324,11 +370,13 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
   return group
 }
 
-/** The goals only (centred on the pitch, like buildFieldGroup) rebuilt as an
- *  ALWAYS-ON-TOP overlay for the object layer: depthTest/-Write off + a high
- *  renderOrder so placed 3D objects (players, cones…) never occlude the goal
- *  frame. Shadow-casting is left off — the field layer's own goals cast the
- *  ground shadow, so this overlay doesn't double it. */
+/** The goals only (centred on the pitch, like buildFieldGroup), rebuilt so the
+ *  object layer can add them to ITS scene — sharing one depth buffer with the
+ *  placed 3D objects. That way a ball can sit inside the goal (occluded by the
+ *  front net, in front of the back net) and a player in front occludes the net,
+ *  instead of the goal being painted flat on top. Shadow-casting is left off —
+ *  the field layer's own goals cast the ground shadow, so this copy doesn't
+ *  double it. */
 export function buildGoalsOverlay(fieldType: FieldType = 'soccer11', layout: TrainingLayout = 'plain'): THREE.Group {
   const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
   const goals = new THREE.Group()
@@ -338,15 +386,8 @@ export function buildGoalsOverlay(fieldType: FieldType = 'soccer11', layout: Tra
   goals.traverse((o) => {
     const m = o as THREE.Mesh
     if (!m.isMesh) return
-    m.renderOrder = 100
     m.castShadow = false
     m.receiveShadow = false
-    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
-      if (mat) {
-        mat.depthTest = false
-        mat.depthWrite = false
-      }
-    }
   })
   return goals
 }
