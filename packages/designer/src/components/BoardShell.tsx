@@ -36,6 +36,10 @@ const BOARD_RIGHT_PAD = 16
 // Left space reserved for the full panel: left-2 (8) + w-52 (208) + gap.
 const PANEL_RESERVE = 50
 
+// Until the user first opens/closes the drawer, it auto-opens when the main
+// component is at least this wide (px) and collapses below it.
+const DRAWER_AUTO_OPEN_WIDTH = 1200
+
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
   /** Controlled theme — when set, the host owns it (live-synced); the in-menu
@@ -50,7 +54,11 @@ export interface BoardShellProps {
 // fullscreen are local view chrome (not part of the drawing).
 export function BoardShell({ initialTheme, theme: controlledTheme, showThemeControl }: BoardShellProps) {
   const { theme, setTheme, isDark } = useTheme(initialTheme, controlledTheme)
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  // The drawer is auto-managed by width until the user opens/closes it; then
+  // `drawerTouched` pins their explicit `drawerUserOpen` choice. The effective
+  // open state is derived below (and forced open during background-edit).
+  const [drawerUserOpen, setDrawerUserOpen] = useState(false)
+  const [drawerTouched, setDrawerTouched] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
@@ -73,7 +81,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   function openCategory(catId: string) {
     const g = groupOf(catId)
     setLibraryCatId((g && lastCatByGroup[g]) || catId)
-    setDrawerOpen(true)
+    setDrawerTouched(true)
+    setDrawerUserOpen(true)
   }
   // Drawer category picks update the current category AND the group's memory.
   function selectCategory(catId: string) {
@@ -95,14 +104,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     const s = store.getState()
     s.setSelection([])
     s.setActiveTool('select')
-    // The drawer switches to the 3D-field zone UI (fieldsOnly) on its own; we must
-    // NOT point libraryCatId at the legacy 'fields' catalog category, or exiting
-    // bg-edit would strand the normal drawer on the (hidden) old-fields palette.
-    setDrawerOpen(true)
+    // The drawer switches to the 3D-field zone UI (fieldsOnly) on its own and is
+    // forced open by bgEditing (see drawerOpen). We must NOT point libraryCatId at
+    // the legacy 'fields' catalog category, or exiting bg-edit would strand the
+    // normal drawer on the (hidden) old-fields palette.
   }
   function finishBackground() {
     setBgEditing(false)
-    setDrawerOpen(false)
   }
 
   // Field-homography calibration mode: a dedicated overlay (bespoke handles) that
@@ -263,6 +271,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
 
   // Responsive layout from the component's own size (container-query style).
   const { width, height } = useElementSize(rootEl)
+  // Effective drawer state: the user's explicit choice once they've touched it,
+  // otherwise auto-open when the component is wide enough (`width` is 0 until
+  // measured, reading as collapsed). Background-edit always forces it open.
+  const drawerOpen = bgEditing || (drawerTouched ? drawerUserOpen : width >= DRAWER_AUTO_OPEN_WIDTH)
   const innerH = Math.max(0, height - 2 * BOARD_TOP_PAD)
   // Rendered field width: the 4:3 fit is height-driven when there's horizontal
   // room, so derive it from height (minus the board's vertical padding).
@@ -420,7 +432,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 fullscreen={fullscreen}
                 onToggleFullscreen={() => setFullscreen((v) => !v)}
                 drawerOpen={drawerOpen}
-                onToggleDrawer={() => setDrawerOpen((v) => !v)}
+                onToggleDrawer={() => { setDrawerTouched(true); setDrawerUserOpen(!drawerOpen) }}
               />
             </div>
           )}
@@ -446,7 +458,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {/* Right library drawer — always a docked sidebar; closed only by the user. */}
           <LibraryDrawer
             open={drawerOpen}
-            onClose={() => setDrawerOpen(false)}
+            onClose={() => { setDrawerTouched(true); setDrawerUserOpen(false) }}
             fullscreen={fullscreen}
             onToggleFullscreen={() => setFullscreen((v) => !v)}
             categoryId={libraryCatId}
