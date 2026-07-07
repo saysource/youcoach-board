@@ -1916,9 +1916,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             if (m && (orig!.type === 'rect' || orig!.type === 'ellipse')) {
               const index = doc.elements.findIndex((e) => e.id === id)
               ops.push({ kind: 'remove', element: orig!, index }, { kind: 'add', element: m, index })
-            } else if (m && orig!.type === 'polyline') {
+            } else if (m && (orig!.type === 'polyline' || orig!.type === 'draw')) {
               const p = orig as PolylineElement
-              updates.push({ id, before: { points: p.points, ground: p.ground, transform: origins[id] }, after: { points: (m as PolylineElement).points, ground: (m as PolylineElement).ground, transform: m.transform } })
+              const mp = m as PolylineElement
+              updates.push({ id, before: { points: p.points, ground: p.ground, transform: origins[id] }, after: { points: mp.points, ground: mp.ground, transform: mp.transform } })
             } else {
               updates.push({ id, before: { transform: origins[id] }, after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } } })
             }

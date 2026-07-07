@@ -126,6 +126,10 @@ export interface PolylineElement extends BaseElement {
 export interface DrawElement extends BaseElement {
   type: 'draw'
   points: Array<[number, number]>
+  /** Per-point world-ground anchors `[x, z]` (metres, y=0), parallel to `points` —
+   *  the stroke painted on the 3D surface, so it warps to stay on the field when the
+   *  camera changes. Absent = not pinned (a flat board stroke). Like PolylineElement. */
+  ground?: Array<[number, number]>
 }
 
 /** A catalog figure (player, material, field…) placed on the board. Stores a
@@ -926,7 +930,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       points.push([x, y])
     }
     if (points.length < 2) return null
-    return { ...base, type: 'draw', points }
+    return { ...base, type: 'draw', points, ground: parseGroundArray(o.ground) }
   }
   if (o.type === 'figure') {
     const figureId = typeof o.figureId === 'string' ? o.figureId : null

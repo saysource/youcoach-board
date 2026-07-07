@@ -14,7 +14,7 @@
 // See specs/start.md "Elements on the 3D space". Framework-free (three.js only).
 
 import * as THREE from 'three'
-import { type BoardElement, type PolylineElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
+import { type BoardElement, type PolylineElement, type DrawElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { rectToPolyline, ellipseToPolyline } from './draw'
@@ -55,10 +55,13 @@ export function bottomCenterBoard(el: GroundElement): { x: number; y: number } {
   return { x: cx + t.x, y: cy + (h * t.scale) / 2 + t.y }
 }
 
-/** A polyline's points in board units, with its transform applied EXACTLY as
+/** Point-path elements that carry a per-point ground footprint. */
+type PathElement = PolylineElement | DrawElement
+
+/** A polyline/stroke's points in board units, with its transform applied EXACTLY as
  *  ElementView renders it: `board = c + R·s·(p − c) + (x, y)` (translate, then
  *  rotate + scale about the local center). */
-function polyBoardPoints(el: PolylineElement): [number, number][] {
+function polyBoardPoints(el: PathElement): [number, number][] {
   const lb = getLocalBounds(el)
   const cx = lb.x + lb.width / 2
   const cy = lb.y + lb.height / 2
@@ -75,7 +78,7 @@ function polyBoardPoints(el: PolylineElement): [number, number][] {
 
 /** Each polyline point's ground anchor under `cam`, or null if ANY point doesn't
  *  hit the ground plane (the array must stay parallel to `points`). */
-function polylineGround(el: PolylineElement, cam: THREE.Camera): Array<[number, number]> | null {
+function polylineGround(el: PathElement, cam: THREE.Camera): Array<[number, number]> | null {
   const out: Array<[number, number]> = []
   for (const [bx, by] of polyBoardPoints(el)) {
     const g = boardToGround(bx, by, cam)
@@ -189,7 +192,7 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera, opts?: {
       const sizeSame = el.sizeM != null && Math.abs(el.sizeM - sizeM) < 1e-4
       if (groundSame && sizeSame) return
       updates.push({ id: el.id, before: { ground: el.ground, sizeM: el.sizeM }, after: { ground: next, sizeM } })
-    } else if (el.type === 'polyline') {
+    } else if (el.type === 'polyline' || el.type === 'draw') {
       const g = polylineGround(el, cam)
       if (!g) return
       if (el.ground && sameGround(el.ground, g)) return
@@ -222,7 +225,7 @@ export function withGroundAnchors(elements: BoardElement[], cfg: PosedCamera): B
       const sizeM = (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
       return { ...el, ground: [g.x, g.z] as [number, number], sizeM }
     }
-    if (el.type === 'polyline' && !el.ground) {
+    if ((el.type === 'polyline' || el.type === 'draw') && !el.ground) {
       const g = polylineGround(el, cam)
       return g ? { ...el, ground: g } : el
     }
@@ -237,7 +240,7 @@ export function withGroundAnchors(elements: BoardElement[], cfg: PosedCamera): B
  *  points that miss the ground are returned unchanged. */
 export function pinNewShape(el: BoardElement, cfg: PosedCamera): BoardElement {
   const cam = makeCalibratedCamera(cfg)
-  if (el.type === 'polyline') {
+  if (el.type === 'polyline' || el.type === 'draw') {
     const g = polylineGround(el, cam)
     return g ? { ...el, ground: g } : el
   }
@@ -269,14 +272,14 @@ export function groundDelta(cam: THREE.Camera, from: { x: number; y: number }, t
  *  Returns null for shapes we don't 3D-move here or when a point leaves the ground,
  *  so the caller falls back to a flat 2D translate. */
 export function groundMoveElement(el: BoardElement, cam: THREE.Camera, dgx: number, dgz: number): BoardElement | null {
-  const movePoly = (poly: PolylineElement): PolylineElement | null => {
+  const movePoly = <T extends PathElement>(poly: T): T | null => {
     const g = polylineGround(poly, cam)
     if (!g) return null
     const ground = g.map(([x, z]) => [x + dgx, z + dgz] as [number, number])
     const points = ground.map(([x, z]) => projectGround(cam, x, z))
     return { ...poly, points, ground, transform: { ...poly.transform, x: 0, y: 0, rotate: 0, scale: 1 } }
   }
-  if (el.type === 'polyline') return movePoly(el)
+  if (el.type === 'polyline' || el.type === 'draw') return movePoly(el)
   if (el.type === 'rect' || el.type === 'ellipse') return movePoly((el.type === 'rect' ? rectToPolyline(el) : ellipseToPolyline(el)) as PolylineElement)
   return null
 }
@@ -297,7 +300,7 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
   const newCam = makeCalibratedCamera(after)
   const changes: ElementChange[] = []
   for (const el of elements) {
-    if (el.type === 'polyline' && el.ground) {
+    if ((el.type === 'polyline' || el.type === 'draw') && el.ground) {
       const pts: Array<[number, number]> = el.ground.map(([x, z]) => projectGround(newCam, x, z))
       changes.push({ id: el.id, before: { points: el.points, transform: el.transform }, after: { points: pts, transform: { ...el.transform, x: 0, y: 0, rotate: 0, scale: 1 } } })
       continue
