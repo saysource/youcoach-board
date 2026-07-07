@@ -293,21 +293,38 @@ export type BoardElement = RectElement | EllipseElement | PolylineElement | Draw
 /** A cubic bézier segment: start, two controls, end. */
 export type Cubic = [[number, number], [number, number], [number, number], [number, number]]
 
-/** Catmull-Rom → cubic béziers through `pts`. Open curves clamp the phantom end
- *  neighbors to the endpoints; closed curves wrap (and include the last→first
- *  segment). Returns one cubic per segment (open: n-1, closed: n). */
-export function catmullRomCubics(pts: Array<[number, number]>, closed: boolean): Cubic[] {
+/** Catmull-Rom → cubic béziers through `pts`, with CENTRIPETAL parameterization
+ *  (`alpha` = 0.5) so unevenly-spaced points don't cusp or loop — uniform
+ *  Catmull-Rom overshoots badly once points bunch up, e.g. when a curve is pinned
+ *  to the pitch and the perspective compresses its far end. Open curves use a
+ *  one-sided tangent at each end; closed curves wrap (and include last→first).
+ *  Returns one cubic per segment (open: n-1, closed: n). Reduces to the classic
+ *  uniform form when points are evenly spaced. */
+export function catmullRomCubics(pts: Array<[number, number]>, closed: boolean, alpha = 0.5): Cubic[] {
   const n = pts.length
   if (n < 2) return []
   const segs = closed ? n : n - 1
   const out: Cubic[] = []
+  const knot = (a: [number, number], b: [number, number]) => Math.hypot(a[0] - b[0], a[1] - b[1]) ** alpha
   for (let i = 0; i < segs; i++) {
     const p1 = pts[i]
     const p2 = pts[(i + 1) % n]
-    const prev = !closed && i === 0 ? p1 : pts[(i - 1 + n) % n]
-    const next = !closed && i === segs - 1 ? p2 : pts[(i + 2) % n]
-    const c1: [number, number] = [p1[0] + (p2[0] - prev[0]) / 6, p1[1] + (p2[1] - prev[1]) / 6]
-    const c2: [number, number] = [p2[0] - (next[0] - p1[0]) / 6, p2[1] - (next[1] - p1[1]) / 6]
+    // Phantom neighbors: null at an open curve's ends → one-sided end tangent.
+    const p0 = !closed && i === 0 ? null : pts[(i - 1 + n) % n]
+    const p3 = !closed && i === segs - 1 ? null : pts[(i + 2) % n]
+    const d1 = p0 ? knot(p0, p1) : 0
+    const d2 = knot(p1, p2) || 1e-6
+    const d3 = p3 ? knot(p2, p3) : 0
+    // Non-uniform Catmull-Rom tangents (dP/dt) at p1 and p2; the bézier controls are
+    // p ± tangent·d2/3. A clamped end (no neighbor) falls back to the segment chord.
+    const tan = (a: [number, number], b: [number, number], c: [number, number], da: number, db: number): [number, number] =>
+      da > 1e-9
+        ? [(b[0] - a[0]) / da - (c[0] - a[0]) / (da + db) + (c[0] - b[0]) / db, (b[1] - a[1]) / da - (c[1] - a[1]) / (da + db) + (c[1] - b[1]) / db]
+        : [(c[0] - b[0]) / db, (c[1] - b[1]) / db]
+    const m1 = p0 ? tan(p0, p1, p2, d1, d2) : ([(p2[0] - p1[0]) / d2, (p2[1] - p1[1]) / d2] as [number, number])
+    const m2 = p3 ? tan(p1, p2, p3, d2, d3) : ([(p2[0] - p1[0]) / d2, (p2[1] - p1[1]) / d2] as [number, number])
+    const c1: [number, number] = [p1[0] + (m1[0] * d2) / 3, p1[1] + (m1[1] * d2) / 3]
+    const c2: [number, number] = [p2[0] - (m2[0] * d2) / 3, p2[1] - (m2[1] * d2) / 3]
     out.push([p1, c1, c2, p2])
   }
   return out
