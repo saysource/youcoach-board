@@ -456,8 +456,9 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           )}
 
           {/* Navigation controls hint (desktop only — touch gestures come later),
-              centered along the bottom edge. */}
-          {navigating && !mobile && (
+              centered along the bottom edge. Shown while navigating AND while
+              editing the background, since both orbit the field with the mouse. */}
+          {(navigating || backgroundMode) && !mobile && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
               <NavHints />
             </div>
