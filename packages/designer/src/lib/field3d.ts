@@ -323,3 +323,30 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
   group.position.set(HALF_L, 0, HALF_W)
   return group
 }
+
+/** The goals only (centred on the pitch, like buildFieldGroup) rebuilt as an
+ *  ALWAYS-ON-TOP overlay for the object layer: depthTest/-Write off + a high
+ *  renderOrder so placed 3D objects (players, cones…) never occlude the goal
+ *  frame. Shadow-casting is left off — the field layer's own goals cast the
+ *  ground shadow, so this overlay doesn't double it. */
+export function buildGoalsOverlay(fieldType: FieldType = 'soccer11', layout: TrainingLayout = 'plain'): THREE.Group {
+  const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
+  const goals = new THREE.Group()
+  if (fieldType === 'training') goals.add(...trainingGoalGroups(layout, halfL, halfW))
+  else goals.add(makeGoal(-1, halfL, goalW), makeGoal(1, halfL, goalW))
+  goals.position.set(HALF_L, 0, HALF_W)
+  goals.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh) return
+    m.renderOrder = 100
+    m.castShadow = false
+    m.receiveShadow = false
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+      if (mat) {
+        mat.depthTest = false
+        mat.depthWrite = false
+      }
+    }
+  })
+  return goals
+}

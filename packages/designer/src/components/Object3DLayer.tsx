@@ -7,7 +7,8 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement } from '@youcoach-board/core'
 import { makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
-import { SUN_POSITION, SUN_TARGET } from '../lib/field3d'
+import { SUN_POSITION, SUN_TARGET, buildGoalsOverlay } from '../lib/field3d'
+import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildObject3D, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots } from '../lib/objects3d'
 
 // A 3D player is near real human height, so it reads well at a modest multiplier;
@@ -31,6 +32,11 @@ interface Props {
   camera: PosedCamera | null
   /** Global display multiplier for placed objects (background.objectScale). */
   objectScale: number
+  /** The field's goals, re-rendered here as an ALWAYS-ON-TOP overlay so placed 3D
+   *  objects never occlude the goal frame (the field layer draws the base + shadow). */
+  fieldType: FieldType
+  layout: TrainingLayout
+  showGoals: boolean
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
 }
@@ -44,11 +50,13 @@ interface Ctx {
   composer: EffectComposer
   renderPass: RenderPass
   outlinePass: OutlinePass
+  goals: THREE.Group | null
+  goalsKey: string
 }
 
 const SELECT_COLOR = 0x2a6cff
 
-export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, viewport, camera, objectScale, svgRef, containerRef }, ref) {
+export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, viewport, camera, objectScale, fieldType, layout, showGoals, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -111,7 +119,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     composer.addPass(outlinePass)
     composer.addPass(new OutputPass())
 
-    ctxRef.current = { renderer, scene, fixedCam, calibCam, meshes: new Map(), composer, renderPass, outlinePass }
+    ctxRef.current = { renderer, scene, fixedCam, calibCam, meshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '' }
     return ctxRef.current
   }
 
@@ -224,12 +232,33 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     return { left: sr.left - cr.left + (sr.width - width) / 2, top: sr.top - cr.top + (sr.height - height) / 2, width, height }
   }
 
+  // The goals overlay (always-on-top copy of the field's goals). Rebuilt only when
+  // the field type / training layout / visibility changes; not in `meshes`, so it's
+  // never a pick target (goals aren't selectable).
+  function syncGoals(ctx: Ctx) {
+    const key = showGoals ? `${fieldType}|${layout}` : ''
+    if (ctx.goalsKey === key) return
+    if (ctx.goals) {
+      ctx.scene.remove(ctx.goals)
+      ctx.goals.traverse((o) => {
+        const m = o as Partial<THREE.Mesh>
+        m.geometry?.dispose()
+        const mat = (o as THREE.Mesh).material
+        if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((x) => x.dispose())
+      })
+    }
+    ctx.goals = showGoals ? buildGoalsOverlay(fieldType, layout) : null
+    if (ctx.goals) ctx.scene.add(ctx.goals)
+    ctx.goalsKey = key
+  }
+
   function render() {
     const ctx = ensureCtx()
     const canvas = canvasRef.current
     const rect = boardRect()
     if (!ctx || !canvas || !rect || rect.width < 1) return
     syncMeshes(ctx)
+    syncGoals(ctx)
     canvas.style.left = `${rect.left}px`
     canvas.style.top = `${rect.top}px`
     canvas.style.width = `${rect.width}px`
@@ -261,7 +290,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, selectedIds, viewport, camera, objectScale])
+  }, [elements, selectedIds, viewport, camera, objectScale, fieldType, layout, showGoals])
 
   useEffect(() => {
     const container = containerRef.current
