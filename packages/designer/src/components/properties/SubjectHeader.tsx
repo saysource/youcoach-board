@@ -1,5 +1,5 @@
 import { type ComponentType } from 'react'
-import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Hand, Pencil, Eraser, Type, Lasso } from 'lucide-react'
+import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Pencil, Eraser, Type, Lasso } from 'lucide-react'
 import { TrapezoidIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from '../icons'
 import type { BoardElement } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
@@ -39,7 +39,6 @@ function elementSubject(el: BoardElement): Subject {
 // tools that aren't on the main toolbar (e.g. ellipse, players, materials).
 const TOOL_SUBJECT: Record<ToolId, Subject> = {
   select: { icon: MousePointer2, label: 'Selection' },
-  hand: { icon: Hand, label: 'Pan' },
   rectangle: { icon: Square, label: 'Rectangle' },
   ellipse: { icon: Circle, label: 'Ellipse' },
   diamond: { icon: Diamond, label: 'Diamond' },

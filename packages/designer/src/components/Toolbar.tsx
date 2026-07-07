@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, Hand, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, Grid3x3, Video, MapPin } from 'lucide-react'
+import { Lock, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, Grid3x3, Video, MapPin } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -26,7 +26,6 @@ const GROUP_ICON: Record<string, ElementType> = { players: PlayersIcon, material
 
 export type ToolId =
   | 'select'
-  | 'hand'
   // The box-shape tools live behind the Shapes menu (see ShapesMenu / draw.ts
   // SHAPE_TOOLS), not as individual toolbar buttons.
   | 'rectangle'
@@ -82,10 +81,7 @@ interface Tool {
 }
 
 // Navigation tools, rendered before the Shapes menu.
-const NAV_TOOLS: Tool[] = [
-  { id: 'hand', label: 'Pan', icon: Hand },
-  { id: 'select', label: 'Selection', icon: MousePointer2, shortcut: 1 },
-]
+const NAV_TOOLS: Tool[] = [{ id: 'select', label: 'Selection', icon: MousePointer2, shortcut: 1 }]
 
 // Free-draw tool, rendered after the Shapes + Lines menus (same group). Box
 // shapes are behind the Shapes menu; lines/arrows behind the Lines menu.

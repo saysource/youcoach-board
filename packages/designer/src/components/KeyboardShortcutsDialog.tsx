@@ -21,7 +21,6 @@ const TOOLS: Section = {
   title: 'Tools',
   rows: [
     { label: 'Selection', combos: [['V'], ['1']] },
-    { label: 'Hand (pan)', combos: [['H']] },
     { label: 'Rectangle', combos: [['R'], ['2']] },
     { label: 'Diamond', combos: [['3']] },
     { label: 'Ellipse', combos: [['O'], ['4']] },
@@ -70,13 +69,6 @@ const EDITOR: Section = {
 const VIEW: Section = {
   title: 'View',
   rows: [
-    { label: 'Zoom in', combos: [[MOD, '+']] },
-    { label: 'Zoom out', combos: [[MOD, '−']] },
-    { label: 'Zoom to 100%', combos: [[MOD, '0']] },
-    { label: 'Zoom to fit', combos: [[ALT, '1']] },
-    { label: 'Zoom to selection', combos: [[ALT, '2']] },
-    { label: 'Zoom to cursor', combos: [[MOD, 'wheel']] },
-    { label: 'Pan the canvas', combos: [['Space', 'drag']] },
     { label: 'Toggle grid', combos: [['G']] },
     { label: 'Snap to objects', combos: [[ALT, 'S']] },
     { label: 'Keyboard shortcuts', combos: [['?']] },

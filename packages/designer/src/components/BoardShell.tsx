@@ -20,7 +20,6 @@ import { Toolbar } from './Toolbar'
 import { MainMenu } from './MainMenu'
 import { TopRightControls } from './TopRightControls'
 import { LibraryDrawer } from './LibraryDrawer'
-import { ZoomBar } from './ZoomBar'
 import { UndoRedoBar } from './UndoRedoBar'
 import { NavBar } from './NavBar'
 import { NavHints } from './NavHints'
@@ -330,13 +329,6 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     addBall: () => addBall(catalog, store),
     showHelp: () => setShortcutsOpen(true),
     toggleGrid: () => setShowGrid((v) => !v),
-    zoom: (kind) => {
-      const s = store.getState()
-      if (kind === 'in') s.zoomIn()
-      else if (kind === 'out') s.zoomOut()
-      else if (kind === 'reset' || kind === 'fit') s.zoomReset()
-      else s.zoomToSelection()
-    },
   })
 
   return (
@@ -452,11 +444,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             </div>
           )}
 
-          {/* Bottom-left zoom + undo/redo. Hidden in mobile mode, where the main
+          {/* Bottom-left undo/redo + nav. Hidden in mobile mode, where the main
               toolbar occupies the bottom and undo/redo live in the property bar. */}
           {!mobile && (
             <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
-              <ZoomBar />
               <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
               <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onReset={resetNav} onStore={storeNav} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} onTopView={topViewNav} />
             </div>

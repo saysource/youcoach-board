@@ -40,7 +40,6 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
   const setBackground = useEditorStore((s) => s.setBackground)
   const beginTransaction = useEditorStore((s) => s.beginTransaction)
   const commitTransaction = useEditorStore((s) => s.commitTransaction)
-  const zoomReset = useEditorStore((s) => s.zoomReset)
 
   const surfaceRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -75,7 +74,6 @@ export function FieldZoneTool({ field3d, viewBox }: { field3d: FieldView; viewBo
   useEffect(() => {
     const el = surfaceRef.current
     if (!el) return
-    zoomReset() // board framing identity so markers align with the rendered field
     beginTransaction()
     const cam = new THREE.PerspectiveCamera(FOV, BOARD_WIDTH / BOARD_HEIGHT, 0.1, 4000)
     cam.position.set(field3d.position[0], field3d.position[1], field3d.position[2])

@@ -9,8 +9,6 @@ import {
   applyOperation,
   invertOperation,
   getElementBounds,
-  BOARD_WIDTH,
-  BOARD_HEIGHT,
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
@@ -33,31 +31,6 @@ export interface Viewport {
   zoom: number
   panX: number
   panY: number
-}
-const MIN_ZOOM = 0.5
-const MAX_ZOOM = 8
-const ZOOM_STEP = 1.25
-const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
-// Clamp one axis of the pan: when the view is larger than the board (zoom < 1)
-// center it (letterbox); otherwise keep it within the board edges.
-function clampAxis(v: number, size: number, board: number): number {
-  return size >= board ? (board - size) / 2 : clampNum(v, 0, board - size)
-}
-function clampViewport(zoom: number, panX: number, panY: number): Viewport {
-  const z = clampNum(zoom, MIN_ZOOM, MAX_ZOOM)
-  return { zoom: z, panX: clampAxis(panX, BOARD_WIDTH / z, BOARD_WIDTH), panY: clampAxis(panY, BOARD_HEIGHT / z, BOARD_HEIGHT) }
-}
-// Zoom by a factor, keeping the anchor board-point fixed on screen (defaults to
-// the current view center).
-function zoomToward(vp: Viewport, factor: number, anchor?: { x: number; y: number }): Viewport {
-  const z = clampNum(vp.zoom * factor, MIN_ZOOM, MAX_ZOOM)
-  const curW = BOARD_WIDTH / vp.zoom
-  const curH = BOARD_HEIGHT / vp.zoom
-  const ax = anchor?.x ?? vp.panX + curW / 2
-  const ay = anchor?.y ?? vp.panY + curH / 2
-  const fx = (ax - vp.panX) / curW
-  const fy = (ay - vp.panY) / curH
-  return clampViewport(z, ax - fx * (BOARD_WIDTH / z), ay - fy * (BOARD_HEIGHT / z))
 }
 
 // Appearance fields carried by Copy/Paste style — everything EXCEPT geometry
@@ -210,15 +183,6 @@ export interface EditorState {
   flipSelected: () => void
   /** Toggle bold on the selected text elements (⌘B). */
   toggleTextBold: () => void
-  /** Zoom the view in / out (about center), reset to 100%, or frame the selection. */
-  zoomIn: () => void
-  zoomOut: () => void
-  zoomReset: () => void
-  zoomToSelection: () => void
-  /** Zoom by a factor, keeping the anchor board-point fixed (for ⌘+wheel). */
-  zoomBy: (factor: number, anchor?: { x: number; y: number }) => void
-  /** Pan the view by (dx, dy) board units (clamped to the board). */
-  panBy: (dx: number, dy: number) => void
   /** Change the selected elements' z-order (one undoable reorder op). */
   arrangeSelected: (mode: 'front' | 'back' | 'forward' | 'backward') => void
   /** Align or distribute the selection (needs ≥2 elements; distribute needs ≥3). */
@@ -654,34 +618,6 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
             }
           }),
         )
-      },
-
-      zoomIn: () => set((s) => ({ viewport: zoomToward(s.viewport, ZOOM_STEP) })),
-      zoomOut: () => set((s) => ({ viewport: zoomToward(s.viewport, 1 / ZOOM_STEP) })),
-      zoomBy: (factor, anchor) => set((s) => ({ viewport: zoomToward(s.viewport, factor, anchor) })),
-      zoomReset: () => set({ viewport: { zoom: 1, panX: 0, panY: 0 } }),
-      panBy: (dx, dy) => set((s) => ({ viewport: clampViewport(s.viewport.zoom, s.viewport.panX + dx, s.viewport.panY + dy) })),
-
-      zoomToSelection: () => {
-        const { doc, selectedIds } = get()
-        const sel = doc.elements.filter((e) => selectedIds.includes(e.id))
-        if (sel.length === 0) {
-          set({ viewport: { zoom: 1, panX: 0, panY: 0 } })
-          return
-        }
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-        for (const e of sel) {
-          const b = getElementBounds(e)
-          minX = Math.min(minX, b.x)
-          minY = Math.min(minY, b.y)
-          maxX = Math.max(maxX, b.x + b.width)
-          maxY = Math.max(maxY, b.y + b.height)
-        }
-        const pad = 1.3 // leave breathing room around the selection
-        const bw = Math.max(1, maxX - minX) * pad
-        const bh = Math.max(1, maxY - minY) * pad
-        const z = clampNum(Math.min(BOARD_WIDTH / bw, BOARD_HEIGHT / bh), MIN_ZOOM, MAX_ZOOM)
-        set({ viewport: clampViewport(z, (minX + maxX) / 2 - BOARD_WIDTH / z / 2, (minY + maxY) / 2 - BOARD_HEIGHT / z / 2) })
       },
 
       arrangeSelected: (mode) => {

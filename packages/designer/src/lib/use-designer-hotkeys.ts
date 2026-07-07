@@ -7,7 +7,6 @@ import type { ToolId } from '../components/Toolbar'
 // row mirrors the toolbar order as a convenient alternate.
 const TOOL_KEYS: Record<string, ToolId> = {
   v: 'select', '1': 'select',
-  h: 'hand',
   r: 'rectangle', '2': 'rectangle',
   '3': 'diamond',
   o: 'ellipse', '4': 'ellipse',
@@ -40,8 +39,6 @@ export interface HotkeyDeps {
   toggleGrid?: () => void
   /** Open the keyboard-shortcuts help dialog. */
   showHelp?: () => void
-  /** Viewport zoom (optional until implemented). */
-  zoom?: (kind: 'in' | 'out' | 'reset' | 'fit' | 'selection') => void
 }
 
 // Whether the event originates from a text field (so we don't hijack typing).
@@ -91,13 +88,9 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
         // Z-order: ⌘⌥] front, ⌘⌥[ back, ⌘] forward, ⌘[ backward.
         if (key === ']') { e.preventDefault(); s.arrangeSelected(alt ? 'front' : 'forward'); return }
         if (key === '[') { e.preventDefault(); s.arrangeSelected(alt ? 'back' : 'backward'); return }
-        // Resize (⌘⌥⇧ +/-) — checked before zoom (which is ⌘ +/- without ⌥).
+        // Resize the selection (⌘⌥⇧ +/-).
         if (alt && shift && (key === '+' || key === '=')) { e.preventDefault(); s.resizeSelected(1.1); return }
         if (alt && shift && (key === '-' || key === '_')) { e.preventDefault(); s.resizeSelected(1 / 1.1); return }
-        // Zoom (⌘ +/-/0) and fit/selection (⌥1 / ⌥2 handled below without ⌘).
-        if (!alt && (key === '+' || key === '=')) { e.preventDefault(); deps.zoom?.('in'); return }
-        if (!alt && (key === '-' || key === '_')) { e.preventDefault(); deps.zoom?.('out'); return }
-        if (!alt && key === '0') { e.preventDefault(); deps.zoom?.('reset'); return }
 
         switch (lower) {
           case 'z': e.preventDefault(); if (shift) s.redo(); else s.undo(); return
@@ -113,10 +106,8 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
         }
       }
 
-      // ── ⌥ (no ⌘): zoom to fit / selection, toggle snap ─────────────────────
+      // ── ⌥ (no ⌘): toggle snap ──────────────────────────────────────────────
       if (alt && !mod) {
-        if (e.code === 'Digit1') { e.preventDefault(); deps.zoom?.('fit'); return }
-        if (e.code === 'Digit2') { e.preventDefault(); deps.zoom?.('selection'); return }
         if (e.code === 'KeyS') { e.preventDefault(); s.toggleSnapToObjects(); return }
         return
       }
@@ -124,14 +115,14 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       // ── Plain keys (no ⌘/⌥) ────────────────────────────────────────────────
       if (key === 'Delete' || key === 'Backspace') { s.deleteSelected(); return }
 
-      // Arrow keys: nudge the selection (⇧ = coarse); with nothing selected, pan.
+      // Arrow keys: nudge the selection (⇧ = coarse).
       if (key.startsWith('Arrow')) {
+        if (!s.selectedIds.length) return
         const step = shift ? 10 : 1
         const ux = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : 0
         const uy = key === 'ArrowUp' ? -1 : key === 'ArrowDown' ? 1 : 0
         e.preventDefault()
-        if (s.selectedIds.length) s.nudgeSelected(ux * step, uy * step)
-        else s.panBy(ux * 40, uy * 40)
+        s.nudgeSelected(ux * step, uy * step)
         return
       }
 
