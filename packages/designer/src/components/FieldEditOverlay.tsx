@@ -18,6 +18,14 @@ const DUR = 500 // fly-to tween (ms)
 const MIN_CAM_Y = 0.5
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
 
+// Cursor for the orbit surface: the Lucide "rotate-3d" glyph (drawing the field is
+// really rotating a 3D scene). Rendered as a white icon over a dark halo so it reads
+// on any pitch colour; hotspot at its centre. Used in navigation + Edit-Background.
+const R3D_PATHS =
+  "<path d='m15.194 13.707 3.814 1.86-1.86 3.814'/><path d='M16.47214 7.52786 A 5 10 0 1 0 13 21.79796'/><path d='M21.79796 11 A 10 5 0 1 0 19 15.57071'/>"
+const R3D_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'><g stroke='black' stroke-opacity='0.5' stroke-width='4'>${R3D_PATHS}</g><g stroke='white' stroke-width='2'>${R3D_PATHS}</g></svg>`
+const ROTATE_3D_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(R3D_SVG)}") 14 14, grab`
+
 interface Pose {
   ref: string
   position: [number, number, number]
@@ -163,7 +171,7 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
       <div
         ref={surfaceRef}
         className="absolute inset-0 z-20"
-        style={{ touchAction: 'none', cursor: 'grab' }}
+        style={{ touchAction: 'none', cursor: ROTATE_3D_CURSOR }}
         onPointerDown={(e) => { tapRef.current = { x: e.clientX, y: e.clientY, t: e.timeStamp } }}
         onPointerUp={(e) => {
           const d = tapRef.current
