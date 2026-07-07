@@ -1506,6 +1506,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function onElementPointerDown(e: React.PointerEvent, el: BoardElement) {
     if (e.button !== 0) return
     if (creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating) return // calibration/navigation: elements are inert
+    // 3D objects/arrows are painted ABOVE the SVG, so one under the cursor is visually
+    // on top of this 2D element — don't grab the click here; let it bubble to the
+    // container's 3D hit-test, which selects the thing you actually see on top.
+    if (fieldCamCfg && svgRef.current) {
+      const p = clientToBoard(svgRef.current, e.clientX, e.clientY)
+      if (object3dLayerRef.current?.pick(p.x, p.y) || arrow3dLayerRef.current?.pick(p.x, p.y)) return
+    }
     e.stopPropagation()
     const svg = svgRef.current
     if (!svg) return
