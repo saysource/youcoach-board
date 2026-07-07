@@ -455,9 +455,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             </div>
           )}
 
-          {/* Navigation controls hint (desktop only — touch gestures come later). */}
+          {/* Navigation controls hint (desktop only — touch gestures come later),
+              centered along the bottom edge. */}
           {navigating && !mobile && (
-            <div className="pointer-events-none absolute bottom-3 right-2">
+            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
               <NavHints />
             </div>
           )}
