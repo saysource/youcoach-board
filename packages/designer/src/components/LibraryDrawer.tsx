@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { X, Sparkles, Maximize, Minimize, Pin, PinOff, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, Camera, type LucideIcon } from 'lucide-react'
+import { X, Sparkles, Maximize, Minimize, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, Camera, type LucideIcon } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -46,9 +46,6 @@ const FACING_DESC: Record<string, string> = {
 interface LibraryDrawerProps {
   open: boolean
   onClose: () => void
-  /** Docked = a real sidebar that the board refits around; otherwise it overlays. */
-  pinned: boolean
-  onTogglePin: () => void
   fullscreen: boolean
   onToggleFullscreen: () => void
   /** Selected category (controlled — lives in the shell so the toolbar can jump). */
@@ -66,7 +63,7 @@ interface LibraryDrawerProps {
 // list) over the selected category's element palette: facet filters (action /
 // facing, or material type) + a thumbnail grid; clicking a thumbnail drops the
 // figure centered on the board. Categories come from the catalog (assets).
-export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, fieldsOnly = false, navPose = null }: LibraryDrawerProps) {
+export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, fieldsOnly = false, navPose = null }: LibraryDrawerProps) {
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
   const setBackground = useEditorStore((s) => s.setBackground)
@@ -131,16 +128,22 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
     setListOpen(false)
   }
 
+  // 3D players: the palette is a set of POSES for one of two characters — a
+  // Man/Woman toggle swaps the whole grid (pose ids are `pose_<gender>_<pose>`).
+  const isPlayers3d = catId === 'players3d'
+  const [players3dGender, setPlayers3dGender] = useState<'man' | 'woman'>('man')
+
   // Facing buttons (arrow-ordered) and action sections. Every action shows as a
   // titled section; only the facing filter (if any) narrows the figures.
   const actions = cat?.facets?.action ?? null
   const facings = cat?.facets?.facing ? [...cat.facets.facing].sort((a, b) => FACING_ORDER.indexOf(a.id) - FACING_ORDER.indexOf(b.id)) : null
   const inFacing = (f: CatalogFigure) => !facings || !facing || (f.facing ?? null) === facing
+  const inGender = (f: CatalogFigure) => !isPlayers3d || !!f.object3d?.startsWith(`pose_${players3dGender}_`)
   const sections = actions
     ? actions
         .map((a) => ({ id: a.id, label: a.label, separatorBefore: a.separatorBefore, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && (f.actions ?? []).includes(a.id)) }))
         .filter((sec) => sec.figures.length)
-    : [{ id: 'all', label: '', separatorBefore: false, figures: (cat?.figures ?? []).filter(inFacing) }]
+    : [{ id: 'all', label: '', separatorBefore: false, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && inGender(f)) }]
 
   function jumpTo(id: string) {
     gridRef.current?.querySelector(`[data-section="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -382,8 +385,7 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
     <aside
       aria-hidden={!open}
       className={cn(
-        'pointer-events-auto absolute inset-y-0 right-0 z-20 flex w-64 flex-col border-l border-border bg-card/90 transition-transform duration-200',
-        pinned ? 'shadow-none' : 'shadow-xl',
+        'pointer-events-auto absolute inset-y-0 right-0 z-20 flex w-64 flex-col border-l border-border bg-card/90 shadow-none transition-transform duration-200',
         open ? 'translate-x-0' : 'translate-x-full',
       )}
     >
@@ -397,7 +399,6 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
             active={fullscreen}
             onClick={onToggleFullscreen}
           />
-          <HeaderButton icon={pinned ? PinOff : Pin} label={pinned ? 'Undock' : 'Dock as sidebar'} active={pinned} onClick={onTogglePin} />
           <HeaderButton icon={X} label="Close library" onClick={onClose} />
         </div>
       </div>
@@ -552,6 +553,22 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
             /* Selected category's palette: facing (arrows), then a thumbnail
                grid split into a titled section per action. */
             <div className="flex flex-1 flex-col overflow-hidden">
+              {isPlayers3d && (
+                /* Man/Woman toggle: swaps the whole pose grid between the two characters. */
+                <div className="flex items-center gap-1 border-b border-border p-2">
+                  {(['man', 'woman'] as const).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      aria-pressed={players3dGender === g}
+                      onClick={() => setPlayers3dGender(g)}
+                      className={cn('flex h-8 flex-1 items-center justify-center rounded-md border border-border text-sm hover:bg-accent', players3dGender === g && 'bg-primary/15 font-medium')}
+                    >
+                      {g === 'man' ? 'Man' : 'Woman'}
+                    </button>
+                  ))}
+                </div>
+              )}
               {facings && (
                 <div className="flex items-center gap-1 border-b border-border p-2">
                   {facings.map((f) => {
@@ -592,21 +609,35 @@ export function LibraryDrawer({ open, onClose, pinned, onTogglePin, fullscreen, 
                         {sec.label}
                       </div>
                     )}
-                    <div className="grid grid-cols-3 gap-0 mb-3 last:mb-0">
-                      {sec.figures.map((f, i) => (
-                        <button
-                          key={`${f.thumb}-${i}`}
-                          type="button"
-                          title={f.tool ? 'Text' : cat?.name}
-                          onPointerDown={(e) => onThumbPointerDown(e, f)}
-                          className={cn(
-                            'flex aspect-square touch-manipulation items-center justify-center rounded-md border border-transparent p-1 hover:border-primary hover:bg-primary/20',
-                            f.svg ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
-                          )}
-                        >
-                          <img src={f.object3d ? OBJECT3D_THUMBS[f.object3d] : url(f.thumb)} alt="" loading="lazy" draggable={false} className="max-h-full max-w-full object-contain" />
-                        </button>
-                      ))}
+                    {/* 3D-player poses show 2-up (1.5× bigger thumbnails). */}
+                    <div className={cn('grid gap-0 mb-3 last:mb-0', isPlayers3d ? 'grid-cols-2' : 'grid-cols-3')}>
+                      {sec.figures.map((f, i) => {
+                        const thumb = (
+                          <button
+                            key={`${f.thumb}-${i}`}
+                            type="button"
+                            title={f.label ? undefined : f.tool ? 'Text' : cat?.name}
+                            aria-label={f.label}
+                            onPointerDown={(e) => onThumbPointerDown(e, f)}
+                            className={cn(
+                              'flex aspect-square touch-manipulation items-center justify-center rounded-md border border-transparent p-1 hover:border-primary hover:bg-primary/20',
+                              f.svg ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+                            )}
+                          >
+                            <img src={f.object3d ? OBJECT3D_THUMBS[f.object3d] : url(f.thumb)} alt="" loading="lazy" draggable={false} className="max-h-full max-w-full object-contain" />
+                          </button>
+                        )
+                        // Labeled figures (e.g. 3D-player poses) get a proper tooltip
+                        // naming the action; the rest keep the plain title attribute.
+                        return f.label ? (
+                          <Tooltip key={`${f.thumb}-${i}`}>
+                            <TooltipTrigger asChild>{thumb}</TooltipTrigger>
+                            <TooltipContent side="left">{f.label}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          thumb
+                        )
+                      })}
                     </div>
                   </div>
                 ))}

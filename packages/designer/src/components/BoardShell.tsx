@@ -35,9 +35,6 @@ const BOARD_LEFT_PAD = 50
 const BOARD_RIGHT_PAD = 16
 // Left space reserved for the full panel: left-2 (8) + w-52 (208) + gap.
 const PANEL_RESERVE = 50
-// Right-side library drawer width (Tailwind w-64 = 16rem). Keep in sync with
-// LibraryDrawer's `w-64` and the `right-64` board inset below.
-const DRAWER_WIDTH = 256
 
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
@@ -54,7 +51,6 @@ export interface BoardShellProps {
 export function BoardShell({ initialTheme, theme: controlledTheme, showThemeControl }: BoardShellProps) {
   const { theme, setTheme, isDark } = useTheme(initialTheme, controlledTheme)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerPinned, setDrawerPinned] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
@@ -260,16 +256,6 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const redo = useEditorStore((s) => s.redo)
   const canUndo = useEditorStore((s) => s.pointer >= 0)
   const canRedo = useEditorStore((s) => s.pointer < s.stack.length - 1)
-  const figureAddedTick = useEditorStore((s) => s.figureAddedTick)
-
-  // Adding a figure (click or drag-drop) closes the drawer when it's a floating
-  // overlay — a quick "pick one and go". Pin it to keep it open for several. The
-  // drawer stays mounted, so its category/scroll are remembered on reopen.
-  const [seenFigureTick, setSeenFigureTick] = useState(figureAddedTick)
-  if (figureAddedTick !== seenFigureTick) {
-    setSeenFigureTick(figureAddedTick)
-    if (drawerOpen && !drawerPinned) setDrawerOpen(false)
-  }
 
   // The root is also the Radix portal container, so menus/tooltips stay inside
   // our scoped, theme-aware subtree. Tracked in state so context updates on mount.
@@ -297,17 +283,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
 
   // When the drawer is OPEN as an overlay, keep the field centered but pull its
   // right edge no further than the drawer's left edge, so the drawer doesn't
-  // cover it — without ever pushing the field's left edge past the reserve. The
-  // upshot: wide containers don't move (already clear); mid widths slide left
-  // just enough to meet the drawer; widths too tight to fully clear it sit
-  // flush-left, minimizing BOTH the overlap and the unused space on the left.
-  // (We grow the right padding to shift the centered field left.) A docked
-  // (pinned) drawer instead refits the board into the remaining width (right-64).
-  const overlayOpen = drawerOpen && !drawerPinned
-  const naturalRight = leftPad + (availWidth + fieldW) / 2 // centered field's right edge
-  const targetRight = Math.max(leftPad + fieldW, Math.min(naturalRight, width - DRAWER_WIDTH))
-  const boardPaddingRight = overlayOpen ? Math.max(BOARD_RIGHT_PAD, width + leftPad - 2 * targetRight + fieldW) : BOARD_RIGHT_PAD
-  const reserveRight = drawerOpen && drawerPinned
+  // The library drawer is always a docked sidebar: when open, the board refits
+  // into the remaining width (right-64) rather than being overlaid.
+  const boardPaddingRight = BOARD_RIGHT_PAD
+  const reserveRight = drawerOpen
   // The rendered field's top-right corner (gaps from the board container's top/right
   // edges, accounting for the 4:3 letterbox) — where the nav watermark sits.
   const fieldTopGap = BOARD_TOP_PAD + Math.max(0, (innerH - fieldW / BOARD_ASPECT) / 2)
@@ -464,12 +443,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             </div>
           )}
 
-          {/* Right library drawer (overlay, or docked sidebar when pinned). */}
+          {/* Right library drawer — always a docked sidebar; closed only by the user. */}
           <LibraryDrawer
             open={drawerOpen}
             onClose={() => setDrawerOpen(false)}
-            pinned={drawerPinned}
-            onTogglePin={() => setDrawerPinned((v) => !v)}
             fullscreen={fullscreen}
             onToggleFullscreen={() => setFullscreen((v) => !v)}
             categoryId={libraryCatId}
