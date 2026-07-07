@@ -4,7 +4,7 @@ import { Check, Rotate3d } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { Button } from './ui/button'
 import { BoardRootProvider } from '../lib/board-root'
-import { BOARD_ASPECT, type FieldView } from '@youcoach-board/core'
+import { BOARD_ASPECT, parseBoard, type FieldView } from '@youcoach-board/core'
 import { useTheme, type ThemeSetting } from '../lib/use-theme'
 import { useElementSize } from '../lib/use-element-size'
 import type { Breakpoint } from '../lib/use-breakpoint'
@@ -13,6 +13,7 @@ import { useAssets, figureColorInfo, figureIndex, figureBaseSize, fieldFigureSca
 import { playerSvgs, PLAYER_SLOTS } from '../lib/player-kit'
 import { isObject3DPlayer } from '../lib/objects3d'
 import { topViewForField } from '../lib/field-zones'
+import { orbitStep, panStep, type PitchType } from '../lib/field-camera'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
 import { addBall } from '../lib/quick-add'
@@ -39,6 +40,9 @@ const PANEL_RESERVE = 50
 // Until the user first opens/closes the drawer, it auto-opens when the main
 // component is at least this wide (px) and collapses below it.
 const DRAWER_AUTO_OPEN_WIDTH = 1200
+
+// Degrees the field camera orbits per arrow-key press (Shift pans instead).
+const CAM_ROTATE_STEP = 3
 
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
@@ -93,6 +97,20 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
 
   // Editor store: subscribe to what the chrome needs; actions via the api handle.
   const store = useEditorStoreApi()
+
+  // Dev-only automation hook (thumbnail rigs / e2e scripts): load a document and
+  // read state from the console. Never present in production builds.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const w = window as unknown as { __ycbE2E?: unknown }
+    w.__ycbE2E = {
+      loadDoc: (json: unknown) => store.setState({ doc: parseBoard(json), selectedIds: [] }),
+      getState: () => store.getState(),
+    }
+    return () => {
+      delete w.__ycbE2E
+    }
+  }, [store])
 
   // Background-edit mode: an explicit editor state (not derived from the drawer)
   // that disables element actions, swaps in a background toolbar, restricts the
@@ -212,6 +230,17 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   function navTap() {
     setNavBounce((n) => n + 1)
   }
+  // Arrow keys move the 3D field camera when nothing is selected (see hotkeys):
+  // 'orbit' rotates like a mouse drag, 'pan' (Shift) slides across the ground. This
+  // path is NORMAL mode only — navigation + background-edit drive their OrbitControls
+  // through FieldEditOverlay's own handler (so its mirrored pose stays in sync).
+  function moveCamera(mode: 'orbit' | 'pan', ux: number, uy: number) {
+    const s = store.getState()
+    const cur = s.doc.background.field3d
+    if (!cur) return
+    const ref = (cur.ref ?? 'soccer11') as PitchType
+    s.setBackground({ field3d: mode === 'orbit' ? orbitStep(cur, ref, ux * CAM_ROTATE_STEP, -uy * CAM_ROTATE_STEP) : panStep(cur, ref, ux, -uy) })
+  }
   // Editing the background owns the pose directly — leave navigation and drop the
   // session view (render-phase sync) so finishing shows the freshly-edited saved pose.
   const [navBgSeen, setNavBgSeen] = useState(bgEditing)
@@ -322,6 +351,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     addBall: () => addBall(catalog, store),
     showHelp: () => setShortcutsOpen(true),
     toggleGrid: () => setShowGrid((v) => !v),
+    moveCamera,
   })
 
   return (

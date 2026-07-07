@@ -39,6 +39,10 @@ export interface HotkeyDeps {
   toggleGrid?: () => void
   /** Open the keyboard-shortcuts help dialog. */
   showHelp?: () => void
+  /** Move the 3D field camera when nothing is selected (arrow keys): 'orbit'
+   *  rotates like a mouse drag, 'pan' (Shift) slides across the ground. ux/uy are
+   *  −1/0/1 from Left/Right and Up/Down. */
+  moveCamera?: (mode: 'orbit' | 'pan', ux: number, uy: number) => void
 }
 
 // Whether the event originates from a text field (so we don't hijack typing).
@@ -115,14 +119,20 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       // ── Plain keys (no ⌘/⌥) ────────────────────────────────────────────────
       if (key === 'Delete' || key === 'Backspace') { s.deleteSelected(); return }
 
-      // Arrow keys: nudge the selection (⇧ = coarse).
+      // Arrow keys: with a selection, nudge it (⇧ = ×10); with nothing selected,
+      // move the 3D field camera like a mouse drag (⇧ = pan instead of orbit).
+      // Navigation + background-edit orbit through the field overlay's own handler,
+      // so we only drive the camera here in normal mode.
       if (key.startsWith('Arrow')) {
-        if (!s.selectedIds.length) return
-        const step = shift ? 10 : 1
         const ux = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : 0
         const uy = key === 'ArrowUp' ? -1 : key === 'ArrowDown' ? 1 : 0
-        e.preventDefault()
-        s.nudgeSelected(ux * step, uy * step)
+        if (s.selectedIds.length) {
+          e.preventDefault()
+          s.nudgeSelected(ux * (shift ? 10 : 1), uy * (shift ? 10 : 1))
+        } else if (!deps.navigating && !deps.bgEditing) {
+          e.preventDefault()
+          deps.moveCamera?.(shift ? 'pan' : 'orbit', ux, uy)
+        }
         return
       }
 

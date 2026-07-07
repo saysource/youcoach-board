@@ -100,3 +100,34 @@ export function configToOrbit(c: PosedCamera): Orbit {
     fov: c.fov,
   }
 }
+
+// Keyboard camera nudges (arrow keys), mirroring a mouse drag: orbit rotates,
+// Shift pans. Elevation stays above the grass and short of straight-down.
+const MIN_ELEVATION = 2
+const MAX_ELEVATION = 89.5
+const clampDeg = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+/** Orbit the camera around its ground target by degree deltas (like a drag-rotate).
+ *  Distance / target / fov are unchanged; elevation is clamped above the pitch. */
+export function orbitStep(cam: PosedCamera, ref: PitchType, dAzimuthDeg: number, dElevationDeg: number): CameraConfig {
+  const o = configToOrbit(cam)
+  o.azimuth += dAzimuthDeg
+  o.elevation = clampDeg(o.elevation + dElevationDeg, MIN_ELEVATION, MAX_ELEVATION)
+  return orbitToConfig(o, ref)
+}
+
+/** Pan the camera across the ground plane (like a drag-pan): translate the target —
+ *  and with it the camera — keeping the orbit angle/distance, so the view direction
+ *  is preserved. `right`/`forward` are signed unit steps (screen right / into the
+ *  scene); the metric step scales with distance so it feels the same at any zoom. */
+export function panStep(cam: PosedCamera, ref: PitchType, right: number, forward: number): CameraConfig {
+  const o = configToOrbit(cam)
+  const az = o.azimuth * DEG
+  const step = Math.max(0.5, o.distance * 0.04)
+  // Ground forward (camera → target) and its right-hand perpendicular.
+  const fwd: [number, number] = [-Math.sin(az), -Math.cos(az)]
+  const rgt: [number, number] = [-fwd[1], fwd[0]]
+  o.targetX += (rgt[0] * right + fwd[0] * forward) * step
+  o.targetZ += (rgt[1] * right + fwd[1] * forward) * step
+  return orbitToConfig(o, ref)
+}

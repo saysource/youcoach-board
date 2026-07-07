@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldType } from '@youcoach-board/core'
 import { projectToBoard } from '../lib/arrow3d'
+import { orbitStep, panStep, type PitchType } from '../lib/field-camera'
 import { zonesForField } from '../lib/field-zones'
 
 // Edit-Background overlay for the real 3D field: real OrbitControls (drag = orbit,
@@ -13,6 +14,7 @@ import { zonesForField } from '../lib/field-zones'
 
 const FOV = 50
 const DUR = 500 // fly-to tween (ms)
+const ARROW_STEP_DEG = 3 // degrees the camera orbits per arrow-key press (Shift pans)
 // The camera must never reach/cross the grass — keep it a little above y=0
 // (metres). Pan/dolly/near-horizon orbit can all push it down, so we clamp.
 const MIN_CAM_Y = 0.5
@@ -164,6 +166,34 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
     controls.enablePan = true
     controls.mouseButtons.LEFT = panMode ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
   }, [panMode])
+
+  // Arrow keys orbit the camera (Shift pans), mirroring a mouse drag — the same as
+  // normal mode, but driven through THIS overlay's OrbitControls so the mirrored
+  // pose (onPose) stays in sync instead of fighting a fly-to. Only bound while the
+  // overlay is mounted (navigation + background-edit).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.key.startsWith('Arrow')) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return
+      const cam = camRef.current
+      const controls = controlsRef.current
+      if (!cam || !controls) return
+      e.preventDefault()
+      const ux = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0
+      const uy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
+      const ref = (field3d.ref ?? 'soccer11') as PitchType
+      const cur = { position: [cam.position.x, cam.position.y, cam.position.z] as [number, number, number], target: [controls.target.x, controls.target.y, controls.target.z] as [number, number, number], fov: cam.fov }
+      const next = e.shiftKey ? panStep(cur, ref, ux, -uy) : orbitStep(cur, ref, ux * ARROW_STEP_DEG, -uy * ARROW_STEP_DEG)
+      cam.position.set(next.position[0], next.position[1], next.position[2])
+      controls.target.set(next.target[0], next.target[1], next.target[2])
+      cam.lookAt(controls.target)
+      controls.update()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <>
