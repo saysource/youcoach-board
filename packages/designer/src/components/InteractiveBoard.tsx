@@ -32,7 +32,7 @@ import {
   ARROW3D_DEFAULTS,
   IDENTITY_TRANSFORM,
 } from '@youcoach-board/core'
-import { useEditorStore } from '../store/context'
+import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { isCreationTool } from '../store/editorStore'
 import {
   clientToBoard,
@@ -88,6 +88,11 @@ const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-ca
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
 const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
 const MOVE_THRESHOLD_PX = 4 // on-screen drag distance before a move engages
+// Alt/Option + wheel 3D zoom-to-cursor of the field camera (normal mode).
+const WHEEL_ZOOM_K = 0.0015 // wheel delta → dolly factor (negative delta = zoom in)
+const ZOOM_MIN_DIST = 2 // camera→target distance clamp (metres), matches OrbitControls
+const ZOOM_MAX_DIST = 400
+const ZOOM_MIN_CAM_Y = 0.5 // keep the camera a little above the grass
 const OBJECT3D_MOVE_PX = 9 // firmer drag threshold for 3D objects (more resistance)
 const SNAP_PX = 6 // on-screen distance within which a move snaps to another object
 const BG_MOVE_HANDLE_PX = 72 // on-screen size of the background pan handle (icon viewBox 46×46)
@@ -329,6 +334,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const snapToObjects = useEditorStore((s) => s.snapToObjects)
   const keepToolActive = useEditorStore((s) => s.keepToolActive)
   const setActiveTool = useEditorStore((s) => s.setActiveTool)
+  const storeApi = useEditorStoreApi()
   const viewBox = `${viewport.panX} ${viewport.panY} ${BOARD_WIDTH / viewport.zoom} ${BOARD_HEIGHT / viewport.zoom}`
 
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -524,6 +530,53 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     setBackground({ field3d: orbitToConfig(fn(configToOrbit(field3d)), field3d.ref as PitchType) })
   }
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+  // Option/Alt + wheel: a 3D "zoom to cursor" of the field camera, in NORMAL mode
+  // only (navigation + background-edit have their own OrbitControls). Dollies the
+  // saved field3d toward/away from the ground point under the pointer, keeping that
+  // point fixed on screen — like OrbitControls' zoomToCursor. The whole wheel
+  // gesture coalesces into ONE undo step via a debounced transaction. The live pose
+  // is read from the store (not a stale closure) so fast bursts accumulate.
+  const zoomCommitRef = useRef<number | null>(null)
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    if (backgroundMode || homographyMode || cameraMode || zoneMode || navigating) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.altKey) return
+      const f3d = storeApi.getState().doc.background.field3d
+      if (!f3d) return
+      e.preventDefault()
+      const p = clientToBoard(svg, e.clientX, e.clientY)
+      const g = boardToGround(p.x, p.y, makeCalibratedCamera(f3d))
+      const pivot = g ? [g.x, 0, g.z] : f3d.target
+      const C = f3d.position, T = f3d.target
+      const dist = Math.hypot(C[0] - T[0], C[1] - T[1], C[2] - T[2]) || 1
+      const f = clamp(Math.exp(e.deltaY * WHEEL_ZOOM_K), ZOOM_MIN_DIST / dist, ZOOM_MAX_DIST / dist)
+      if (f === 1) return
+      const toward = (a: readonly number[]): [number, number, number] => [pivot[0] + (a[0] - pivot[0]) * f, pivot[1] + (a[1] - pivot[1]) * f, pivot[2] + (a[2] - pivot[2]) * f]
+      const position = toward(C)
+      position[1] = Math.max(ZOOM_MIN_CAM_Y, position[1])
+      if (zoomCommitRef.current === null) beginTransaction()
+      else window.clearTimeout(zoomCommitRef.current)
+      setBackground({ field3d: { ...f3d, position, target: toward(T) } })
+      zoomCommitRef.current = window.setTimeout(() => {
+        commitTransaction()
+        zoomCommitRef.current = null
+      }, 250)
+    }
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      svg.removeEventListener('wheel', onWheel)
+      if (zoomCommitRef.current !== null) {
+        window.clearTimeout(zoomCommitRef.current)
+        commitTransaction()
+        zoomCommitRef.current = null
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backgroundMode, homographyMode, cameraMode, zoneMode, navigating])
+
   // A near-overhead top view; azimuth sets the orientation (0 = landscape / goals
   // left-right, 90 = portrait / goals top-bottom). Orbit is disabled while locked.
   function goTopView(orientation: 'portrait' | 'landscape') {
