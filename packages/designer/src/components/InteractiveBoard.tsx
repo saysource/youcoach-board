@@ -24,6 +24,7 @@ import {
   type ArrowTip,
   type BoardElement,
   type ElementChange,
+  type ElementPatch,
   type Operation,
   type PolylineElement,
   type ElementTransform,
@@ -81,7 +82,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -709,7 +710,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // THE FIELD AXES (constant pitch-x or pitch-z), not screen axes — so alignment
   // behaves the same in perspective as top-down. The snap radius is the on-screen
   // SNAP_PX converted to ground metres per axis (perspective varies metres/px).
-  function snapObject3DField(nx: number, nz: number, exclude: Set<string>): { x: number; z: number; guides: SnapLine[] } {
+  function snapGroundPoint(nx: number, nz: number, exclude: Set<string>): { x: number; z: number; guides: SnapLine[] } {
     // Ground positions of the other elements: objects use their x/z; 2D elements
     // are projected from their board centre onto the pitch plane.
     const targets: { x: number; z: number }[] = []
@@ -778,7 +779,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       let dx = ground.x - g.grabGround.x
       let dz = ground.z - g.grabGround.z
       if (snapToObjects) {
-        const sn = snapObject3DField(g.orig.x + dx, g.orig.z + dz, new Set(g.moving.map((m) => m.id)))
+        const sn = snapGroundPoint(g.orig.x + dx, g.orig.z + dz, new Set(g.moving.map((m) => m.id)))
         dx = sn.x - g.orig.x
         dz = sn.z - g.orig.z
         setObject3dSnapGuides(sn.guides)
@@ -1027,6 +1028,52 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     return snap ? { x: raw.x + snap.dx, y: raw.y + snap.dy } : raw
   }
 
+  // An element's board-space CENTRE at transform `t` (translate only — scale/rotate
+  // are about the centre, so they don't move it).
+  function elBoardCenter(el: BoardElement, t: ElementTransform): Point {
+    const lb = getLocalBounds(el)
+    return { x: lb.x + lb.width / 2 + t.x, y: lb.y + lb.height / 2 + t.y }
+  }
+
+  // On a 3D field: the move gesture's snapped GROUND delta (metres, x/z) + the
+  // field-axis guide lines. The selection's ground centre is snapped to other
+  // elements' ground x/z (constant pitch-x or pitch-z lines — the SAME behaviour in
+  // perspective as top-down), never to screen horizontals/verticals. No snap → the
+  // raw ground delta with no guides.
+  function groundSnap(m: MoveState): { dgx: number; dgz: number; guides: SnapLine[] } {
+    const dg = groundDelta(arrow3dCam, m.start, m.current) ?? { dgx: 0, dgz: 0 }
+    if (!snapToObjects || !m.engaged) return { dgx: dg.dgx, dgz: dg.dgz, guides: [] }
+    const originEls = m.ids
+      .map((id) => {
+        const el = doc.elements.find((e) => e.id === id)
+        return el && m.origins[id] ? ({ ...el, transform: m.origins[id] } as BoardElement) : null
+      })
+      .filter((e): e is BoardElement => e !== null)
+    const u = unionBounds(originEls)
+    const gc0 = u ? arrow3dGround({ x: u.x + u.width / 2, y: u.y + u.height / 2 }) : null
+    if (!gc0) return { dgx: dg.dgx, dgz: dg.dgz, guides: [] }
+    const sn = snapGroundPoint(gc0.x + dg.dgx, gc0.z + dg.dgz, new Set(m.ids))
+    return { dgx: sn.x - gc0.x, dgz: sn.z - gc0.z, guides: sn.guides }
+  }
+
+  // Board translate that slides a standing/flat element (token/figure/text/…) along
+  // the pitch by a ground delta (metres), perspective-correct; null if its centre
+  // leaves the ground plane. Its ground anchor (if any) shifts by the same delta.
+  function groundTranslate(el: BoardElement, t: ElementTransform, dgx: number, dgz: number): Point | null {
+    const ob = elBoardCenter(el, t)
+    const gc = arrow3dGround(ob)
+    if (!gc) return null
+    const nb = projectGround(arrow3dCam, gc.x + dgx, gc.z + dgz)
+    return { x: t.x + (nb[0] - ob.x), y: t.y + (nb[1] - ob.y) }
+  }
+
+  // The single [x,z] ground anchor a standing element carries (figure/token/3D text),
+  // shifted by (dgx,dgz) — for keeping the pin in step with a ground move.
+  function shiftGroundAnchor(el: BoardElement, dgx: number, dgz: number): [number, number] | undefined {
+    const g = (isGroundElement(el) || isText3d(el)) ? el.ground : undefined
+    return g ? [g[0] + dgx, g[1] + dgz] : undefined
+  }
+
   // The resized element's notable points (rotation- and type-aware: ellipse radius
   // extremes, else corners) + its AABB, for a given handle pointer.
   function resizedNotable(el: BoardElement, g: Gesture, pointer: Point): { pts: SnapMark[]; box: Box } {
@@ -1218,23 +1265,22 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     if (move && move.origins[el.id]) {
       if (!move.engaged) return el // not dragged far enough yet — stay put
       const o = move.origins[el.id]
-      // On a 3D field, shapes drag along the ground surface (warp in perspective,
-      // stay true in top view); anything groundMoveElement can't 3D-move (and 2D
-      // fields) falls back to a flat translate.
+      // On a 3D field EVERY element moves along the pitch by a field-axis-snapped
+      // ground delta: shapes warp (groundMoveElement), standing/flat elements slide
+      // perspective-correctly (groundTranslate) and keep their ground anchor in step.
+      // Flat boards fall back to the screen-space translate.
       if (fieldCamCfg) {
-        const dg = groundDelta(arrow3dCam, move.start, move.current)
-        const moved = dg && groundMoveElement(el, arrow3dCam, dg.dgx, dg.dgz)
+        const s = groundSnap(move)
+        const moved = groundMoveElement(el, arrow3dCam, s.dgx, s.dgz)
         if (moved) return moved
+        const gt = groundTranslate(el, o, s.dgx, s.dgz)
+        if (gt) {
+          const ground = shiftGroundAnchor(el, s.dgx, s.dgz)
+          return { ...el, transform: { ...o, x: gt.x, y: gt.y }, ...(ground ? { ground } : {}) } as BoardElement
+        }
       }
       const d = moveDelta(move)
-      const t = { ...o, x: o.x + d.x, y: o.y + d.y }
-      // 3D text drags along the pitch: shift its ground anchor live so the field
-      // glyphs (drawn from `ground`) follow the box instead of lagging until commit.
-      if (isText3d(el) && fieldCamCfg && el.ground) {
-        const dg = groundDelta(arrow3dCam, move.start, move.current)
-        if (dg) return { ...el, transform: t, ground: [el.ground[0] + dg.dgx, el.ground[1] + dg.dgz] as [number, number] }
-      }
-      return { ...el, transform: t }
+      return { ...el, transform: { ...o, x: o.x + d.x, y: o.y + d.y } }
     }
     if (gesture && gesture.id === el.id) {
       if (gesture.kind === 'rotate') {
@@ -1941,33 +1987,39 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const { ids, origins, engaged } = move
       setMove(null)
       if (engaged) {
-        // 3D field: shapes commit as a ground-surface move — polylines update their
-        // warped points, rectangles/ovals become the equivalent pinned polyline
-        // (remove + add, id kept). Everything else keeps the flat 2D translate. The
-        // whole gesture is one undo step (pinSetup wraps multi-op as a transaction).
-        const dg = fieldCamCfg ? groundDelta(arrow3dCam, move.start, move.current) : null
-        const moved = ids.filter((id) => origins[id]).map((id) => {
-          const orig = doc.elements.find((e) => e.id === id)
-          return { id, orig, m: dg && orig ? groundMoveElement(orig, arrow3dCam, dg.dgx, dg.dgz) : null }
-        })
-        if (dg && moved.some((x) => x.m || (x.orig && isText3d(x.orig)))) {
+        // 3D field: EVERY element commits as a field-axis-snapped ground-surface move
+        // — shapes warp (rect/ovals become the equivalent pinned polyline, remove+add
+        // id kept), standing/flat elements slide perspective-correctly and shift their
+        // ground anchor. Flat boards keep the screen-space translate. One undo step
+        // (pinSetup wraps multi-op as a transaction).
+        const s = fieldCamCfg ? groundSnap(move) : null
+        if (s) {
           const ops: Operation[] = []
           const updates: ElementChange[] = []
-          for (const { id, orig, m } of moved) {
-            if (m && (orig!.type === 'rect' || orig!.type === 'ellipse')) {
+          for (const id of ids) {
+            if (!origins[id]) continue
+            const orig = doc.elements.find((e) => e.id === id)
+            if (!orig) continue
+            const m = groundMoveElement(orig, arrow3dCam, s.dgx, s.dgz)
+            if (m && (orig.type === 'rect' || orig.type === 'ellipse')) {
               const index = doc.elements.findIndex((e) => e.id === id)
-              ops.push({ kind: 'remove', element: orig!, index }, { kind: 'add', element: m, index })
-            } else if (m && (orig!.type === 'polyline' || orig!.type === 'draw')) {
+              ops.push({ kind: 'remove', element: orig, index }, { kind: 'add', element: m, index })
+            } else if (m && (orig.type === 'polyline' || orig.type === 'draw')) {
               const p = orig as PolylineElement
               const mp = m as PolylineElement
               updates.push({ id, before: { points: p.points, ground: p.ground, transform: origins[id] }, after: { points: mp.points, ground: mp.ground, transform: mp.transform } })
-            } else if (orig && isText3d(orig)) {
-              // 3D text: translate the box AND shift its ground anchor, so it stays
-              // pinned (reproject re-centres the box from `ground` on camera moves).
-              const ng: [number, number] | undefined = orig.ground && dg ? [orig.ground[0] + dg.dgx, orig.ground[1] + dg.dgz] : orig.ground
-              updates.push({ id, before: { transform: origins[id], ground: orig.ground }, after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y }, ground: ng } })
             } else {
-              updates.push({ id, before: { transform: origins[id] }, after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } } })
+              // Standing/flat: slide along the ground (perspective-correct) + shift the
+              // pin; if the centre leaves the pitch, fall back to the flat translate.
+              const gt = groundTranslate(orig, origins[id], s.dgx, s.dgz)
+              const after: ElementPatch = { transform: gt ? { ...origins[id], x: gt.x, y: gt.y } : { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } }
+              const before: ElementPatch = { transform: origins[id] }
+              const ng = gt ? shiftGroundAnchor(orig, s.dgx, s.dgz) : undefined
+              if (ng) {
+                before.ground = (isGroundElement(orig) || isText3d(orig)) ? orig.ground : undefined
+                after.ground = ng
+              }
+              updates.push({ id, before, after })
             }
           }
           if (updates.length) ops.push({ kind: 'update', changes: updates })
@@ -2160,15 +2212,17 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       .join(' ')
   }
   // Object-snap guides (alignment lines + equal-distance gaps) shown while dragging,
-  // resizing, or dragging a polyline vertex.
-  const objectSnap = move ? moveSnap(move) : null
+  // resizing, or dragging a polyline vertex. On a 3D field the move snaps to the
+  // pitch axes (field guides), off-field to screen axes (2D snap + gap guides).
+  const fieldMoveSnap = move && move.engaged && fieldCamCfg ? groundSnap(move) : null
+  const objectSnap = move && !fieldCamCfg ? moveSnap(move) : null
   const resizeGuides = ((): SnapLine[] => {
     if (!gesture || gesture.kind !== 'resize') return []
     const el = doc.elements.find((e) => e.id === gesture.id)
     return el ? resizePointer(el, gesture).guides : []
   })()
   const pointGuides = gesture?.kind === 'point' ? resolvePointDrag(gesture).guides : gesture?.kind === 'anchor' ? resolveAnchorDrag(gesture).guides : []
-  const alignGuides = [...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides, ...object3dSnapGuides]
+  const alignGuides = [...(fieldMoveSnap?.guides ?? []), ...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides, ...object3dSnapGuides]
   const gapGuides = objectSnap?.gaps ?? []
 
   // 2D selection chrome excludes 3D arrows (they have no SVG box; their own
