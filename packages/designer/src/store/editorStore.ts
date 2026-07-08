@@ -86,6 +86,10 @@ export interface EditorState {
   /** When true, dragging a selection snaps its bounding box to other elements'
    *  edges/centers and draws alignment guides. Toggled with ⌥S or the menu. */
   snapToObjects: boolean
+  /** Admin mode: reveals the authoring-only tools (field homography/camera/zones)
+   *  in a dedicated main-menu section. Off for final users; toggled via ?admin=1 in
+   *  the URL or the ⌥⇧A shortcut. */
+  adminMode: boolean
   /** The GLOBAL token size (metric diameter, metres) shared by every token on the
    *  board — tokens are always this size, always perspective-scaled by depth (like
    *  circular objects facing the camera). This holds the value for the NEXT token /
@@ -128,6 +132,9 @@ export interface EditorState {
   setActiveTool: (tool: ToolId) => void
   toggleKeepTool: () => void
   toggleSnapToObjects: () => void
+  /** Toggle / set admin mode (authoring tools visibility). */
+  toggleAdminMode: () => void
+  setAdminMode: (on: boolean) => void
   /** Set the global token size (metric diameter, metres) and resize EVERY token on
    *  the board to it at once (one undo step). */
   setTokenSizeM: (m: number) => void
@@ -154,6 +161,9 @@ export interface EditorState {
    *  the tool is locked — switch back to the selection tool. */
   createFigure: (element: BoardElement) => void
   deleteSelected: () => void
+  /** Clear every element from the canvas in one undoable step (keeps background,
+   *  field and viewport). */
+  resetCanvas: () => void
   /** Remove the given elements by id (one undoable op) — used by the eraser. */
   removeElements: (ids: string[]) => void
   /** Apply a set of element attribute changes as one undoable operation — the
@@ -263,6 +273,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       kitHistory: [],
       keepToolActive: false,
       snapToObjects: false,
+      adminMode: false,
       tokenSizeM: TOKEN_DEFAULT_SIZE_M,
       tokenTextScale: 1,
       tokenLabelScale: 1,
@@ -284,6 +295,10 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       toggleKeepTool: () => set((s) => ({ keepToolActive: !s.keepToolActive })),
 
       toggleSnapToObjects: () => set((s) => ({ snapToObjects: !s.snapToObjects })),
+
+      toggleAdminMode: () => set((s) => ({ adminMode: !s.adminMode })),
+
+      setAdminMode: (on) => set({ adminMode: on }),
 
       setTokenSizeM: (m) => {
         const size = Math.max(2, Math.min(10, m))
@@ -380,6 +395,19 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
           index,
         }))
         push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'delete', ops })
+        set({ selectedIds: [] })
+      },
+
+      resetCanvas: () => {
+        const { doc } = get()
+        if (doc.elements.length === 0) return
+        // Remove every element highest-index-first (so each index stays valid); one
+        // transaction, so Undo restores the whole canvas.
+        const ops: Operation[] = doc.elements
+          .map((element, index) => ({ element, index }))
+          .sort((a, b) => b.index - a.index)
+          .map(({ element, index }) => ({ kind: 'remove', element, index }))
+        push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'reset canvas', ops })
         set({ selectedIds: [] })
       },
 

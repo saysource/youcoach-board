@@ -112,8 +112,9 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
         }
       }
 
-      // ── ⌥ (no ⌘): toggle snap ──────────────────────────────────────────────
+      // ── ⌥ (no ⌘): toggle snap; ⌥⇧A toggles admin mode ──────────────────────
       if (alt && !mod) {
+        if (shift && e.code === 'KeyA') { e.preventDefault(); s.toggleAdminMode(); return }
         if (e.code === 'KeyS') { e.preventDefault(); s.toggleSnapToObjects(); return }
         return
       }

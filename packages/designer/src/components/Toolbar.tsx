@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, Grid3x3, Video, MapPin, RulerDimensionLine } from 'lucide-react'
+import { Lock, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, RulerDimensionLine } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -85,10 +85,6 @@ interface Tool {
 // Navigation tools, rendered before the Shapes menu.
 const NAV_TOOLS: Tool[] = [{ id: 'select', label: 'Selection', icon: MousePointer2, shortcut: 1 }]
 
-// Free-draw tool, rendered after the Shapes + Lines menus (same group). Box
-// shapes are behind the Shapes menu; lines/arrows behind the Lines menu.
-const DRAW_TOOLS: Tool[] = [{ id: 'draw', label: 'Draw', icon: Pencil, shortcut: 5 }]
-
 interface ToolbarProps {
   activeTool: ToolId
   onToolChange: (tool: ToolId) => void
@@ -98,12 +94,6 @@ interface ToolbarProps {
   onOpenCategory: (catId: string) => void
   /** Enter background-edit mode (from the More-tools menu). */
   onEditBackground: () => void
-  /** Enter the field-homography calibration mode (from the More-tools menu). */
-  onFieldHomography: () => void
-  /** Enter the field-camera calibration mode (from the More-tools menu). */
-  onFieldCamera: () => void
-  /** Enter the field-zones authoring mode (from the More-tools menu). */
-  onFieldZones: () => void
   /** Pick a game system to place (opens its direction/style dialog). */
   onPickFormation: (code: string) => void
 }
@@ -111,7 +101,7 @@ interface ToolbarProps {
 // Which toolbar dropdown is currently open (only one at a time).
 type ToolbarMenu = 'shapes' | 'lines' | 'more'
 
-export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onFieldHomography, onFieldCamera, onFieldZones, onPickFormation }: ToolbarProps) {
+export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onPickFormation }: ToolbarProps) {
   // The shape last picked/used, so the Shapes button shows it and re-opening the
   // menu re-activates it. Null until the first use (button shows the generic icon).
   const [lastShape, setLastShape] = useState<ShapeTool | null>(null)
@@ -146,13 +136,8 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ShapesMenu activeTool={activeTool} lastShape={lastShape} onPick={pickShape} {...menuProps('shapes')} />
       <LinesMenu activeTool={activeTool} lastLine={lastLine} onPick={pickLine} onPick3D={() => onToolChange('arrow3d')} {...menuProps('lines')} />
-      {DRAW_TOOLS.map((tool) => (
-        <ToolButton key={tool.id} label={tool.label} active={activeTool === tool.id} shortcut={tool.shortcut} onClick={() => onToolChange(tool.id)}>
-          <tool.icon />
-        </ToolButton>
-      ))}
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onFieldHomography={onFieldHomography} onFieldCamera={onFieldCamera} onFieldZones={onFieldZones} onPickFormation={onPickFormation} {...menuProps('more')} />
+      <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onPickFormation={onPickFormation} {...menuProps('more')} />
       <ToolButton label="Change field and edit background settings" onClick={onEditBackground}>
         <SoccerFieldIcon />
       </ToolButton>
@@ -284,18 +269,12 @@ function LinesMenu({
 function MoreToolsMenu({
   onToolChange,
   onOpenCategory,
-  onFieldHomography,
-  onFieldCamera,
-  onFieldZones,
   onPickFormation,
   open,
   onOpenChange,
 }: {
   onToolChange: (tool: ToolId) => void
   onOpenCategory: (catId: string) => void
-  onFieldHomography: () => void
-  onFieldCamera: () => void
-  onFieldZones: () => void
   onPickFormation: (code: string) => void
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -354,6 +333,10 @@ function MoreToolsMenu({
         <DropdownMenuItem onSelect={() => onToolChange('text')}>
           <Type /> Add Text
         </DropdownMenuItem>
+        {/* Free-draw (pen) tool — moved here from the main toolbar row. */}
+        <DropdownMenuItem onSelect={() => onToolChange('draw')}>
+          <Pencil /> Pen
+        </DropdownMenuItem>
         {/* Game systems: only on fields that define them (soccer/futsal). */}
         {systems.length > 0 && (
           <DropdownMenuSub>
@@ -373,19 +356,6 @@ function MoreToolsMenu({
         {/* Lasso: free-draw a selection; elements the loop touches are selected. */}
         <DropdownMenuItem onSelect={() => onToolChange('lasso')}>
           <Lasso /> Lasso select
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {/* Calibrate the field-perspective homography (dev/authoring tool). */}
-        <DropdownMenuItem onSelect={onFieldHomography}>
-          <Grid3x3 /> Field homography
-        </DropdownMenuItem>
-        {/* Pose a real perspective camera onto the field (dev/authoring tool). */}
-        <DropdownMenuItem onSelect={onFieldCamera}>
-          <Video /> Field camera
-        </DropdownMenuItem>
-        {/* Author the 3D-field zone markers + default poses (dev/authoring tool). */}
-        <DropdownMenuItem onSelect={onFieldZones}>
-          <MapPin /> Field zones
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

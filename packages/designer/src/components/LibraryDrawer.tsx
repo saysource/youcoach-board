@@ -535,7 +535,10 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                       <button
                         key={id}
                         type="button"
-                        onClick={() => onCategoryChange(id)}
+                        // Always collapse the list on click. A NEW category also collapses
+                        // via the catId-change effect; re-selecting the ACTIVE one doesn't
+                        // change catId, so close it here (else the list would just sit open).
+                        onClick={() => { onCategoryChange(id); setListOpen(false) }}
                         className={cn('flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground', selected && 'font-medium text-foreground')}
                       >
                         <span className="truncate">{catalog.categories[id]?.name ?? id}</span>

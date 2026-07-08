@@ -133,6 +133,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     }
   }, [store])
 
+  // Admin mode (authoring-only field tools) can be pre-enabled via ?admin=1 in the
+  // URL; it's also togglable at runtime with ⌥⇧A. Read once on mount.
+  useEffect(() => {
+    const admin = new URLSearchParams(window.location.search).get('admin')
+    if (admin != null && admin !== '0' && admin !== 'false') store.getState().setAdminMode(true)
+  }, [store])
+
   // Background-edit mode: an explicit editor state (not derived from the drawer)
   // that disables element actions, swaps in a background toolbar, restricts the
   // drawer to fields, and is committed by "Finish" or ESC.
@@ -442,7 +449,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
 
           {/* Top-left menu (+ the navigation control below it on mobile). */}
           <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
-            <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} />
+            <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} onFieldHomography={fieldHomography} onFieldCamera={startFieldCamera} onFieldZones={startFieldZones} />
             {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} />}
           </div>
 
@@ -487,9 +494,6 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 onToggleLock={toggleKeepTool}
                 onOpenCategory={openCategory}
                 onEditBackground={editBackground}
-                onFieldHomography={fieldHomography}
-                onFieldCamera={startFieldCamera}
-                onFieldZones={startFieldZones}
                 onPickFormation={setFormation}
               />
             )}

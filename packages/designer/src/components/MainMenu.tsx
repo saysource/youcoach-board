@@ -13,6 +13,10 @@ import {
   SlidersHorizontal,
   Magnet,
   Check,
+  Wrench,
+  Grid3x3,
+  Video,
+  MapPin,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from './ui/button'
@@ -41,11 +45,17 @@ interface MainMenuProps {
   showThemeControl?: boolean
   /** Open the keyboard-shortcuts help dialog. */
   onShowShortcuts?: () => void
+  /** Authoring tools, shown only in admin mode under a dedicated "Admin" section. */
+  onFieldHomography?: () => void
+  onFieldCamera?: () => void
+  onFieldZones?: () => void
 }
 
-export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts }: MainMenuProps) {
+export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts, onFieldHomography, onFieldCamera, onFieldZones }: MainMenuProps) {
   const snapToObjects = useEditorStore((s) => s.snapToObjects)
   const toggleSnapToObjects = useEditorStore((s) => s.toggleSnapToObjects)
+  const adminMode = useEditorStore((s) => s.adminMode)
+  const resetCanvas = useEditorStore((s) => s.resetCanvas)
   return (
     <DropdownMenu>
       <Tooltip>
@@ -100,9 +110,33 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
         </DropdownMenuSub>
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
+        <DropdownMenuItem onSelect={() => resetCanvas()}>
           <Trash2 /> Reset the canvas
         </DropdownMenuItem>
+
+        {/* Admin: authoring-only field tools, hidden from final users. Toggled via
+            ?admin=1 or the ⌥⇧A shortcut. */}
+        {adminMode && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Wrench /> Admin tools
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onSelect={() => onFieldHomography?.()}>
+                  <Grid3x3 /> Field homography
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onFieldCamera?.()}>
+                  <Video /> Field camera
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onFieldZones?.()}>
+                  <MapPin /> Field zones
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
+        )}
 
         {showThemeControl && (
           <>
