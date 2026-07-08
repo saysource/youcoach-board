@@ -80,7 +80,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement, polylineGround } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -2045,14 +2045,26 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const i = Number(g.handle.slice('point-'.length))
       const { lp } = resolvePointDrag(g)
       const after = el.points.map((p, idx) => (idx === i ? ([lp.x, lp.y] as [number, number]) : p))
-      updateElements([{ id: g.id, before: { points: el.points }, after: { points: after } }])
+      updateElements([reanchorPoints(el, after)])
     } else if (g.kind === 'anchor' && el.type === 'polyline') {
       const seg = Number(g.handle.slice('anchor-'.length))
       const { lp } = resolveAnchorDrag(g)
       const after = [...el.points]
       after.splice(seg + 1, 0, [lp.x, lp.y])
-      updateElements([{ id: g.id, before: { points: el.points }, after: { points: after } }])
+      updateElements([reanchorPoints(el, after)])
     }
+  }
+
+  // A point/vertex edit changes `points`; on a pitch-pinned polyline (carrying a
+  // per-point `ground` anchor) that anchor must be re-derived from the NEW board
+  // points, or the next camera move reprojects the edited point back to its old
+  // ground spot. Falls back to a points-only change off-pitch / when unpinned.
+  function reanchorPoints(el: Extract<BoardElement, { type: 'polyline' }>, after: Array<[number, number]>): ElementChange {
+    if (el.ground && fieldCamCfg) {
+      const ground = polylineGround({ ...el, points: after }, arrow3dCam)
+      if (ground) return { id: el.id, before: { points: el.points, ground: el.ground }, after: { points: after, ground } }
+    }
+    return { id: el.id, before: { points: el.points }, after: { points: after } }
   }
 
   // Double-click a vertex to remove it (Miro). Open lines keep their endpoints;
@@ -2062,7 +2074,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const min = el.closed ? 3 : 2
     if (el.points.length <= min) return
     if (!el.closed && (i === 0 || i === el.points.length - 1)) return
-    updateElements([{ id: el.id, before: { points: el.points }, after: { points: el.points.filter((_, idx) => idx !== i) } }])
+    updateElements([reanchorPoints(el, el.points.filter((_, idx) => idx !== i))])
   }
 
   const single = !creating && liveSelected.length === 1

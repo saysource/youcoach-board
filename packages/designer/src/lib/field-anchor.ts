@@ -78,7 +78,7 @@ export function polyBoardPoints(el: PathElement): [number, number][] {
 
 /** Each polyline point's ground anchor under `cam`, or null if ANY point doesn't
  *  hit the ground plane (the array must stay parallel to `points`). */
-function polylineGround(el: PathElement, cam: THREE.Camera): Array<[number, number]> | null {
+export function polylineGround(el: PathElement, cam: THREE.Camera): Array<[number, number]> | null {
   const out: Array<[number, number]> = []
   for (const [bx, by] of polyBoardPoints(el)) {
     const g = boardToGround(bx, by, cam)
