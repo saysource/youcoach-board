@@ -87,6 +87,7 @@ function Text3DHtmlItem({ el, cam, boardToPx }: { el: TextElement; cam: THREE.Ca
         textAlign: el.align,
         whiteSpace: 'pre',
         overflow: 'visible',
+        opacity: el.transform.opacity,
       }}
     >
       {el.text}
