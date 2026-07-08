@@ -148,8 +148,11 @@ export interface BoardCtm {
 export function Text3DHtml({ elements, cam, ctm }: { elements: TextElement[]; cam: THREE.Camera; ctm: BoardCtm | null }) {
   if (!ctm) return null
   const boardToPx = (b: [number, number]) => ({ x: ctm.a * b[0] + ctm.c * b[1] + ctm.ex, y: ctm.b * b[0] + ctm.d * b[1] + ctm.ey })
+  // z-index 1 keeps the perspective-transformed glyphs ABOVE the WebGL layers (the
+  // pitch, 3D arrows/objects are z-index auto) — a 3D-transformed div is composited
+  // and would otherwise be painted behind them regardless of DOM order.
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 1 }}>
       {elements.map((el) => (
         <Text3DHtmlItem key={el.id} el={el} cam={cam} boardToPx={boardToPx} />
       ))}
