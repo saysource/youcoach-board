@@ -172,32 +172,30 @@ export function referencePPM(): number {
   return ppmRefCache
 }
 
-/** On-board height (px) for a token of metric height `m` at ground `g`: sized at
- *  its own depth when perspective is on (near tokens read bigger, follows the
- *  camera), or at a FIXED reference scale when off (constant board size — doesn't
- *  change with the scene's zoom/pan). */
-export function tokenBoardH(cam: THREE.Camera, m: number, g: [number, number], perspective: boolean): number {
-  return perspective ? m * groundPPM(cam, g[0], g[1]) : m * referencePPM()
+/** On-board height (px) for a token of metric diameter `m` (metres) at ground `g`:
+ *  ALWAYS sized at its own depth (near tokens read bigger, follows the camera) —
+ *  tokens are circular objects always facing the camera. */
+export function tokenBoardH(cam: THREE.Camera, m: number, g: [number, number]): number {
+  return m * groundPPM(cam, g[0], g[1])
 }
 
-/** Default token size on the pitch: a 2.5 m RADIUS → 5 m DIAMETER. A token box is
- *  square (width = height = diameter), and `sizeM` is that metric height, so this
- *  is the default `sizeM`. Deliberately fixed (not derived from the drawn board
- *  size), so every fresh token is 2.5 m regardless of prior scale logic. */
+/** Default global token size: 5 m DIAMETER (2.5 m radius). A token box is square
+ *  (width = height = diameter), and `sizeM` is that metric diameter. The properties
+ *  slider maps 2 m … 10 m; every token shares one size. */
 export const TOKEN_DEFAULT_SIZE_M = 5
 
-/** Pin a freshly-stamped token to the pitch at the fixed 2.5 m-radius default:
+/** Pin a freshly-stamped token to the pitch at the global size `sizeM` (metres):
  *  capture its ground anchor + set `sizeM` and the on-board `scale` so it renders
- *  at 2.5 m radius immediately (before any camera move). Returns it unchanged if
- *  its drop point misses the pitch. */
-export function pinNewToken(el: TokenElement, cfg: PosedCamera, perspective: boolean): TokenElement {
+ *  at that metric size immediately. Returns it unchanged if its drop point misses
+ *  the pitch. */
+export function pinNewToken(el: TokenElement, cfg: PosedCamera, sizeM: number): TokenElement {
   const cam = makeCalibratedCamera(cfg)
   const bc = bottomCenterBoard(el)
   const g = boardToGround(bc.x, bc.y, cam)
   if (!g) return el
   const h = localCenter(el).h
-  const scale = clamp(tokenBoardH(cam, TOKEN_DEFAULT_SIZE_M, [g.x, g.z], perspective) / (h || 1), 0.05, 30)
-  return { ...el, ground: [g.x, g.z], sizeM: TOKEN_DEFAULT_SIZE_M, transform: { ...el.transform, scale } }
+  const scale = clamp(tokenBoardH(cam, sizeM, [g.x, g.z]) / (h || 1), 0.05, 30)
+  return { ...el, ground: [g.x, g.z], sizeM, transform: { ...el.transform, scale } }
 }
 
 /** The ground displacement (metres) for nudging a pitch element at ground (gx, gz)
@@ -222,49 +220,33 @@ function sameGround(a: Array<[number, number]>, b: Array<[number, number]>): boo
  *  depth) is what keeps synced tokens equal in flat views: without it, entering
  *  from a perspective view gives near/far tokens different `sizeM` for the same
  *  board size, so they'd render at different sizes in a later top view. */
-function sharedTokenSizeM(elements: BoardElement[], cam: THREE.Camera, refId?: string): number | null {
-  const tokens = elements.filter((e): e is GroundElement => e.type === 'token')
-  const ref = tokens.find((t) => t.id === refId) ?? tokens[0]
-  if (!ref) return null
-  const bc = bottomCenterBoard(ref)
-  const g = boardToGround(bc.x, bc.y, cam)
-  if (!g) return null
-  return (localCenter(ref).h * ref.transform.scale) / groundPPM(cam, g.x, g.z)
-}
-
 /** Prepare pins on entering Edit-Background (a single undoable step, run BEFORE
  *  the field-edit transaction). For every pinnable element it (re)derives the
  *  ground anchor from the element's CURRENT board placement through `cfg` — which
  *  heals any staleness from ordinary fixed-camera edits — and, because only a
  *  polygon can warp, CONVERTS each rectangle into an equivalent closed polyline
- *  first. When `syncTokenSizes` is on, ALL tokens are given one shared metric
- *  height (so they stay equal-sized in flat views regardless of perspective).
+ *  first. Tokens keep their shared global `sizeM` (all tokens are one size).
  *  Returns:
  *   - `remove` + `add` ops (same index, id preserved) per rectangle, the added
  *     polyline already carrying its per-point ground, and
  *   - one `update` op setting `ground`/`sizeM` on standing elements whose anchor
  *     changed (already-synced elements are skipped, so it's idempotent). */
-export function buildPinOps(elements: BoardElement[], cfg: PosedCamera, opts?: { syncTokenSizes?: boolean; refTokenId?: string }): Operation[] {
+export function buildPinOps(elements: BoardElement[], cfg: PosedCamera): Operation[] {
   const cam = makeCalibratedCamera(cfg)
   const ops: Operation[] = []
   const updates: ElementChange[] = []
-  const shared = opts?.syncTokenSizes ? sharedTokenSizeM(elements, cam, opts.refTokenId) : null
   elements.forEach((el, index) => {
     if (el.type === 'figure' || el.type === 'token') {
       const bc = bottomCenterBoard(el)
       const g = boardToGround(bc.x, bc.y, cam)
       if (!g) return
       const next: [number, number] = [g.x, g.z]
-      // Capture the element's real-world height (metres) at its spot, so its size
-      // can be derived absolutely under any camera (self-correcting scaling).
-      // Synced tokens all take the ONE shared size instead of their own depth's.
-      // Tokens take a FIXED default size (2.5 m radius) rather than one derived from
-      // their drawn board size — a synced token takes the shared size, else its own
-      // explicit `sizeM` (from a resize), else the 2.5 m default. Figures stay
-      // derived from their drawn size.
+      // Capture the element's real-world size (metres) at its spot, so its size can
+      // be derived absolutely under any camera. Tokens carry the shared global size
+      // (all one size); figures derive from their drawn size.
       const sizeM =
         el.type === 'token'
-          ? (shared ?? el.sizeM ?? TOKEN_DEFAULT_SIZE_M)
+          ? (el.sizeM ?? TOKEN_DEFAULT_SIZE_M)
           : (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
       const groundSame = el.ground && closePt(el.ground, next)
       const sizeSame = el.sizeM != null && Math.abs(el.sizeM - sizeM) < 1e-4
@@ -386,8 +368,7 @@ export function groundMoveElement(el: BoardElement, cam: THREE.Camera, dgx: numb
  *     into `points` (resetting translate/rotate/scale, keeping opacity), so the
  *     shape warps to stay on the field surface.
  *  Elements without a ground anchor are skipped. Returns the `update` changes. */
-export function reprojectChanges(elements: BoardElement[], before: PosedCamera, after: PosedCamera, opts?: { tokenPerspective?: boolean }): ElementChange[] {
-  const tokenPerspective = opts?.tokenPerspective !== false
+export function reprojectChanges(elements: BoardElement[], before: PosedCamera, after: PosedCamera): ElementChange[] {
   const oldCam = makeCalibratedCamera(before)
   const newCam = makeCalibratedCamera(after)
   const changes: ElementChange[] = []
@@ -409,15 +390,14 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
     const [gx, gz] = el.ground
     const { cx, cy, h } = localCenter(el)
     let scale: number
-    if (el.type === 'token' && el.sizeM != null) {
-      // Absolute from the token's metric height: at its own depth (perspective) or
-      // uniform (perspective off). Self-correcting — never gets stuck.
-      scale = clamp(tokenBoardH(newCam, el.sizeM, [gx, gz], tokenPerspective) / (h || 1), 0.05, 30)
+    if (el.type === 'token') {
+      // A token is always its metric diameter at its own depth (perspective) —
+      // self-correcting, never gets stuck. Older docs without `sizeM` fall to the
+      // global default.
+      scale = clamp(tokenBoardH(newCam, el.sizeM ?? TOKEN_DEFAULT_SIZE_M, [gx, gz]) / (h || 1), 0.05, 30)
     } else if (el.sizeM != null) {
       // Figure: always perspective-sized from its metric height.
       scale = clamp((el.sizeM * groundPPM(newCam, gx, gz)) / (h || 1), 0.05, 30)
-    } else if (el.type === 'token' && !tokenPerspective) {
-      scale = el.transform.scale // legacy (no sizeM): keep constant when off
     } else {
       const ratio = groundPPM(newCam, gx, gz) / groundPPM(oldCam, gx, gz)
       if (!Number.isFinite(ratio) || ratio <= 0) continue
@@ -430,20 +410,14 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
   return changes
 }
 
-/** Re-size all tokens at the CURRENT camera for the given prefs — used when a
- *  token preference is toggled (not a camera move), so tokens update at once:
- *  perspective on → each at its depth; off → uniform (pitch-centre depth); sync
- *  on → all share one metric size. Derives a token's ground/`sizeM` on the fly if
- *  it isn't pinned yet, keeps its feet on the ground, and skips no-op changes. */
-export function tokenSizeChanges(elements: BoardElement[], cfg: PosedCamera, opts: { syncTokenSizes?: boolean; tokenPerspective?: boolean; refTokenId?: string }): ElementChange[] {
+/** Set EVERY token to the global metric diameter `sizeM` (metres) at the CURRENT
+ *  camera — the properties size slider's batch update. All tokens become one size,
+ *  perspective-scaled by their depth, feet kept on the ground. Derives a token's
+ *  ground on the fly if it isn't pinned yet, and skips no-op changes. */
+export function tokenSizeChanges(elements: BoardElement[], cfg: PosedCamera, sizeM: number): ElementChange[] {
   const cam = makeCalibratedCamera(cfg)
   const tokens = elements.filter((e): e is GroundElement => e.type === 'token')
   if (!tokens.length) return []
-  const perspective = opts.tokenPerspective !== false
-  // A display toggle must NOT change physical size: prefer the reference token's
-  // STORED metric height (invariant), deriving from its board size only if unset.
-  const refTok = tokens.find((t) => t.id === opts.refTokenId) ?? tokens[0]
-  const shared = opts.syncTokenSizes ? refTok.sizeM ?? sharedTokenSizeM(elements, cam, opts.refTokenId) : null
   const changes: ElementChange[] = []
   for (const t of tokens) {
     let g = t.ground
@@ -454,12 +428,11 @@ export function tokenSizeChanges(elements: BoardElement[], cfg: PosedCamera, opt
       g = [hit.x, hit.z]
     }
     const { cx, cy, h } = localCenter(t)
-    const m = shared ?? t.sizeM ?? (h * t.transform.scale) / groundPPM(cam, g[0], g[1])
-    const scale = clamp(tokenBoardH(cam, m, g, perspective) / (h || 1), 0.05, 30)
+    const scale = clamp(tokenBoardH(cam, sizeM, g) / (h || 1), 0.05, 30)
     const [bcx, bcy] = projectGround(cam, g[0], g[1])
-    const after = { transform: { ...t.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }, ground: g, sizeM: m }
+    const after = { transform: { ...t.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }, ground: g, sizeM }
     const t0 = t.transform
-    const unchanged = Math.abs(scale - t0.scale) < 1e-4 && Math.abs(after.transform.x - t0.x) < 1e-2 && Math.abs(after.transform.y - t0.y) < 1e-2 && t.ground != null && t.sizeM != null
+    const unchanged = Math.abs(scale - t0.scale) < 1e-4 && Math.abs(after.transform.x - t0.x) < 1e-2 && Math.abs(after.transform.y - t0.y) < 1e-2 && t.ground != null && t.sizeM === sizeM
     if (unchanged) continue
     changes.push({ id: t.id, before: { transform: t0, ground: t.ground, sizeM: t.sizeM }, after })
   }

@@ -13,7 +13,7 @@ import {
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
 import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox, nextTokenText } from '../lib/draw'
-import { reprojectChanges, withGroundAnchors, pinNewShape, groundNudgeDelta } from '../lib/field-anchor'
+import { reprojectChanges, withGroundAnchors, pinNewShape, groundNudgeDelta, tokenSizeChanges, TOKEN_DEFAULT_SIZE_M } from '../lib/field-anchor'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -86,14 +86,12 @@ export interface EditorState {
   /** When true, dragging a selection snaps its bounding box to other elements'
    *  edges/centers and draws alignment guides. Toggled with ⌥S or the menu. */
   snapToObjects: boolean
-  /** Preference: when true, resizing one token resizes every other token to
-   *  match (the reference token = first selected token, else first in the doc).
-   *  Coaches usually want a single uniform token size. */
-  syncTokenSizes: boolean
-  /** Preference: when true, tokens scale with the 3D field perspective (bigger
-   *  when the pitch is more magnified where they stand); when false they keep a
-   *  constant on-board size but still stay pinned to their pitch spot. */
-  tokenPerspective: boolean
+  /** The GLOBAL token size (metric diameter, metres) shared by every token on the
+   *  board — tokens are always this size, always perspective-scaled by depth (like
+   *  circular objects facing the camera). This holds the value for the NEXT token /
+   *  a token-less board; once tokens exist their (synced) `sizeM` is the live truth.
+   *  The properties slider maps 2 m … 10 m. */
+  tokenSizeM: number
 
   /** Style for the next element to be created — editable in the properties panel
    *  before anything is selected (so the user can pre-set stroke/fill/… ), and
@@ -123,8 +121,9 @@ export interface EditorState {
   setActiveTool: (tool: ToolId) => void
   toggleKeepTool: () => void
   toggleSnapToObjects: () => void
-  toggleSyncTokenSizes: () => void
-  toggleTokenPerspective: () => void
+  /** Set the global token size (metric diameter, metres) and resize EVERY token on
+   *  the board to it at once (one undo step). */
+  setTokenSizeM: (m: number) => void
   /** Merge changes into the next-element style defaults. */
   setToolDefaults: (patch: Partial<FigureStyle>) => void
   /** Merge changes into the next-token defaults (style/text/label). */
@@ -254,8 +253,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       kitHistory: [],
       keepToolActive: false,
       snapToObjects: false,
-      syncTokenSizes: true,
-      tokenPerspective: true,
+      tokenSizeM: TOKEN_DEFAULT_SIZE_M,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
       styleClipboard: null,
@@ -275,9 +273,16 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       toggleSnapToObjects: () => set((s) => ({ snapToObjects: !s.snapToObjects })),
 
-      toggleSyncTokenSizes: () => set((s) => ({ syncTokenSizes: !s.syncTokenSizes })),
-
-      toggleTokenPerspective: () => set((s) => ({ tokenPerspective: !s.tokenPerspective })),
+      setTokenSizeM: (m) => {
+        const size = Math.max(2, Math.min(10, m))
+        set({ tokenSizeM: size })
+        // Resize every token on the pitch to the new global size (one undo step).
+        const { doc } = get()
+        const f3d = doc.background.field3d
+        if (!f3d) return
+        const changes = tokenSizeChanges(doc.elements, f3d, size)
+        if (changes.length) get().updateElements(changes)
+      },
 
       setToolDefaults: (patch) => set((s) => ({ toolDefaults: { ...s.toolDefaults, ...patch } })),
 
@@ -452,7 +457,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
           'field3d' in patch && before3d && after3d && JSON.stringify(before3d) !== JSON.stringify(after3d)
             // Derive ground anchors on the fly so EVERY pinnable element remaps to the
             // new pose — not only those already pinned via Edit-Background.
-            ? reprojectChanges(withGroundAnchors(doc.elements, before3d), before3d, after3d, { tokenPerspective: get().tokenPerspective })
+            ? reprojectChanges(withGroundAnchors(doc.elements, before3d), before3d, after3d)
             : []
         if (txn) {
           // Capture the pre-transaction background once; apply live (no stack push).

@@ -36,6 +36,11 @@ export function usePropertyEditing() {
   const setTokenDefaults = useEditorStore((s) => s.setTokenDefaults)
   const textDefaults = useEditorStore((s) => s.textDefaults)
   const setTextDefaults = useEditorStore((s) => s.setTextDefaults)
+  // The GLOBAL token size (metric diameter): the live value is any token's shared
+  // `sizeM`, else the store default; setting it resizes every token at once.
+  const storeTokenSizeM = useEditorStore((s) => s.tokenSizeM)
+  const setTokenSizeM = useEditorStore((s) => s.setTokenSizeM)
+  const tokenSize = (doc.elements.find((e) => e.type === 'token') as Extract<BoardElement, { type: 'token' }> | undefined)?.sizeM ?? storeTokenSizeM
   const { catalog } = useAssets()
   const els = doc.elements.filter((e) => selectedIds.includes(e.id))
   // Map a figure's SVG path → the recolor-class slots it exposes (from the catalog).
@@ -109,6 +114,8 @@ export function usePropertyEditing() {
         text: tokenTool ? tokenDefaults.text : undefined,
         label: tokenTool ? tokenDefaults.label : undefined,
         showLabel: tokenTool ? tokenDefaults.showLabel : undefined,
+        // Global token size (metres) — same value whether or not a token is selected.
+        tokenSize,
         // Text-tool defaults (the next text to be placed); undefined otherwise.
         bgColor: textTool ? textDefaults.bgColor : undefined,
         fontSize: textTool ? textDefaults.fontSize : undefined,
@@ -156,6 +163,7 @@ export function usePropertyEditing() {
       setText: (text: string) => setTokenDefaults({ text }),
       setLabel: (label: string) => setTokenDefaults({ label }),
       setShowLabel: (showLabel: boolean) => setTokenDefaults({ showLabel }),
+      setTokenSize: (m: number) => setTokenSizeM(m),
       // Text-tool defaults.
       setBgColor: (bgColor: string) => setTextDefaults({ bgColor }),
       setFontSize: (fontSize: number) => setTextDefaults({ fontSize }),
@@ -291,6 +299,7 @@ export function usePropertyEditing() {
       text: firstToken?.text,
       label: firstToken?.label,
       showLabel: firstToken?.showLabel,
+      tokenSize,
       bgColor: firstText?.bgColor,
       fontSize: firstText?.fontSize,
       align: firstText?.align,
@@ -483,5 +492,6 @@ export function usePropertyEditing() {
       patch(tokens, (e) => ({ before: { showLabel: (e as Extract<BoardElement, { type: 'token' }>).showLabel }, after: { showLabel } }))
       setTokenDefaults({ showLabel })
     },
+    setTokenSize: (m: number) => setTokenSizeM(m),
   }
 }

@@ -123,6 +123,19 @@ export function SelectionHandles({ element, scale, onHandleDown, hideFrame = fal
   const r = ((t.rotate % 90) + 90) % 90
   const outlineRendering = r < 0.01 || r > 89.99 ? 'crispEdges' : 'geometricPrecision'
 
+  // Token: a selection OUTLINE (like a 3D object's), NO handles — tokens can't be
+  // resized (one global size) or rotated. A soft ring hugging the round badge.
+  if (element.type === 'token') {
+    const cb = elementToBoard({ x: box.x + box.width / 2, y: box.y + box.height / 2 }, box, t)
+    const ring = (box.width / 2) * t.scale + SELECTION_PAD_PX / scale
+    return (
+      <g pointerEvents="none" fill="none" stroke={FRAME} vectorEffect="non-scaling-stroke">
+        <circle cx={cb.x} cy={cb.y} r={ring} strokeWidth={STROKE_PX * 3} strokeOpacity={0.3} />
+        <circle cx={cb.x} cy={cb.y} r={ring} strokeWidth={STROKE_PX} />
+      </g>
+    )
+  }
+
   // Multi-select (non-interactive): just the bounding-box outline (solid — only
   // the group frame is dashed).
   if (!interactive) {

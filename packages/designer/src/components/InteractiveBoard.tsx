@@ -82,7 +82,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround } from '../lib/field-anchor'
+import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -333,8 +333,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const commitTransaction = useEditorStore((s) => s.commitTransaction)
   const updateElements = useEditorStore((s) => s.updateElements)
   const pinSetup = useEditorStore((s) => s.pinSetup)
-  const syncTokenSizes = useEditorStore((s) => s.syncTokenSizes)
-  const tokenPerspective = useEditorStore((s) => s.tokenPerspective)
+  const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
@@ -484,11 +483,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     if (!editing3d || !field3d) return
     // Prepare pitch pins (ONE undoable step, before the field-edit transaction):
     // (re)derive every element's ground anchor from its CURRENT board placement —
-    // healing staleness from ordinary fixed-camera edits — convert rectangles to
-    // closed polylines so they can warp onto the field surface, and (when syncing
-    // token sizes) give all tokens one shared metric size so they stay equal.
-    const refTokenId = selectedIds.find((id) => doc.elements.find((e) => e.id === id)?.type === 'token')
-    pinSetup(buildPinOps(doc.elements, field3d, { syncTokenSizes, refTokenId }))
+    // healing staleness from ordinary fixed-camera edits — and convert rectangles to
+    // closed polylines so they can warp onto the field surface.
+    pinSetup(buildPinOps(doc.elements, field3d))
     beginTransaction()
     return () => commitTransaction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -503,27 +500,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     if (!navigating) return
     const cam = doc.background.field3d
     if (!cam) return
-    const refTokenId = selectedIds.find((id) => doc.elements.find((e) => e.id === id)?.type === 'token')
-    pinSetup(buildPinOps(doc.elements, cam, { syncTokenSizes, refTokenId }))
+    pinSetup(buildPinOps(doc.elements, cam))
     beginTransaction()
     return () => commitTransaction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigating])
-
-  // Toggling a token preference (perspective / sync) re-sizes all tokens at once
-  // for the current camera — so the change is visible immediately, not only on the
-  // next camera move. Fires only on an actual pref change (not mount), in normal
-  // mode (Edit-Background handles it via reprojection on the next camera move).
-  const tokenPrefsRef = useRef({ tokenPerspective, syncTokenSizes })
-  useEffect(() => {
-    const prev = tokenPrefsRef.current
-    tokenPrefsRef.current = { tokenPerspective, syncTokenSizes }
-    if (prev.tokenPerspective === tokenPerspective && prev.syncTokenSizes === syncTokenSizes) return
-    if (!field3d) return
-    const refTokenId = selectedIds.find((id) => doc.elements.find((e) => e.id === id)?.type === 'token')
-    updateElements(tokenSizeChanges(doc.elements, field3d, { syncTokenSizes, tokenPerspective, refTokenId }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenPerspective, syncTokenSizes])
 
   // Edit-Background camera nudges for the 3D field (coach-friendly, discrete steps;
   // fov stays 50). Each is one undo step.
@@ -1168,7 +1149,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const dx = c0.x - center.x
       const dy = c0.y - center.y
       const c1 = { x: center.x + dx * Math.cos(rad) - dy * Math.sin(rad), y: center.y + dx * Math.sin(rad) + dy * Math.cos(rad) }
-      return { ...t0, rotate: t0.rotate + deg, x: c1.x - lc.x, y: c1.y - lc.y }
+      // Tokens never spin — a group rotation only orbits their position (rotate kept).
+      const rotate = el.type === 'token' ? t0.rotate : t0.rotate + deg
+      return { ...t0, rotate, x: c1.x - lc.x, y: c1.y - lc.y }
     }
     // resize: uniform scale about the opposite corner (projected ratio).
     const pivot = boxCorner(g.box0, GROUP_OPP[g.handle as CornerId])
@@ -1464,9 +1447,12 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       if (tok.type === 'token') {
         tok.label = td.label
         tok.text = nextTokenText(doc.elements, tok, td.text)
-        // On a 3D field, a fresh token is pinned at the fixed 2.5 m-radius default
-        // (overrides prior board-size scale logic); flat boards keep the box size.
-        if (fieldCamCfg) tok = pinNewToken(tok, fieldCamCfg, tokenPerspective)
+        // On a 3D field, a fresh token is pinned at the GLOBAL token size (all
+        // tokens are one size) — the existing tokens' size, else the store default.
+        if (fieldCamCfg) {
+          const existing = doc.elements.find((e): e is Extract<BoardElement, { type: 'token' }> => e.type === 'token')
+          tok = pinNewToken(tok, fieldCamCfg, existing?.sizeM ?? tokenSizeM)
+        }
       }
       createFigure(tok)
       return
@@ -2103,52 +2089,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     }
   }
 
-  // "Sync token sizes": after resizing one token, make every OTHER token match a
-  // reference token's size (the first selected token, else the first in the doc —
-  // which in a single-token resize is the token just dragged), keeping each
-  // centered. With token-perspective on over a 3D field, the tokens KEEP their
-  // relative perspective sizes: all share one physical size (from the reference),
-  // rendered per-depth (else they all take the same board size). Returns the
-  // resize + the sync as ONE undoable batch.
-  function tokenSizeSyncChanges(resizeChange: ElementChange): ElementChange[] {
-    const tokens = doc.elements.filter((e): e is Extract<BoardElement, { type: 'token' }> => e.type === 'token')
-    const ref = tokens.find((t) => selectedIds.includes(t.id)) ?? tokens[0]
-    if (!ref) return [resizeChange]
-    const refIsResized = ref.id === resizeChange.id
-    const tw = (refIsResized ? resizeChange.after.width : ref.width) as number
-    const th = (refIsResized ? resizeChange.after.height : ref.height) as number
-    const tscale = (refIsResized ? resizeChange.after.transform?.scale : ref.transform.scale) ?? 1
-    const eRef = th * tscale // reference's effective board height
-    // The shared physical size (metres): from the reference's depth when
-    // perspective is on (so other tokens render per-depth), or from the FIXED
-    // reference scale when off (so the stored size stays consistent and a later
-    // camera move won't jump). Kept on every token so reprojection agrees.
-    const perspective = tokenPerspective && !!field3d
-    const refPPM = perspective && field3d ? anchorPPM(ref, field3d) : null
-    const sizeM = perspective ? (refPPM ? eRef / refPPM : null) : eRef / referencePPM()
-    const changes: ElementChange[] = []
-    // The resized (reference) token keeps its dragged size; record the shared sizeM.
-    if (refIsResized) changes.push({ ...resizeChange, before: { ...resizeChange.before, sizeM: ref.sizeM }, after: { ...resizeChange.after, sizeM: sizeM ?? ref.sizeM } })
-    for (const t of tokens) {
-      if (t.id === ref.id) continue
-      // Target effective height: shared physical size at THIS token's depth
-      // (perspective), else the reference's size (uniform).
-      let eT = eRef
-      if (perspective && sizeM != null && field3d) {
-        const ppmT = anchorPPM(t, field3d)
-        if (ppmT) eT = sizeM * ppmT
-      }
-      changes.push({
-        id: t.id,
-        before: { x: t.x, y: t.y, width: t.width, height: t.height, transform: t.transform, sizeM: t.sizeM },
-        // Same base box as the reference, scale encoding the per-depth size; grow/
-        // shrink about the token's local center so it doesn't jump.
-        after: { x: t.x + (t.width - tw) / 2, y: t.y + (t.height - th) / 2, width: tw, height: th, transform: { ...t.transform, scale: eT / th }, sizeM: sizeM ?? t.sizeM },
-      })
-    }
-    return changes.length ? changes : [resizeChange]
-  }
-
   function commitGesture(g: Gesture) {
     // Ignore a handle click with no real drag (avoids empty undo entries).
     if (Math.hypot(g.current.x - g.start.x, g.current.y - g.start.y) < 1) return
@@ -2184,7 +2124,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           before: { x: g.box0.x, y: g.box0.y, width: g.box0.width, height: g.box0.height, transform: g.t0 },
           after: { x: box.x, y: box.y, width: box.width, height: box.height, transform },
         }
-        updateElements(el.type === 'token' && syncTokenSizes ? tokenSizeSyncChanges(resizeChange) : [resizeChange])
+        updateElements([resizeChange])
       }
     } else if (g.kind === 'point' && el.type === 'polyline') {
       const i = Number(g.handle.slice('point-'.length))

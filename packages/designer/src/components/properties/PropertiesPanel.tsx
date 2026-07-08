@@ -658,6 +658,10 @@ function TokenSettingsWidget() {
           placeholder="Player"
         />
       )}
+      {/* Global token size (Small → Big), shared by every token on the board (2–10 m). */}
+      <Field label={`Size (${Math.round(p.values.tokenSize ?? 5)} m)`}>
+        <WaveSlider min={2} max={10} value={Math.round(p.values.tokenSize ?? 5)} onChange={p.setTokenSize} />
+      </Field>
       <Field label="Opacity">
         <WaveSlider min={0} max={100} value={Math.round((p.values.opacity ?? 1) * 100)} onChange={(v) => p.setOpacity(v / 100)} />
       </Field>
