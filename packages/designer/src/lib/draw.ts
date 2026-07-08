@@ -1,4 +1,4 @@
-import type { ArrowTip, BoardElement, Box, StrokeStyle, FillStyle, TokenShape, TokenFill, TextAlign } from '@youcoach-board/core'
+import type { ArrowTip, BoardElement, PolylineElement, Box, StrokeStyle, FillStyle, TokenShape, TokenFill, TextAlign } from '@youcoach-board/core'
 import {
   normalizeBox,
   IDENTITY_TRANSFORM,
@@ -89,7 +89,7 @@ export function toolCreatesClosed(tool: ToolId): boolean {
 /** The line/arrow tools (the Lines menu). Straight: line/arrow; curved (smooth):
  *  elbow-line/elbow-arrow. zigzag-arrow/double-arrow ride the same smooth curve
  *  with the wave/parallel render style. All the *-arrow tools get an end tip. */
-export const LINE_TOOLS = ['arrow', 'line', 'elbow-arrow', 'elbow-line', 'zigzag-arrow', 'double-arrow'] as const
+export const LINE_TOOLS = ['arrow', 'line', 'elbow-arrow', 'elbow-line', 'zigzag-arrow', 'double-arrow', 'tape'] as const
 export type LineTool = (typeof LINE_TOOLS)[number]
 export function isLineTool(tool: ToolId): tool is LineTool {
   return (LINE_TOOLS as readonly string[]).includes(tool)
@@ -106,6 +106,10 @@ export function toolIsZigzag(tool: ToolId): boolean {
 /** Whether a line tool draws a double (parallel) line. */
 export function toolIsDouble(tool: ToolId): boolean {
   return tool === 'double-arrow'
+}
+/** Whether a line tool is the CAD measurement "tape" (2-point line + length label). */
+export function toolIsTape(tool: ToolId): boolean {
+  return tool === 'tape'
 }
 
 /** Below this drag distance (board units) a press is treated as a click, not a
@@ -139,6 +143,7 @@ export function toolElementType(tool: ToolId): DraftType | null {
     case 'elbow-arrow':
     case 'zigzag-arrow':
     case 'double-arrow':
+    case 'tape':
       return 'line'
     default:
       return null
@@ -203,8 +208,9 @@ export function squareCorner(start: Point, current: Point): Point {
 
 /** Build a straight line as a 2-point (open) polyline, optionally end-tipped and
  *  curved (a 2-point curve is straight; the curve shows once points are added). */
-export function makeLine(id: string, start: Point, current: Point, endTip: ArrowTip = 'none', curve = false, zigzag = false, double = false): BoardElement {
-  return makePolyline(id, [start, current], false, 'none', endTip, curve, zigzag, double)
+export function makeLine(id: string, start: Point, current: Point, endTip: ArrowTip = 'none', curve = false, zigzag = false, double = false, tape = false): BoardElement {
+  const el = makePolyline(id, [start, current], false, 'none', endTip, curve, zigzag, double)
+  return tape ? { ...(el as PolylineElement), tape: true } : el
 }
 
 /** Build a polyline from vertices (board coords). */

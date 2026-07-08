@@ -56,6 +56,7 @@ import {
   toolIsCurved,
   toolIsZigzag,
   toolIsDouble,
+  toolIsTape,
   isLineTool,
   MIN_DRAG,
   type DraftType,
@@ -71,6 +72,7 @@ import { Object3DLayer, type Object3DLayerHandle } from './Object3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
 import { FieldSceneLayer } from './FieldSceneLayer'
+import { TapeDecorations } from './TapeDecoration'
 import { FieldEditOverlay } from './FieldEditOverlay'
 import { FieldZoneTool } from './FieldZoneTool'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
@@ -113,6 +115,8 @@ interface Draft {
   // For 'line' drafts: wave (zigzag-arrow) / parallel (double-arrow) render style.
   zigzag: boolean
   double: boolean
+  // For 'line' drafts: the CAD measurement "tape" (2-point line + length label).
+  tape: boolean
   // Shift held — snap a line's angle to 15° steps (see snapLineEnd).
   snap: boolean
 }
@@ -1369,7 +1373,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     if (type) {
       // line/arrow start as a 'line' draft: a drag → straight line, a click →
       // multi-point polyline (resolved on pointer-up). rect/ellipse → box draft.
-      setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool), curve: toolIsCurved(activeTool), zigzag: toolIsZigzag(activeTool), double: toolIsDouble(activeTool), snap: e.shiftKey })
+      setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool), curve: toolIsCurved(activeTool), zigzag: toolIsZigzag(activeTool), double: toolIsDouble(activeTool), tape: toolIsTape(activeTool), snap: e.shiftKey })
       containerRef.current?.setPointerCapture(e.pointerId)
     } else {
       // A 3D arrow under the cursor selects (and starts a body-move) — it isn't an
@@ -1842,15 +1846,17 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       // Need at least a short stroke (≥2 distinct points) to keep it.
       if (pts.length >= 2) createFigure(applyFigureStyle(makeDraw(crypto.randomUUID(), pts), toolDefaults))
     } else if (draft) {
-      const { type, start, current, endTip, curve, zigzag, double, snap } = draft
+      const { type, start, current, endTip, curve, zigzag, double, tape, snap } = draft
       setDraft(null)
       if (type === 'line') {
         if (isDragSignificant('line', start, current)) {
-          // A real drag → a straight line (2-point polyline, end-tipped if arrow).
+          // A real drag → a straight line (2-point polyline, end-tipped if arrow;
+          // a tape carries its measurement flag).
           const end = snap ? snapLineEnd(start, current) : current
-          createFigure(applyFigureStyle(makeLine(crypto.randomUUID(), start, end, endTip, curve, zigzag, double), toolDefaults))
-        } else {
+          createFigure(applyFigureStyle(makeLine(crypto.randomUUID(), start, end, endTip, curve, zigzag, double, tape), toolDefaults))
+        } else if (!tape) {
           // A click → switch to multi-point polyline mode, seeded with this point.
+          // The tape is strictly 2 points, so a click just cancels (drag required).
           setPolyDraft({ points: [start], cursor: current, endTip, curve, zigzag, double, snap })
         }
       } else if (isDragSignificant(type, start, current)) {
@@ -2375,6 +2381,14 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             )
           })}
         </g>
+        {fieldCamCfg && (
+          <TapeDecorations
+            elements={doc.elements
+              .map(liveElement)
+              .filter((e): e is PolylineElement => e.type === 'polyline' && !!e.tape)}
+            cam={arrow3dCam}
+          />
+        )}
       </BoardCanvas>
       {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />

@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, Grid3x3, Video, MapPin } from 'lucide-react'
+import { Lock, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, Grid3x3, Video, MapPin, Ruler } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -42,6 +42,7 @@ export type ToolId =
   | 'elbow-line'
   | 'zigzag-arrow'
   | 'double-arrow'
+  | 'tape'
   | 'token'
   | 'text'
   | 'draw'
@@ -68,6 +69,7 @@ const LINE_ITEMS: { id: LineTool; label: string; icon: ElementType }[] = [
   { id: 'elbow-line', label: 'Elbow line', icon: ElbowLineIcon },
   { id: 'zigzag-arrow', label: 'Zigzag arrow', icon: LineZigzagArrowIcon },
   { id: 'double-arrow', label: 'Double arrow', icon: LineStyleDoubleIcon },
+  { id: 'tape', label: 'Tape (measure)', icon: Ruler },
 ]
 const LINE_ICON: Record<LineTool, ElementType> = Object.fromEntries(LINE_ITEMS.map((s) => [s.id, s.icon])) as Record<LineTool, ElementType>
 

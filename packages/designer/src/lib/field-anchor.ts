@@ -61,7 +61,7 @@ type PathElement = PolylineElement | DrawElement
 /** A polyline/stroke's points in board units, with its transform applied EXACTLY as
  *  ElementView renders it: `board = c + R·s·(p − c) + (x, y)` (translate, then
  *  rotate + scale about the local center). */
-function polyBoardPoints(el: PathElement): [number, number][] {
+export function polyBoardPoints(el: PathElement): [number, number][] {
   const lb = getLocalBounds(el)
   const cx = lb.x + lb.width / 2
   const cy = lb.y + lb.height / 2

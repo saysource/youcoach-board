@@ -118,6 +118,9 @@ export interface PolylineElement extends BaseElement {
    *  field surface when the 3D field camera changes. Absent = not pinned. See
    *  specs/start.md "Elements on the 3D space". */
   ground?: Array<[number, number]>
+  /** A CAD-style measurement "tape": a strictly 2-point straight line rendered with
+   *  end ticks and its ground length (metres) labelled along it. */
+  tape?: boolean
 }
 
 /** A freehand stroke: a dense point path, always open and unfilled, rendered
@@ -917,6 +920,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       startTip: parseTip(o.startTip),
       endTip: parseTip(o.endTip),
       ground: parseGroundArray(o.ground),
+      tape: o.tape === true || undefined,
     }
   }
   if (o.type === 'draw') {
