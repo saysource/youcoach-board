@@ -82,7 +82,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround } from '../lib/field-anchor'
+import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -1282,13 +1282,18 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       if (!move.engaged) return el // not dragged far enough yet — stay put
       const o = move.origins[el.id]
       // On a 3D field EVERY element moves along the pitch by a field-axis-snapped
-      // ground delta: shapes warp (groundMoveElement), standing/flat elements slide
-      // perspective-correctly (groundTranslate) and keep their ground anchor in step.
+      // ground delta: shapes warp (groundMoveElement); figures/tokens re-stand at the
+      // new depth (so they GROW/SHRINK with perspective as they near/leave the
+      // camera); other flat elements (3D text) slide keeping their anchor in step.
       // Flat boards fall back to the screen-space translate.
       if (fieldCamCfg) {
         const s = groundSnap(move)
         const moved = groundMoveElement(el, arrow3dCam, s.dgx, s.dgz)
         if (moved) return moved
+        if (isGroundElement(el) && el.ground) {
+          const ng: [number, number] = [el.ground[0] + s.dgx, el.ground[1] + s.dgz]
+          return { ...el, transform: standingTransform(el, arrow3dCam, ng[0], ng[1]), ground: ng }
+        }
         const gt = groundTranslate(el, o, s.dgx, s.dgz)
         if (gt) {
           const ground = shiftGroundAnchor(el, s.dgx, s.dgz)
@@ -2027,15 +2032,21 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
               const p = orig as PolylineElement
               const mp = m as PolylineElement
               updates.push({ id, before: { points: p.points, ground: p.ground, transform: origins[id] }, after: { points: mp.points, ground: mp.ground, transform: mp.transform } })
+            } else if (isGroundElement(orig) && orig.ground) {
+              // Figure/token: re-stand at the new depth so it keeps its metric size
+              // (grows/shrinks with perspective), and shift its ground anchor.
+              const og = { ...orig, transform: origins[id] } as typeof orig
+              const ng: [number, number] = [orig.ground[0] + s.dgx, orig.ground[1] + s.dgz]
+              updates.push({ id, before: { transform: origins[id], ground: orig.ground }, after: { transform: standingTransform(og, arrow3dCam, ng[0], ng[1]), ground: ng } })
             } else {
-              // Standing/flat: slide along the ground (perspective-correct) + shift the
-              // pin; if the centre leaves the pitch, fall back to the flat translate.
+              // Other flat elements (3D text): slide along the ground + shift the pin;
+              // if the centre leaves the pitch, fall back to the flat translate.
               const gt = groundTranslate(orig, origins[id], s.dgx, s.dgz)
               const after: ElementPatch = { transform: gt ? { ...origins[id], x: gt.x, y: gt.y } : { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } }
               const before: ElementPatch = { transform: origins[id] }
               const ng = gt ? shiftGroundAnchor(orig, s.dgx, s.dgz) : undefined
               if (ng) {
-                before.ground = (isGroundElement(orig) || isText3d(orig)) ? orig.ground : undefined
+                before.ground = isText3d(orig) ? orig.ground : undefined
                 after.ground = ng
               }
               updates.push({ id, before, after })

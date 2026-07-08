@@ -14,7 +14,7 @@
 // See specs/start.md "Elements on the 3D space". Framework-free (three.js only).
 
 import * as THREE from 'three'
-import { type BoardElement, type PolylineElement, type DrawElement, type TokenElement, type TextElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
+import { type BoardElement, type PolylineElement, type DrawElement, type TokenElement, type TextElement, type ElementTransform, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { rectToPolyline, ellipseToPolyline } from './draw'
@@ -196,6 +196,20 @@ export function pinNewToken(el: TokenElement, cfg: PosedCamera, sizeM: number): 
   const h = localCenter(el).h
   const scale = clamp(tokenBoardH(cam, sizeM, [g.x, g.z]) / (h || 1), 0.05, 30)
   return { ...el, ground: [g.x, g.z], sizeM, transform: { ...el.transform, scale } }
+}
+
+/** The transform placing a standing element (figure/token) with its feet at ground
+ *  (gx, gz) under `cam`, sized from its metric size at THAT depth — so it grows/
+ *  shrinks with perspective as it moves nearer/further. Same formula reprojection
+ *  uses on a camera move, so a drag and an orbit size a token identically. */
+export function standingTransform(el: GroundElement, cam: THREE.Camera, gx: number, gz: number): ElementTransform {
+  const { cx, cy, h } = localCenter(el)
+  let scale: number
+  if (el.type === 'token') scale = clamp(tokenBoardH(cam, el.sizeM ?? TOKEN_DEFAULT_SIZE_M, [gx, gz]) / (h || 1), 0.05, 30)
+  else if (el.sizeM != null) scale = clamp((el.sizeM * groundPPM(cam, gx, gz)) / (h || 1), 0.05, 30)
+  else scale = el.transform.scale
+  const [bcx, bcy] = projectGround(cam, gx, gz)
+  return { ...el.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }
 }
 
 /** The ground displacement (metres) for nudging a pitch element at ground (gx, gz)
