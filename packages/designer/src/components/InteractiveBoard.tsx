@@ -359,6 +359,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const [polyDraft, setPolyDraft] = useState<PolyDraft | null>(null)
   // In-progress freehand stroke: the captured points (board coords).
   const [freeDraft, setFreeDraft] = useState<Point[] | null>(null)
+  // Token tool: the pointer's board position, so a 50%-opacity preview of the token
+  // that a click would drop follows the cursor. Null when the pointer isn't over the
+  // board (or the token tool isn't active).
+  const [tokenPreview, setTokenPreview] = useState<Point | null>(null)
   // Inline token editing: which token + which field (the badge number or the
   // under-badge label) + the in-progress text. Double-click / touch long-press;
   // committed on Enter/blur.
@@ -1115,6 +1119,31 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     return { x: Math.min(Math.max(p.x, 0), doc.width), y: Math.min(Math.max(p.y, 0), doc.height) }
   }
 
+  // Build the token a click at board point `c` would create — the editable next-token
+  // defaults (style + text/label), sized to match existing tokens (or the field's
+  // figure scale) and, on a 3D field, pinned to the pitch at the global token size so
+  // it perspective-scales. Shared by the click handler and the hover PREVIEW so they
+  // never diverge. `id` is 'token-preview' for the ghost, a real uuid for a placement.
+  function makeTokenAt(c: Point, id: string): BoardElement {
+    const td = tokenDefaults
+    // Size: copy the last selected/created token's CURRENT size (so resizes are
+    // honoured); else match any token already on the board; else the field figure scale.
+    const ref =
+      doc.elements.find((e) => e.id === lastTokenId && e.type === 'token') ??
+      [...doc.elements].reverse().find((e) => e.type === 'token')
+    const size = ref?.type === 'token' ? ref.width : Math.round(TOKEN_SIZE * doc.background.figureScale)
+    let tok = makeToken(id, c.x, c.y, td, td.text, size)
+    if (tok.type === 'token') {
+      tok.label = td.label
+      tok.text = nextTokenText(doc.elements, tok, td.text)
+      if (fieldCamCfg) {
+        const existing = doc.elements.find((e): e is Extract<BoardElement, { type: 'token' }> => e.type === 'token')
+        tok = pinNewToken(tok, fieldCamCfg, existing?.sizeM ?? tokenSizeM)
+      }
+    }
+    return tok
+  }
+
   // Remap polyline points from their old local bbox into a new one (so corner
   // resize scales the line). Zero-extent axes keep points pinned (no div/0).
   function scalePoints(points: Array<[number, number]>, from: Box, to: Box): Array<[number, number]> {
@@ -1449,28 +1478,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     // Token: a stamp tool — a single click drops a default token at the cursor
     // (createFigure selects it and reverts to the select tool unless locked).
     if (activeTool === 'token') {
-      const c = clampToCanvas(p)
-      // Use the editable next-token defaults (style + starting text/label).
-      const td = tokenDefaults
-      // Size: copy the last selected/created token's CURRENT size (so resizes are
-      // honoured); else match any token already on the board; else honour the
-      // field's figure scale (the same multiplier placed figures use).
-      const ref =
-        doc.elements.find((e) => e.id === lastTokenId && e.type === 'token') ??
-        [...doc.elements].reverse().find((e) => e.type === 'token')
-      const size = ref?.type === 'token' ? ref.width : Math.round(TOKEN_SIZE * doc.background.figureScale)
-      let tok = makeToken(crypto.randomUUID(), c.x, c.y, td, td.text, size)
-      if (tok.type === 'token') {
-        tok.label = td.label
-        tok.text = nextTokenText(doc.elements, tok, td.text)
-        // On a 3D field, a fresh token is pinned at the GLOBAL token size (all
-        // tokens are one size) — the existing tokens' size, else the store default.
-        if (fieldCamCfg) {
-          const existing = doc.elements.find((e): e is Extract<BoardElement, { type: 'token' }> => e.type === 'token')
-          tok = pinNewToken(tok, fieldCamCfg, existing?.sizeM ?? tokenSizeM)
-        }
-      }
-      createFigure(tok)
+      createFigure(makeTokenAt(clampToCanvas(p), crypto.randomUUID()))
       return
     }
 
@@ -1941,6 +1949,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       setMarquee(next)
       setSelection(marqueeSelection(next))
     }
+    // Token tool with no active gesture: move the drop-preview ghost with the cursor.
+    else if (activeTool === 'token') setTokenPreview(clampToCanvas(p))
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
@@ -2272,6 +2282,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       onPointerDown={onContainerPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerLeave={() => setTokenPreview(null)}
     >
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
@@ -2280,6 +2291,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         doc={doc}
         svgRef={svgRef}
         viewBox={viewBox}
+        // Declare the tool cursor on the SVG itself (the actual pointer target), not
+        // only on the container — so it can't flicker to the inherited/default value
+        // as the pointer crosses the stacked WebGL/overlay layers. Eraser keeps its
+        // data-URL cursor from the container (inherited when this is unset).
+        className={cn(creating || lassoTool ? 'cursor-crosshair' : eraserTool ? undefined : 'cursor-default')}
         background={
           <>
             <BackgroundView doc={doc} />
@@ -2489,6 +2505,14 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 </g>
               )
             })()}
+            {/* Token drop-preview: a 50%-opacity ghost of the token a click would
+                create, following the cursor (perspective-sized like the real one).
+                Pointer-transparent so it never fights the crosshair cursor. */}
+            {activeTool === 'token' && tokenPreview && !move && !gesture && (
+              <g pointerEvents="none" opacity={0.5}>
+                <ElementView element={makeTokenAt(tokenPreview, 'token-preview')} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} />
+              </g>
+            )}
           </>
         }
       >
