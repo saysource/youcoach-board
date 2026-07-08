@@ -53,28 +53,31 @@ function TokenSwatch({ style }: { style: TokenStyle }) {
   )
 }
 
-// A mini pitch showing where the formation lands and which way it attacks. Built in
-// the canonical vertical 800×1200 schematic (GK at the bottom own goal); this is a
-// topology cue, not the actual on-pitch orientation. Long side = 150px, neutral
-// (currentColor) so it adapts to light/dark.
+// A mini pitch showing where the formation lands and which way it attacks. Authored
+// in the canonical vertical 800×1200 schematic (GK at the own goal, attacking toward
+// y=0), then rotated 90° CW so it reads LEFT→RIGHT along the pitch length — matching
+// the 3D pitch (length along x) and the Left/Right direction labels. Forward attacks
+// toward the right. Long side = 150px, neutral (currentColor) for light/dark.
 const DISC_R = 42
 function FieldPreview({ code, kind, dir, spread }: { code: string; kind: FieldKind; dir: FormationDir; spread: Spread }) {
   const discs = formationFieldPoints(code, dir, spread)
-  // Arrow along the field length: forward attacks toward y=0 (up), reverse down.
+  // Arrow along the field length: forward attacks toward y=0 (→ right after rotation).
   const up = dir === 'forward'
   const tailY = up ? 760 : 440
   const headY = up ? 450 : 750
   const hy = up ? headY + 60 : headY - 60
   return (
-    <svg width={100} height={150} viewBox="0 0 800 1200" className="text-foreground" aria-hidden>
-      <path d={FIELD_PATH[kind]} fill="none" stroke="currentColor" strokeWidth={1.25} vectorEffect="non-scaling-stroke" opacity={0.45} />
-      <g stroke="currentColor" fill="currentColor" strokeWidth={18} strokeLinecap="round" strokeLinejoin="round" opacity={0.75}>
-        <line x1={400} y1={tailY} x2={400} y2={headY} />
-        <polygon points={`340,${hy} 400,${headY} 460,${hy}`} stroke="none" />
+    <svg width={150} height={100} viewBox="0 0 1200 800" className="text-foreground" aria-hidden>
+      <g transform="translate(1200 0) rotate(90)">
+        <path d={FIELD_PATH[kind]} fill="none" stroke="currentColor" strokeWidth={1.25} vectorEffect="non-scaling-stroke" opacity={0.45} />
+        <g stroke="currentColor" fill="currentColor" strokeWidth={18} strokeLinecap="round" strokeLinejoin="round" opacity={0.75}>
+          <line x1={400} y1={tailY} x2={400} y2={headY} />
+          <polygon points={`340,${hy} 400,${headY} 460,${hy}`} stroke="none" />
+        </g>
+        {discs.map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r={DISC_R} fill="currentColor" opacity={0.55} />
+        ))}
       </g>
-      {discs.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={DISC_R} fill="currentColor" opacity={0.55} />
-      ))}
     </svg>
   )
 }
@@ -84,7 +87,7 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
   const field3d = useEditorStore((s) => s.doc.background.field3d)
   const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
   const placeElements = useEditorStore((s) => s.placeElements)
-  const dirs = directionOptions('vertical')
+  const dirs = directionOptions('horizontal')
   const options = styleOptions(elements)
   const [dir, setDir] = useState<FormationDir>('forward')
   const [styleIdx, setStyleIdx] = useState(0)
@@ -164,7 +167,7 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
         <Button variant="outline" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" onClick={place}>
+        <Button variant="default" size="sm" onClick={place}>
           Add {cfg.teamSize} players
         </Button>
       </div>
