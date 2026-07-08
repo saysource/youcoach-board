@@ -1692,12 +1692,14 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     let cy: number
     let font: number // editor font in screen px (overlays the rendered glyph 1:1)
     if (field === 'label') {
-      // Caption: a fixed on-screen size centered just below the badge (mirrors the
-      // renderer, which divides the px sizes by the fit-scale to get board units).
+      // Caption: a FIXED on-screen-size label anchored a fixed gap below the token's
+      // BASE — which sits at (centre + half-height × perspective scale). Mirrors the
+      // renderer so the textarea overlays the glyph 1:1 whatever the token's size.
       const gapBoard = TOKEN_LABEL_GAP_PX / scale
       const fontBoard = TOKEN_LABEL_PX / scale
+      const baseY = el.y + el.height / 2 + (el.height / 2) * el.transform.scale + el.transform.y
       cx = el.x + el.width / 2 + el.transform.x
-      cy = el.y + el.height + gapBoard + fontBoard / 2 + el.transform.y
+      cy = baseY + gapBoard + fontBoard / 2
       font = TOKEN_LABEL_PX
     } else {
       // Badge number: anchored at the geometry's text point, sized into the box.

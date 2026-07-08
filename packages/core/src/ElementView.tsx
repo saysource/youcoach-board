@@ -122,9 +122,15 @@ function Shape({ element, viewScale }: { element: BoardElement; viewScale?: numb
           <rect x={0} y={0} width={P} height={P / 2} fill={element.color2} />
         </pattern>
       ) : null
-    // Caption sizing: fixed on-screen px when a viewScale is known, else board units.
-    const labelFont = viewScale && viewScale > 0 ? TOKEN_LABEL_PX / viewScale : TOKEN_LABEL_PX
-    const labelGap = viewScale && viewScale > 0 ? TOKEN_LABEL_GAP_PX / viewScale : TOKEN_LABEL_GAP_PX
+    // Caption: a fixed-size 2D label anchored at the token's BASE, which itself moves
+    // as the token grows/shrinks with 3D perspective. It lives inside the element's
+    // transform (scaled by `transform.scale`), so we COUNTER-SCALE the font + gap by
+    // that scale — the label keeps a constant on-screen size no matter how big the
+    // token renders, sitting a fixed gap below the (scaled) base. `viewScale` keeps
+    // it constant against board zoom too.
+    const labelScale = element.transform.scale || 1
+    const labelFont = (viewScale && viewScale > 0 ? TOKEN_LABEL_PX / viewScale : TOKEN_LABEL_PX) / labelScale
+    const labelGap = (viewScale && viewScale > 0 ? TOKEN_LABEL_GAP_PX / viewScale : TOKEN_LABEL_GAP_PX) / labelScale
     return (
       <>
         <g transform={t}>
