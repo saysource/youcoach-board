@@ -1,8 +1,8 @@
 import type * as THREE from 'three'
 import type { TextElement } from '@youcoach-board/core'
 import { TEXT_FONT, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius } from '@youcoach-board/core'
-import { projectGround, referencePPM } from '../lib/field-anchor'
 import { solveHomography } from '../lib/homography'
+import { text3dCorners } from '../lib/text3d'
 
 // "3D text": a text element written flat on the pitch surface, anchored by its box
 // centre (`ground`), with a user-chosen reading direction (`orientation`
@@ -13,44 +13,6 @@ import { solveHomography } from '../lib/homography'
 
 const SELECT_FRAME = 'var(--color-selection-frame)'
 
-/** Baseline ground direction [x, z] for each orientation about the field X axis. */
-function dirFor(orientation: number): [number, number] {
-  switch (((orientation % 360) + 360) % 360) {
-    case 90:
-      return [0, 1]
-    case 180:
-      return [-1, 0]
-    case 270:
-      return [0, -1]
-    default:
-      return [1, 0]
-  }
-}
-
-/** The text box's four GROUND corners (metres) — TL, TR, BR, BL in the box's own
- *  (reading, down) frame — sized from its board dimensions via the reference scale
- *  (so a 3D text is about the size its flat twin would be at the default view). */
-function boardCorners(el: TextElement, cam: THREE.Camera): [number, number][] {
-  const [gx, gz] = el.ground!
-  const k = 1 / referencePPM() // metres per board unit
-  const [dx, dz] = dirFor(el.orientation ?? 0)
-  let px = dz
-  let pz = -dx // perpendicular (text-down) ground direction
-  // Sign the perpendicular so the projected frame is NOT mirrored (determinant > 0)
-  // — glyphs read upright, not backwards/upside-down — the tape label's trick.
-  const o = projectGround(cam, gx, gz)
-  const A = projectGround(cam, gx + dx, gz + dz) // image of the reading axis
-  const B = projectGround(cam, gx + px, gz + pz) // image of the perpendicular
-  if ((A[0] - o[0]) * (B[1] - o[1]) - (A[1] - o[1]) * (B[0] - o[0]) < 0) {
-    px = -px
-    pz = -pz
-  }
-  const hw = (el.width / 2) * k
-  const hh = (el.height / 2) * k
-  const C = (sw: number, sh: number) => projectGround(cam, gx + dx * sw * hw + px * sh * hh, gz + dz * sw * hw + pz * sh * hh)
-  return [C(-1, -1), C(1, -1), C(1, 1), C(-1, 1)] // TL, TR, BR, BL
-}
-
 // ── Selection frame: the projected quad (a warped rectangle on the pitch), so the
 // frame leans with the text instead of being an axis-aligned box. No handles — a 3D
 // text is moved by dragging and sized via the properties slider. ───────────────────
@@ -59,7 +21,7 @@ export function Text3DFrames({ elements, cam }: { elements: TextElement[]; cam: 
     <>
       {elements.map((el) => {
         if (!el.ground) return null
-        const pts = boardCorners(el, cam)
+        const pts = text3dCorners(el, cam)
         return (
           <polygon
             key={el.id}
@@ -91,7 +53,7 @@ function Text3DHtmlItem({ el, cam, boardToPx }: { el: TextElement; cam: THREE.Ca
     { x: w, y: h },
     { x: 0, y: h },
   ]
-  const dst = boardCorners(el, cam).map((b) => boardToPx(b))
+  const dst = text3dCorners(el, cam).map((b) => boardToPx(b))
   let H: number[]
   try {
     H = solveHomography(src, dst)

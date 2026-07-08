@@ -75,6 +75,7 @@ import { FieldCameraLayer } from './FieldCameraLayer'
 import { FieldSceneLayer } from './FieldSceneLayer'
 import { TapeDecorations } from './TapeDecoration'
 import { Text3DFrames, Text3DHtml } from './Text3DDecoration'
+import { text3dCorners } from '../lib/text3d'
 import { FieldEditOverlay } from './FieldEditOverlay'
 import { FieldZoneTool } from './FieldZoneTool'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
@@ -2205,6 +2206,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       })
       .join(' ')
   }
+  // A 3D text's hit/grab area is its PROJECTED footprint quad (matching the leaning
+  // glyphs), not the flat axis-aligned box. Used for both click-select and move.
+  const isText3dHit = (el: BoardElement): el is Extract<BoardElement, { type: 'text' }> => isText3d(el) && !!fieldCamCfg && !!el.ground
+  const text3dHitPoints = (el: Extract<BoardElement, { type: 'text' }>) => text3dCorners(el, arrow3dCam).map((p) => `${p[0]},${p[1]}`).join(' ')
   // Object-snap guides (alignment lines + equal-distance gaps) shown while dragging,
   // resizing, or dragging a polyline vertex. On a 3D field the move snaps to the
   // pitch axes (field guides), off-field to screen axes (2D snap + gap guides).
@@ -2304,7 +2309,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 el.type === 'polyline' && el.points.length === 2 ? null : (
                   <polygon
                     key={`hit-${el.id}`}
-                    points={framePoints(el)}
+                    points={isText3dHit(el) ? text3dHitPoints(el) : framePoints(el)}
                     fill="transparent"
                     style={{ cursor: 'move' }}
                     onPointerDown={(e) => onElementPointerDown(e, el)}
@@ -2493,21 +2498,26 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             // value) ONLY in the rendered element — the selection chrome still
             // sees the real `showLabel`, so the frame doesn't shrink while editing.
             const beingEdited = !!editing && editing.id === el.id
-            // A pitch-pinned 3D text draws its glyphs through the field overlay
-            // (Text3DDecorations); here render only its transparent box as the
-            // select/move hit area — EXCEPT while editing it, when the flat box +
-            // live text back the inline textarea.
+            // A pitch-pinned 3D text draws its glyphs through the HTML overlay; here
+            // its hit area is the PROJECTED footprint quad (so clicking the leaning
+            // text selects it), EXCEPT while editing it, when the flat box + live text
+            // back the inline textarea.
+            const t3dHit = isText3dHit(live) && !beingEdited
             const render =
               beingEdited && live.type === 'token'
                 ? editing!.field === 'label'
                   ? { ...live, showLabel: false }
                   : { ...live, text: '' }
-                : isText3d(live) && fieldCamCfg && !beingEdited
-                  ? { ...live, text: '', bgColor: 'transparent' }
-                  : live
+                : live
             return (
               <g key={el.id} style={{ cursor: 'move', opacity: erasing ? 0.25 : undefined }} onPointerDown={(e) => onElementPointerDown(e, el)}>
-                {render.type === 'figure' ? <FigureView element={render} /> : <ElementView element={render} viewScale={scale} />}
+                {t3dHit ? (
+                  <polygon points={text3dHitPoints(live)} fill="transparent" />
+                ) : render.type === 'figure' ? (
+                  <FigureView element={render} />
+                ) : (
+                  <ElementView element={render} viewScale={scale} />
+                )}
               </g>
             )
           })}
