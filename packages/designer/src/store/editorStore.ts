@@ -290,6 +290,10 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
           activeTool: tool,
           // Picking a creation tool clears the current selection (Excalidraw-like).
           selectedIds: isCreationTool(tool) ? [] : s.selectedIds,
+          // Tokens are stamped repeatedly, so the token tool auto-enables "keep tool
+          // active" (it otherwise reverts to select after one drop). Other tools keep
+          // the current setting (the user can still toggle it off).
+          keepToolActive: tool === 'token' ? true : s.keepToolActive,
         })),
 
       toggleKeepTool: () => set((s) => ({ keepToolActive: !s.keepToolActive })),
