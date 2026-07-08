@@ -4,6 +4,9 @@
 // team attacking UP (decreasing y). The point count equals the team size, so a
 // system is offered only when it matches the field's team size.
 
+import type { FieldType } from '@youcoach-board/core'
+import { PITCH_MODELS } from './field-reference'
+
 export type FieldPoint = [number, number]
 
 export const FIELD_W = 800
@@ -40,31 +43,30 @@ export type FieldKind = 'soccer' | 'futsal'
  *  stretched across the whole pitch. */
 export type Spread = 'half' | 'whole'
 
-export interface FieldSystemConfig {
-  orientation: FieldOrientation
-  /** Playable area on the 1200×900 board (from the field artwork). */
-  rect: { x: number; y: number; w: number; h: number }
+/** A game-system-capable field: which team size it fields, its metric ground size
+ *  ([length x, width z] in metres, matching the 3D pitch frame) and the artwork the
+ *  preview uses. Derived from the current 3D field TYPE (not a 2D SVG path). */
+export interface SystemConfig {
   /** Players per team (incl. goalkeeper). */
   teamSize: number
-  /** Which field artwork the preview uses. */
-  field: FieldKind
+  /** Metric pitch size [length x, width z] in metres — the 3D ground frame. */
+  size: [number, number]
+  /** Which field artwork the schematic preview uses. */
+  kind: FieldKind
 }
 
-// Game systems are defined at field level: which fields support them + their
-// playable area, orientation and team size. Extendable later to per-field custom
-// setups (rondos, N-vs-M situations, …).
-export const FIELD_SYSTEMS: Record<string, FieldSystemConfig> = {
-  'images/optimized/fields/11/49.svg': { orientation: 'horizontal', rect: { x: 33, y: 90, w: 1120, h: 719 }, teamSize: 11, field: 'soccer' },
-  'images/optimized/fields/11/19.svg': { orientation: 'vertical', rect: { x: 327, y: 27, w: 546, h: 851 }, teamSize: 11, field: 'soccer' },
-  'images/optimized/fields/futsal/1.svg': { orientation: 'vertical', rect: { x: 409, y: 85, w: 376, h: 732 }, teamSize: 5, field: 'futsal' },
-}
-
-export function fieldSystemConfig(fieldSvg: string | null | undefined): FieldSystemConfig | null {
-  return (fieldSvg && FIELD_SYSTEMS[fieldSvg]) || null
+// Game systems are offered on the 3D pitches that define a regulation team size:
+// soccer-11 (105×68 m) and futsal (from the pitch model). A training/area field has
+// no fixed formations. Sizes are read from the shared PITCH_MODELS so the placement
+// and the field-camera wireframe never drift apart.
+export function systemConfigForField(fieldType: FieldType): SystemConfig | null {
+  if (fieldType === 'soccer11') return { teamSize: 11, size: PITCH_MODELS.soccer11.size, kind: 'soccer' }
+  if (fieldType === 'futsal') return { teamSize: 5, size: PITCH_MODELS.futsal.size, kind: 'futsal' }
+  return null
 }
 
 /** Formation codes available on a field (those matching its team size). */
-export function availableSystems(cfg: FieldSystemConfig): string[] {
+export function availableSystems(cfg: SystemConfig): string[] {
   return Object.keys(FORMATIONS).filter((code) => FORMATIONS[code].length === cfg.teamSize)
 }
 
@@ -98,15 +100,13 @@ export function formationFieldPoints(code: string, dir: FormationDir, spread: Sp
   return pts.map(([fx, fy]) => (dir === 'forward' ? [fx, fy] : [FIELD_W - fx, FIELD_H - fy]))
 }
 
-/** Board-coordinate centers for a formation on a field. Vertical fields map the
- *  canonical field directly; horizontal fields rotate it 90° clockwise. */
-export function formationCenters(code: string, cfg: FieldSystemConfig, dir: FormationDir, spread: Spread): { x: number; y: number }[] {
-  const { rect, orientation } = cfg
-  return formationFieldPoints(code, dir, spread).map(([fx, fy]) => {
-    const u = fx / FIELD_W // 0..1 across the field width
-    const v = fy / FIELD_H // 0..1 along its length
-    return orientation === 'vertical'
-      ? { x: rect.x + u * rect.w, y: rect.y + v * rect.h }
-      : { x: rect.x + (1 - v) * rect.w, y: rect.y + u * rect.h } // 90° CW
-  })
+/** Metric GROUND spots (x = length, z = width, metres) for a formation on a 3D pitch
+ *  of `size` [len, wid]. The canonical schematic (800 wide × 1200 long, GK at the
+ *  bottom own goal, attacking UP toward fy=0) maps: long axis → pitch length, short
+ *  axis → pitch width. Forward puts the own goal at x=0 (attack toward +x); reverse
+ *  is the same shape point-reflected (handled inside formationFieldPoints), so the
+ *  ground spots always match the dialog's preview discs exactly. */
+export function formationGround(code: string, size: [number, number], dir: FormationDir, spread: Spread): FieldPoint[] {
+  const [len, wid] = size
+  return formationFieldPoints(code, dir, spread).map(([fx, fy]) => [len * (1 - fy / FIELD_H), (fx / FIELD_W) * wid])
 }

@@ -7,12 +7,13 @@ import { Button } from './ui/button'
 import { cn } from '../lib/cn'
 import { useEditorStore } from '../store/context'
 import { makeToken, TOKEN_SIZE, type TokenStyle } from '../lib/draw'
+import { pinTokensAtGround } from '../lib/field-anchor'
 import {
-  fieldSystemConfig,
-  formationCenters,
+  systemConfigForField,
+  formationGround,
   formationFieldPoints,
   directionOptions,
-  type FieldSystemConfig,
+  type SystemConfig,
   type FieldKind,
   type FormationDir,
   type Spread,
@@ -52,12 +53,12 @@ function TokenSwatch({ style }: { style: TokenStyle }) {
   )
 }
 
-// A mini pitch showing where the formation lands and which way it attacks. Built
-// in the canonical vertical 800×1200 space; horizontal fields rotate 90° CW. Long
-// side = 150px, neutral (currentColor) so it adapts to light/dark.
+// A mini pitch showing where the formation lands and which way it attacks. Built in
+// the canonical vertical 800×1200 schematic (GK at the bottom own goal); this is a
+// topology cue, not the actual on-pitch orientation. Long side = 150px, neutral
+// (currentColor) so it adapts to light/dark.
 const DISC_R = 42
-function FieldPreview({ code, cfg, dir, spread }: { code: string; cfg: FieldSystemConfig; dir: FormationDir; spread: Spread }) {
-  const vertical = cfg.orientation === 'vertical'
+function FieldPreview({ code, kind, dir, spread }: { code: string; kind: FieldKind; dir: FormationDir; spread: Spread }) {
   const discs = formationFieldPoints(code, dir, spread)
   // Arrow along the field length: forward attacks toward y=0 (up), reverse down.
   const up = dir === 'forward'
@@ -65,36 +66,38 @@ function FieldPreview({ code, cfg, dir, spread }: { code: string; cfg: FieldSyst
   const headY = up ? 450 : 750
   const hy = up ? headY + 60 : headY - 60
   return (
-    <svg width={vertical ? 100 : 150} height={vertical ? 150 : 100} viewBox={vertical ? '0 0 800 1200' : '0 0 1200 800'} className="text-foreground" aria-hidden>
-      <g transform={vertical ? undefined : 'translate(1200 0) rotate(90)'}>
-        <path d={FIELD_PATH[cfg.field]} fill="none" stroke="currentColor" strokeWidth={1.25} vectorEffect="non-scaling-stroke" opacity={0.45} />
-        <g stroke="currentColor" fill="currentColor" strokeWidth={18} strokeLinecap="round" strokeLinejoin="round" opacity={0.75}>
-          <line x1={400} y1={tailY} x2={400} y2={headY} />
-          <polygon points={`340,${hy} 400,${headY} 460,${hy}`} stroke="none" />
-        </g>
-        {discs.map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r={DISC_R} fill="currentColor" opacity={0.55} />
-        ))}
+    <svg width={100} height={150} viewBox="0 0 800 1200" className="text-foreground" aria-hidden>
+      <path d={FIELD_PATH[kind]} fill="none" stroke="currentColor" strokeWidth={1.25} vectorEffect="non-scaling-stroke" opacity={0.45} />
+      <g stroke="currentColor" fill="currentColor" strokeWidth={18} strokeLinecap="round" strokeLinejoin="round" opacity={0.75}>
+        <line x1={400} y1={tailY} x2={400} y2={headY} />
+        <polygon points={`340,${hy} 400,${headY} 460,${hy}`} stroke="none" />
       </g>
+      {discs.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={DISC_R} fill="currentColor" opacity={0.55} />
+      ))}
     </svg>
   )
 }
 
-function Body({ code, cfg, onClose }: { code: string; cfg: FieldSystemConfig; onClose: () => void }) {
+function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose: () => void }) {
   const elements = useEditorStore((s) => s.doc.elements)
-  const figureScale = useEditorStore((s) => s.doc.background.figureScale)
+  const field3d = useEditorStore((s) => s.doc.background.field3d)
+  const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
   const placeElements = useEditorStore((s) => s.placeElements)
-  const dirs = directionOptions(cfg.orientation)
+  const dirs = directionOptions('vertical')
   const options = styleOptions(elements)
   const [dir, setDir] = useState<FormationDir>('forward')
   const [styleIdx, setStyleIdx] = useState(0)
   const [spread, setSpread] = useState<Spread>('half')
 
   function place() {
+    if (!field3d) return // systems only appear on a 3D pitch, so this is set
     const style = options[Math.min(styleIdx, options.length - 1)]
-    const size = Math.max(12, Math.round(TOKEN_SIZE * figureScale))
-    const tokens = formationCenters(code, cfg, dir, spread).map((c, i) => makeToken(crypto.randomUUID(), c.x, c.y, style, String(i + 1), size))
-    placeElements(tokens)
+    const grounds = formationGround(code, cfg.size, dir, spread)
+    // Base tokens (any position); pinning relocates + perspective-sizes each to its
+    // ground spot at the shared global token size.
+    const base = grounds.map((_, i) => makeToken(crypto.randomUUID(), 0, 0, style, String(i + 1), TOKEN_SIZE))
+    placeElements(pinTokensAtGround(base as Parameters<typeof pinTokensAtGround>[0], grounds, field3d, tokenSizeM))
     onClose()
   }
 
@@ -115,7 +118,7 @@ function Body({ code, cfg, onClose }: { code: string; cfg: FieldSystemConfig; on
               onClick={() => setDir(d.id)}
               className={cn('flex flex-col items-center gap-1 rounded-lg border p-2 transition-colors', dir === d.id ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-accent')}
             >
-              <FieldPreview code={code} cfg={cfg} dir={d.id} spread={spread} />
+              <FieldPreview code={code} kind={cfg.kind} dir={d.id} spread={spread} />
               <span className="text-[11px] text-muted-foreground">{d.label}</span>
             </button>
           ))}
@@ -170,9 +173,11 @@ function Body({ code, cfg, onClose }: { code: string; cfg: FieldSystemConfig; on
 }
 
 /** Pick direction, team style and pitch coverage for a game system, then drop its
- *  tokens. Open when `code` is set and the current field supports systems. */
-export function GameSystemDialog({ code, fieldSvg, onClose }: { code: string | null; fieldSvg: string | null | undefined; onClose: () => void }) {
-  const cfg = fieldSystemConfig(fieldSvg)
+ *  tokens onto the 3D pitch. Open when `code` is set and the current field type
+ *  supports systems (soccer-11 / futsal). */
+export function GameSystemDialog({ code, onClose }: { code: string | null; onClose: () => void }) {
+  const fieldType = useEditorStore((s) => s.doc.background.fieldType)
+  const cfg = systemConfigForField(fieldType)
   return (
     <Dialog open={code != null && cfg != null} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="max-w-md">

@@ -18,7 +18,7 @@ import {
 import { cn } from '../lib/cn'
 import { useAssets } from '../lib/assets'
 import { addBall as quickAddBall } from '../lib/quick-add'
-import { fieldSystemConfig, availableSystems } from '../lib/formations'
+import { systemConfigForField, availableSystems } from '../lib/formations'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 
 // Icon per catalog macro-group, for the More-tools menu.
@@ -302,9 +302,10 @@ function MoreToolsMenu({
 }) {
   const { catalog } = useAssets()
   const storeApi = useEditorStoreApi()
-  // Game systems are offered only on fields that define them (see FIELD_SYSTEMS).
-  const fieldSvg = useEditorStore((s) => s.doc.background.fieldSvg)
-  const systemsCfg = fieldSystemConfig(fieldSvg)
+  // Game systems are offered only on 3D fields with a regulation team size
+  // (soccer-11 / futsal), derived from the current field TYPE.
+  const fieldType = useEditorStore((s) => s.doc.background.fieldType)
+  const systemsCfg = systemConfigForField(fieldType)
   const systems = systemsCfg ? availableSystems(systemsCfg) : []
   // The ball = the first material with the "balls" action; flagged so animation
   // can special-case it later.

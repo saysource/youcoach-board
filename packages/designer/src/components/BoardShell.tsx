@@ -554,7 +554,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           />
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-          <GameSystemDialog code={formation} fieldSvg={fieldSvg} onClose={() => setFormation(null)} />
+          <GameSystemDialog code={formation} onClose={() => setFormation(null)} />
         </BoardRootProvider>
       </TooltipPrimitive.Provider>
     </div>

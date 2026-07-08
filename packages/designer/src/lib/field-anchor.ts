@@ -212,6 +212,20 @@ export function standingTransform(el: GroundElement, cam: THREE.Camera, gx: numb
   return { ...el.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }
 }
 
+/** Pin a batch of tokens to the pitch at given metric ground spots (metres), all at
+ *  the shared global size `sizeM`, under the field camera `cfg` — one camera build
+ *  for the whole set. Each returned token carries its `ground` anchor and the
+ *  perspective transform placing its feet there. Used to drop a game-system
+ *  formation's worth of tokens at once. */
+export function pinTokensAtGround(tokens: TokenElement[], grounds: Array<[number, number]>, cfg: PosedCamera, sizeM: number): TokenElement[] {
+  const cam = makeCalibratedCamera(cfg)
+  return tokens.map((el, i) => {
+    const [gx, gz] = grounds[i]
+    const sized = { ...el, sizeM }
+    return { ...sized, ground: [gx, gz] as [number, number], transform: standingTransform(sized, cam, gx, gz) }
+  })
+}
+
 /** The ground displacement (metres) for nudging a pitch element at ground (gx, gz)
  *  by (dx, dy) BOARD units under `cfg` — projects the anchor, offsets it on-screen,
  *  and reads back the ground delta. So arrow-key nudges of `object3d`/`arrow3d`
