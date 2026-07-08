@@ -706,24 +706,12 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     updateElements([{ id: g.id, before, after: patch }])
   }
 
-  // Snap a dragged 3D object's ground x/z so it lines up with other objects ALONG
-  // THE FIELD AXES (constant pitch-x or pitch-z), not screen axes — so alignment
-  // behaves the same in perspective as top-down. The snap radius is the on-screen
-  // SNAP_PX converted to ground metres per axis (perspective varies metres/px).
-  function snapGroundPoint(nx: number, nz: number, exclude: Set<string>): { x: number; z: number; guides: SnapLine[] } {
-    // Ground positions of the other elements: objects use their x/z; 2D elements
-    // are projected from their board centre onto the pitch plane.
-    const targets: { x: number; z: number }[] = []
-    for (const e of doc.elements) {
-      if (exclude.has(e.id) || e.type === 'arrow3d') continue
-      if (e.type === 'object3d') {
-        targets.push({ x: e.x, z: e.z })
-        continue
-      }
-      const b = unionBounds([e])
-      const gr = b && arrow3dGround({ x: b.x + b.width / 2, y: b.y + b.height / 2 })
-      if (gr) targets.push(gr)
-    }
+  // Snap a ground point (nx, nz) so it lines up with `targets` ALONG THE FIELD AXES
+  // (constant pitch-x or pitch-z), not screen axes — so alignment behaves the same
+  // in perspective as top-down. The snap radius is the on-screen SNAP_PX converted
+  // to ground metres per axis (perspective varies metres/px). Emits a field-axis
+  // guide (a straight ground line stays straight projected) per snapped axis.
+  function snapGroundAxes(nx: number, nz: number, targets: { x: number; z: number }[]): { x: number; z: number; guides: SnapLine[] } {
     const px = SNAP_PX / (scale || 1)
     const c0 = object3dToBoard(nx, 0, nz)
     const cX = object3dToBoard(nx + 0.5, 0, nz)
@@ -750,8 +738,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const oz = snapZ ?? nz
     const toB = (x: number, z: number) => object3dToBoard(x, 0, z)
     const guides: SnapLine[] = []
-    // A field-axis guide runs through the moving object + every target it lines
-    // up with; a straight ground line stays straight when projected to the board.
     if (snapX != null) {
       const aligned = targets.filter((t) => Math.abs(t.x - ox) < 0.02)
       const zs = [oz, ...aligned.map((t) => t.z)]
@@ -767,6 +753,24 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       guides.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, marks: [toB(ox, oz), ...aligned.map((t) => toB(t.x, t.z))] })
     }
     return { x: ox, z: oz, guides }
+  }
+
+  // Field-axis snap for a MOVE: the moving selection's ground centre lines up with
+  // other elements' ground centres (objects use x/z; 2D elements project their box
+  // centre onto the pitch).
+  function snapGroundPoint(nx: number, nz: number, exclude: Set<string>): { x: number; z: number; guides: SnapLine[] } {
+    const targets: { x: number; z: number }[] = []
+    for (const e of doc.elements) {
+      if (exclude.has(e.id) || e.type === 'arrow3d') continue
+      if (e.type === 'object3d') {
+        targets.push({ x: e.x, z: e.z })
+        continue
+      }
+      const b = unionBounds([e])
+      const gr = b && arrow3dGround({ x: b.x + b.width / 2, y: b.y + b.height / 2 })
+      if (gr) targets.push(gr)
+    }
+    return snapGroundAxes(nx, nz, targets)
   }
 
   // Move (x/z) every object in the gesture by a shared ground delta, or rotate
@@ -1197,6 +1201,34 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     return { board: clampToCanvas({ x: board.x + snap.dx, y: board.y + snap.dy }), guides: snap.guides }
   }
 
+  // The 3D-field version of snapVertexBoard: magnet a dragged vertex to the FIELD
+  // axes (constant pitch-x / pitch-z) through other elements' notable points AND
+  // this shape's other vertices — projected onto the pitch — so a point aligns the
+  // same way in perspective as top-down. `excludeIdx` skips the moving vertex.
+  function snapVertexGround(g: Gesture, board: Point, excludeIdx: number): { board: Point; guides: SnapLine[] } {
+    const el = doc.elements.find((e) => e.id === g.id)
+    const gp = arrow3dGround(board)
+    if (!snapToObjects || !el || !gp) return { board, guides: [] }
+    const targets: { x: number; z: number }[] = []
+    for (const e of doc.elements) {
+      if (e.id === g.id || e.type === 'arrow3d') continue
+      for (const p of notablePoints(e)) {
+        const gg = arrow3dGround(p)
+        if (gg) targets.push(gg)
+      }
+    }
+    if (el.type === 'polyline') {
+      el.points.forEach((pt, idx) => {
+        if (idx === excludeIdx) return
+        const gg = arrow3dGround(elementToBoard({ x: pt[0], y: pt[1] }, g.box0, g.t0))
+        if (gg) targets.push(gg)
+      })
+    }
+    const sn = snapGroundAxes(gp.x, gp.z, targets)
+    const nb = projectGround(arrow3dCam, sn.x, sn.z)
+    return { board: clampToCanvas({ x: nb[0], y: nb[1] }), guides: sn.guides }
+  }
+
   function resolvePointDrag(g: Gesture): { lp: Point; guides: SnapLine[] } {
     const el = doc.elements.find((e) => e.id === g.id)
     const i = Number(g.handle.slice('point-'.length))
@@ -1207,13 +1239,14 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const neighbor = elementToBoard({ x: el.points[ni][0], y: el.points[ni][1] }, g.box0, g.t0)
       board = snapLineEnd(neighbor, board)
     }
-    const snapped = snapVertexBoard(g, clampToCanvas(board), i)
+    // On a 3D field a vertex snaps along the pitch axes; flat boards → screen axes.
+    const snapped = fieldCamCfg ? snapVertexGround(g, clampToCanvas(board), i) : snapVertexBoard(g, clampToCanvas(board), i)
     return { lp: boardToElement(snapped.board, g.box0, g.t0), guides: snapped.guides }
   }
 
   // Same object-snap for a NEW vertex inserted by dragging a mid-segment anchor.
   function resolveAnchorDrag(g: Gesture): { lp: Point; guides: SnapLine[] } {
-    const snapped = snapVertexBoard(g, clampToCanvas(g.current), -1)
+    const snapped = fieldCamCfg ? snapVertexGround(g, clampToCanvas(g.current), -1) : snapVertexBoard(g, clampToCanvas(g.current), -1)
     return { lp: boardToElement(snapped.board, g.box0, g.t0), guides: snapped.guides }
   }
 
