@@ -12,10 +12,23 @@ const OFFSET_M = 1.8 // label centre offset above the line (metres)
 const TICK_M = 1.0 // half-length of the perpendicular end ticks (metres)
 
 function TapeItem({ el, cam }: { el: PolylineElement; cam: THREE.Camera }) {
-  const bpts = polyBoardPoints(el)
-  if (bpts.length < 2) return null
-  const g1 = boardToGround(bpts[0][0], bpts[0][1], cam)
-  const g2 = boardToGround(bpts[bpts.length - 1][0], bpts[bpts.length - 1][1], cam)
+  // Measure + place from the TRUE ground anchors, not the rendered board points:
+  // once a point is reprojected off-screen its board position is clipped/clamped,
+  // which would corrupt a length derived by reverse-projecting it. `ground` is the
+  // pitch-pinned source of truth (kept live through edits), so the metric length and
+  // the label/ticks stay exact even when an endpoint is behind the camera. Fall back
+  // to board points only for an unpinned tape (no ground anchor / off-pitch).
+  let g1: { x: number; z: number } | null
+  let g2: { x: number; z: number } | null
+  if (el.ground && el.ground.length >= 2) {
+    g1 = { x: el.ground[0][0], z: el.ground[0][1] }
+    g2 = { x: el.ground[el.ground.length - 1][0], z: el.ground[el.ground.length - 1][1] }
+  } else {
+    const bpts = polyBoardPoints(el)
+    if (bpts.length < 2) return null
+    g1 = boardToGround(bpts[0][0], bpts[0][1], cam)
+    g2 = boardToGround(bpts[bpts.length - 1][0], bpts[bpts.length - 1][1], cam)
+  }
   if (!g1 || !g2) return null
   const length = Math.hypot(g2.x - g1.x, g2.z - g1.z)
   const P = (x: number, z: number) => projectGround(cam, x, z)

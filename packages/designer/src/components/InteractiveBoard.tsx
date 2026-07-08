@@ -1172,6 +1172,18 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   // The element as it should render RIGHT NOW — committed state plus any
   // in-progress move / resize / rotate / endpoint gesture.
+  // A live vertex edit changes `points`; on a pitch-pinned polyline keep its
+  // per-point `ground` anchor in step so anything reading `ground` (the Tape's
+  // length/ticks/label) tracks the drag instead of lagging until commit. Off-pitch
+  // or unpinned → just the new points. Mirrors reanchorPoints (the commit path).
+  function liveReground(el: Extract<BoardElement, { type: 'polyline' }>, points: Array<[number, number]>): BoardElement {
+    if (el.ground && fieldCamCfg) {
+      const ground = polylineGround({ ...el, points }, arrow3dCam)
+      if (ground) return { ...el, points, ground }
+    }
+    return { ...el, points }
+  }
+
   function liveElement(el: BoardElement): BoardElement {
     if (groupGesture && groupGesture.t0[el.id]) {
       return { ...el, transform: groupTransformFor(el, groupGesture) }
@@ -1211,7 +1223,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         const i = Number(gesture.handle.slice('point-'.length))
         const { lp } = resolvePointDrag(gesture)
         const points = el.points.map((p, idx) => (idx === i ? ([lp.x, lp.y] as [number, number]) : p))
-        return { ...el, points }
+        return liveReground(el, points)
       }
       if (gesture.kind === 'anchor' && el.type === 'polyline') {
         // Insert a vertex on segment `seg` (between vertex seg and seg+1) and drag
@@ -1220,7 +1232,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         const { lp } = resolveAnchorDrag(gesture)
         const points = [...el.points]
         points.splice(seg + 1, 0, [lp.x, lp.y])
-        return { ...el, points }
+        return liveReground(el, points)
       }
     }
     return el

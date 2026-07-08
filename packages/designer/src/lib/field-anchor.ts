@@ -35,6 +35,33 @@ export function projectGround(cam: THREE.Camera, x: number, z: number): [number,
   return [((v.x / w + 1) * BOARD_WIDTH) / 2, ((1 - v.y / w) * BOARD_HEIGHT) / 2]
 }
 
+/** Clip-space w of a ground point (> 0 ⇔ in front of the camera). */
+function groundW(cam: THREE.Camera, x: number, z: number): number {
+  const v = new THREE.Vector4(x, 0, z, 1)
+  v.applyMatrix4(cam.matrixWorldInverse)
+  v.applyMatrix4(cam.projectionMatrix)
+  return v.w
+}
+
+/** Project a chain of ground points to board units, clipping every vertex that lies
+ *  BEHIND the camera (w ≤ ε) to where its segment crosses the front plane — toward
+ *  whichever neighbour is in front. Keeps a pitch-pinned line running off toward the
+ *  horizon instead of its far end swinging to huge coordinates (the raw per-point
+ *  w-clamp) when the camera dips low on zoom-in. Output stays parallel to the input;
+ *  a vertex with no in-front neighbour (whole segment behind) falls back to the
+ *  clamp (it is off-screen regardless). */
+export function projectGroundPath(cam: THREE.Camera, pts: Array<[number, number]>): Array<[number, number]> {
+  const EPS = 1e-3
+  const ws = pts.map(([x, z]) => groundW(cam, x, z))
+  return pts.map(([x, z], i) => {
+    if (ws[i] > EPS) return projectGround(cam, x, z)
+    const j = ws[i - 1] > EPS ? i - 1 : ws[i + 1] > EPS ? i + 1 : -1
+    if (j < 0) return projectGround(cam, x, z)
+    const t = (EPS - ws[i]) / (ws[j] - ws[i])
+    return projectGround(cam, x + (pts[j][0] - x) * t, z + (pts[j][1] - z) * t)
+  })
+}
+
 /** Elements that stand on the pitch and carry a single ground anchor. */
 export type GroundElement = Extract<BoardElement, { type: 'figure' | 'token' }>
 export function isGroundElement(el: BoardElement): el is GroundElement {
@@ -301,7 +328,7 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
   const changes: ElementChange[] = []
   for (const el of elements) {
     if ((el.type === 'polyline' || el.type === 'draw') && el.ground) {
-      const pts: Array<[number, number]> = el.ground.map(([x, z]) => projectGround(newCam, x, z))
+      const pts: Array<[number, number]> = projectGroundPath(newCam, el.ground)
       changes.push({ id: el.id, before: { points: el.points, transform: el.transform }, after: { points: pts, transform: { ...el.transform, x: 0, y: 0, rotate: 0, scale: 1 } } })
       continue
     }
