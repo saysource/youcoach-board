@@ -80,7 +80,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement, polylineGround } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement, polylineGround, pinNewToken } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -876,14 +876,40 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Ids of elements whose bounding box intersects the eraser circle at `p`.
   function elementsUnder(p: Point, r: number): string[] {
     const out: string[] = []
-    for (const el of doc.elements) {
-      if ((el.type === 'arrow3d' || el.type === 'object3d')) continue // 3D arrows have no SVG box; not erasable this way
-      const b = getElementBounds(el)
+    // Circle (centre `p`, radius `r`) vs an axis-aligned board box.
+    const hitsBox = (b: { x: number; y: number; width: number; height: number }) => {
       const cx = Math.max(b.x, Math.min(p.x, b.x + b.width))
       const cy = Math.max(b.y, Math.min(p.y, b.y + b.height))
       const dx = p.x - cx
       const dy = p.y - cy
-      if (dx * dx + dy * dy <= r * r) out.push(el.id)
+      return dx * dx + dy * dy <= r * r
+    }
+    for (const el of doc.elements) {
+      if (el.type === 'arrow3d') {
+        // No SVG box — hit-test the eraser circle against the arrow's projected
+        // tail/head/apex bounding box (its footprint on the board).
+        const h = arrow3dHandleBoard(el)
+        const xs = h.map((q) => q.x)
+        const ys = h.map((q) => q.y)
+        const bx = Math.min(...xs)
+        const by = Math.min(...ys)
+        if (hitsBox({ x: bx, y: by, width: Math.max(...xs) - bx, height: Math.max(...ys) - by })) out.push(el.id)
+        continue
+      }
+      if (el.type === 'object3d') {
+        // Project the base centre and a footprint edge to get a board-space radius,
+        // then do a circle-vs-circle test against the eraser.
+        const c = object3dToBoard(el.x, 0, el.z)
+        const objR = el.size * (doc.background.objectScale ?? 1) * 0.5
+        const e2 = object3dToBoard(el.x + objR, 0, el.z)
+        const radB = Math.hypot(e2.x - c.x, e2.y - c.y)
+        const dx = p.x - c.x
+        const dy = p.y - c.y
+        if (Math.hypot(dx, dy) <= r + radB) out.push(el.id)
+        continue
+      }
+      const b = getElementBounds(el)
+      if (hitsBox(b)) out.push(el.id)
     }
     return out
   }
@@ -1347,10 +1373,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         doc.elements.find((e) => e.id === lastTokenId && e.type === 'token') ??
         [...doc.elements].reverse().find((e) => e.type === 'token')
       const size = ref?.type === 'token' ? ref.width : Math.round(TOKEN_SIZE * doc.background.figureScale)
-      const tok = makeToken(crypto.randomUUID(), c.x, c.y, td, td.text, size)
+      let tok = makeToken(crypto.randomUUID(), c.x, c.y, td, td.text, size)
       if (tok.type === 'token') {
         tok.label = td.label
         tok.text = nextTokenText(doc.elements, tok, td.text)
+        // On a 3D field, a fresh token is pinned at the fixed 2.5 m-radius default
+        // (overrides prior board-size scale logic); flat boards keep the box size.
+        if (fieldCamCfg) tok = pinNewToken(tok, fieldCamCfg, tokenPerspective)
       }
       createFigure(tok)
       return

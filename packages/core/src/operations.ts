@@ -29,6 +29,9 @@ export interface ElementPatch {
   // Geometry (for future resize); type-checked loosely since it varies by type.
   x?: number
   y?: number
+  // Ground z (metres) for 3D elements (object3d/arrow3d), which live in world
+  // coordinates rather than the 2D transform.
+  z?: number
   width?: number
   height?: number
   points?: Array<[number, number]>

@@ -13,7 +13,7 @@ import {
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
 import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox, nextTokenText } from '../lib/draw'
-import { reprojectChanges, withGroundAnchors, pinNewShape } from '../lib/field-anchor'
+import { reprojectChanges, withGroundAnchors, pinNewShape, groundNudgeDelta } from '../lib/field-anchor'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -573,15 +573,24 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       nudgeSelected: (dx, dy) => {
         const { doc, selectedIds } = get()
+        const field3d = doc.background.field3d
         const sel = doc.elements.filter((e) => selectedIds.includes(e.id) && !e.locked)
         if (sel.length === 0) return
-        get().updateElements(
-          sel.map((e) => ({
-            id: e.id,
-            before: { transform: e.transform },
-            after: { transform: { ...e.transform, x: e.transform.x + dx, y: e.transform.y + dy } },
-          })),
-        )
+        const changes: ElementChange[] = []
+        for (const e of sel) {
+          if (e.type === 'object3d' || e.type === 'arrow3d') {
+            // 3D elements live in ground metres (x/z), not the 2D transform — convert
+            // the board-unit nudge to a ground delta at the element's spot so arrow
+            // keys move them on the pitch, screen-relative like the 2D nudge.
+            if (!field3d) continue
+            const d = groundNudgeDelta(field3d, e.x, e.z, dx, dy)
+            if (!d) continue
+            changes.push({ id: e.id, before: { x: e.x, z: e.z }, after: { x: e.x + d.dgx, z: e.z + d.dgz } })
+          } else {
+            changes.push({ id: e.id, before: { transform: e.transform }, after: { transform: { ...e.transform, x: e.transform.x + dx, y: e.transform.y + dy } } })
+          }
+        }
+        if (changes.length) get().updateElements(changes)
       },
 
       resizeSelected: (factor) => {

@@ -14,7 +14,7 @@
 // See specs/start.md "Elements on the 3D space". Framework-free (three.js only).
 
 import * as THREE from 'three'
-import { type BoardElement, type PolylineElement, type DrawElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
+import { type BoardElement, type PolylineElement, type DrawElement, type TokenElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { rectToPolyline, ellipseToPolyline } from './draw'
@@ -168,6 +168,39 @@ export function referencePPM(): number {
 export function tokenBoardH(cam: THREE.Camera, m: number, g: [number, number], perspective: boolean): number {
   return perspective ? m * groundPPM(cam, g[0], g[1]) : m * referencePPM()
 }
+
+/** Default token size on the pitch: a 2.5 m RADIUS → 5 m DIAMETER. A token box is
+ *  square (width = height = diameter), and `sizeM` is that metric height, so this
+ *  is the default `sizeM`. Deliberately fixed (not derived from the drawn board
+ *  size), so every fresh token is 2.5 m regardless of prior scale logic. */
+export const TOKEN_DEFAULT_SIZE_M = 5
+
+/** Pin a freshly-stamped token to the pitch at the fixed 2.5 m-radius default:
+ *  capture its ground anchor + set `sizeM` and the on-board `scale` so it renders
+ *  at 2.5 m radius immediately (before any camera move). Returns it unchanged if
+ *  its drop point misses the pitch. */
+export function pinNewToken(el: TokenElement, cfg: PosedCamera, perspective: boolean): TokenElement {
+  const cam = makeCalibratedCamera(cfg)
+  const bc = bottomCenterBoard(el)
+  const g = boardToGround(bc.x, bc.y, cam)
+  if (!g) return el
+  const h = localCenter(el).h
+  const scale = clamp(tokenBoardH(cam, TOKEN_DEFAULT_SIZE_M, [g.x, g.z], perspective) / (h || 1), 0.05, 30)
+  return { ...el, ground: [g.x, g.z], sizeM: TOKEN_DEFAULT_SIZE_M, transform: { ...el.transform, scale } }
+}
+
+/** The ground displacement (metres) for nudging a pitch element at ground (gx, gz)
+ *  by (dx, dy) BOARD units under `cfg` — projects the anchor, offsets it on-screen,
+ *  and reads back the ground delta. So arrow-key nudges of `object3d`/`arrow3d`
+ *  feel like the 2D board nudge (screen-relative). Null if it can't hit the ground. */
+export function groundNudgeDelta(cfg: PosedCamera, gx: number, gz: number, dx: number, dy: number): { dgx: number; dgz: number } | null {
+  const cam = makeCalibratedCamera(cfg)
+  const b = projectGround(cam, gx, gz)
+  const g0 = boardToGround(b[0], b[1], cam)
+  const g1 = boardToGround(b[0] + dx, b[1] + dy, cam)
+  if (!g0 || !g1) return null
+  return { dgx: g1.x - g0.x, dgz: g1.z - g0.z }
+}
 function sameGround(a: Array<[number, number]>, b: Array<[number, number]>): boolean {
   return a.length === b.length && a.every((p, i) => closePt(p, b[i]))
 }
@@ -214,7 +247,14 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera, opts?: {
       // Capture the element's real-world height (metres) at its spot, so its size
       // can be derived absolutely under any camera (self-correcting scaling).
       // Synced tokens all take the ONE shared size instead of their own depth's.
-      const sizeM = el.type === 'token' && shared != null ? shared : (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
+      // Tokens take a FIXED default size (2.5 m radius) rather than one derived from
+      // their drawn board size — a synced token takes the shared size, else its own
+      // explicit `sizeM` (from a resize), else the 2.5 m default. Figures stay
+      // derived from their drawn size.
+      const sizeM =
+        el.type === 'token'
+          ? (shared ?? el.sizeM ?? TOKEN_DEFAULT_SIZE_M)
+          : (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
       const groundSame = el.ground && closePt(el.ground, next)
       const sizeSame = el.sizeM != null && Math.abs(el.sizeM - sizeM) < 1e-4
       if (groundSame && sizeSame) return
@@ -249,7 +289,9 @@ export function withGroundAnchors(elements: BoardElement[], cfg: PosedCamera): B
       const bc = bottomCenterBoard(el)
       const g = boardToGround(bc.x, bc.y, cam)
       if (!g) return el
-      const sizeM = (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
+      // Tokens default to the fixed 2.5 m radius (or their explicit resized `sizeM`);
+      // figures derive from their drawn board size.
+      const sizeM = el.type === 'token' ? (el.sizeM ?? TOKEN_DEFAULT_SIZE_M) : (localCenter(el).h * el.transform.scale) / groundPPM(cam, g.x, g.z)
       return { ...el, ground: [g.x, g.z] as [number, number], sizeM }
     }
     if ((el.type === 'polyline' || el.type === 'draw') && !el.ground) {
