@@ -74,7 +74,7 @@ import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
 import { FieldSceneLayer } from './FieldSceneLayer'
 import { TapeDecorations } from './TapeDecoration'
-import { Text3DDecorations } from './Text3DDecoration'
+import { Text3DFrames, Text3DHtml } from './Text3DDecoration'
 import { FieldEditOverlay } from './FieldEditOverlay'
 import { FieldZoneTool } from './FieldZoneTool'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
@@ -383,13 +383,21 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Screen pixels per board unit (CTM x-scale); selection chrome divides by it
   // to stay a constant on-screen size. Recomputed when the SVG resizes.
   const [scale, setScale] = useState(1)
+  // Board→overlay-pixel mapping (from the SVG's screen CTM, relative to its own
+  // top-left). Only changes on resize/zoom/pan — NOT per field-camera frame — so we
+  // keep it in state (measured in an effect) rather than reading the ref in render.
+  const [boardCtm, setBoardCtm] = useState<{ a: number; b: number; c: number; d: number; ex: number; ey: number } | null>(null)
 
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
     const update = () => {
       const m = svg.getScreenCTM()
-      if (m && m.a) setScale(m.a)
+      if (m && m.a) {
+        setScale(m.a)
+        const r = svg.getBoundingClientRect()
+        setBoardCtm({ a: m.a, b: m.b, c: m.c, d: m.d, ex: m.e - r.left, ey: m.f - r.top })
+      }
     }
     update()
     const ro = new ResizeObserver(update)
@@ -2308,15 +2316,19 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 navigating — the board isn't editable there, so a selection frame
                 would wrongly suggest you can move things. */}
             {!creating && !navigating &&
-              liveSelected2D.map((el) => (
-                <SelectionHandles
-                  key={`sel-${el.id}`}
-                  element={el}
-                  scale={scale}
-                  onHandleDown={single && !el.locked ? (handle, e) => onHandleDown(handle, e, el) : undefined}
-                  hideFrame={gesture?.id === el.id && (gesture.kind === 'point' || gesture.kind === 'anchor')}
-                />
-              ))}
+              liveSelected2D
+                // A 3D text shows the projected footprint quad (Text3DFrames) instead
+                // of an axis-aligned box, so skip the normal chrome for it.
+                .filter((el) => !(isText3d(el) && fieldCamCfg && !!el.ground))
+                .map((el) => (
+                  <SelectionHandles
+                    key={`sel-${el.id}`}
+                    element={el}
+                    scale={scale}
+                    onHandleDown={single && !el.locked ? (handle, e) => onHandleDown(handle, e, el) : undefined}
+                    hideFrame={gesture?.id === el.id && (gesture.kind === 'point' || gesture.kind === 'anchor')}
+                  />
+                ))}
             {/* Group resize/rotate chrome for a multi-selection. Hidden while
                 rotating (the box is an AABB that grows, so the handle would slide
                 out from under the pointer); the per-element frames stay. */}
@@ -2508,11 +2520,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             cam={arrow3dCam}
           />
         )}
-        {fieldCamCfg && (
-          <Text3DDecorations
-            elements={doc.elements
-              .map(liveElement)
-              // The text being inline-edited shows its flat box instead, so skip it.
+        {/* 3D-text selection frame: the projected footprint quad (leans with the
+            text), for selected 3D texts only. The glyphs live in an HTML overlay. */}
+        {fieldCamCfg && !navigating && (
+          <Text3DFrames
+            elements={liveSelected
               .filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground && !(editing && editing.id === e.id))}
             cam={arrow3dCam}
           />
@@ -2522,6 +2534,17 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
       {/* 3D objects ("3D materials"): WebGL overlay (pointer-transparent). */}
       <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={navigating ? [] : selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} />
+      {/* 3D text: HTML overlay carrying a perspective matrix3d (pointer-transparent;
+          the SVG hit-box drives selection/move). Skips the text being inline-edited. */}
+      {fieldCamCfg && (
+        <Text3DHtml
+          elements={doc.elements
+            .map(liveElement)
+            .filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground && !(editing && editing.id === e.id))}
+          cam={arrow3dCam}
+          ctm={boardCtm}
+        />
+      )}
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}

@@ -433,11 +433,11 @@ export function rectToPolyline(rect: Extract<BoardElement, { type: 'rect' }>): B
   }
 }
 
-/** Control points stored for an oval. We keep only the MINIMUM that defines it —
- *  8 points around the perimeter — and let `curve: true` (catmull-rom) render the
- *  long, smooth path; the user never sees these points (no vertex handles). Pinned,
- *  these few points reproject and re-smooth into the warped oval on the pitch. */
-const ELLIPSE_SAMPLES = 8
+/** Control points stored for an oval. A ground ellipse projects to a conic, and our
+ *  reprojection is only exact AT the points (catmull-rom interpolates between them in
+ *  board space), so we sample densely enough to hug the true projected curve — the
+ *  user never sees these points (no vertex handles). `curve: true` smooths them. */
+const ELLIPSE_SAMPLES = 24
 
 /** Convert an ellipse into an equivalent CLOSED SMOOTH polyline flagged `oval`, so
  *  it renders through the polyline machinery (and can warp onto the pitch — only a
