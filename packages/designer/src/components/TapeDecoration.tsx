@@ -41,14 +41,23 @@ function TapeItem({ el, cam }: { el: PolylineElement; cam: THREE.Camera }) {
     pz = -pz
   }
 
-  // Label frame: origin a little above the line, local metres → board (SVG y is
-  // down, so the local +y axis maps to −perpendicular).
+  // Label frame: origin a little above the line, local metres → board.
   const ox = mx + px * OFFSET_M
   const oz = mz + pz * OFFSET_M
   const o = P(ox, oz)
-  const xa = P(ox + ux, oz + uz) // board delta per 1 m along the line
+  const xa = P(ox + ux, oz + uz) // board delta per 1 m along the line (baseline)
   const ya = P(ox + px, oz + pz) // board delta per 1 m perpendicular
-  const m = `matrix(${xa[0] - o[0]} ${xa[1] - o[1]} ${-(ya[0] - o[0])} ${-(ya[1] - o[1])} ${o[0]} ${o[1]})`
+  const ax = xa[0] - o[0]
+  const ay = xa[1] - o[1]
+  const bx = ya[0] - o[0]
+  const by = ya[1] - o[1]
+  // The label's local +y (text-down) axis is the perpendicular image, signed so the
+  // 2×2 frame is NOT mirrored (determinant > 0). The baseline already points
+  // screen-rightward, so a positive determinant guarantees upright, correctly-facing
+  // text — without it, perspective can flip the frame's handedness on some line
+  // orientations and the label reads "from below" the pitch (upside-down/mirrored).
+  const t = ax * by - ay * bx < 0 ? -1 : 1
+  const m = `matrix(${ax} ${ay} ${t * bx} ${t * by} ${o[0]} ${o[1]})`
 
   const stroke = el.stroke
   const tick = (g: { x: number; z: number }) => {
