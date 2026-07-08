@@ -26,6 +26,9 @@ export interface Object3DLayerHandle {
 interface Props {
   elements: Object3DElement[]
   selectedIds: string[]
+  /** Ids currently under the eraser (queued for deletion) — rendered at half
+   *  opacity as a "will be erased" cue. */
+  erasingIds?: Set<string>
   viewport: { zoom: number; panX: number; panY: number }
   /** The active field camera (background.field3d / a posed field). Objects render
    *  through it so they sit on the pitch; null → the default fixed near-ortho cam. */
@@ -56,7 +59,26 @@ interface Ctx {
 
 const SELECT_COLOR = 0x2a6cff
 
-export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, viewport, camera, objectScale, fieldType, layout, showGoals, svgRef, containerRef }, ref) {
+/** Dim (or restore) every material under `obj` — a per-object opacity cue. Safe:
+ *  buildObject3D gives each object its own material instances (only textures are
+ *  shared), so this never bleeds onto other objects. */
+function setObjectDim(obj: THREE.Object3D, dim: boolean) {
+  obj.traverse((o) => {
+    const mat = (o as THREE.Mesh).material
+    if (!mat) return
+    const arr = Array.isArray(mat) ? mat : [mat]
+    for (const m of arr) {
+      const opacity = dim ? 0.5 : 1
+      if (m.opacity !== opacity || m.transparent !== dim) {
+        m.opacity = opacity
+        m.transparent = dim
+        m.needsUpdate = true
+      }
+    }
+  })
+}
+
+export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, erasingIds, viewport, camera, objectScale, fieldType, layout, showGoals, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -183,6 +205,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
       obj.position.set(e.x, -baseMinY * scale, e.z)
       obj.rotation.set(0, e.rotation, 0)
+      setObjectDim(obj, !!erasingIds?.has(e.id))
       obj.userData.id = e.id
       obj.userData.objectId = e.objectId
       // Live tint for colorable materials: recolor the body toon material only
@@ -290,7 +313,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, selectedIds, viewport, camera, objectScale, fieldType, layout, showGoals])
+  }, [elements, selectedIds, erasingIds, viewport, camera, objectScale, fieldType, layout, showGoals])
 
   useEffect(() => {
     const container = containerRef.current

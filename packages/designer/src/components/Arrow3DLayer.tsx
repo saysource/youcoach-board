@@ -16,6 +16,8 @@ export interface Arrow3DLayerHandle {
 interface Props {
   elements: Arrow3DElement[]
   selectedIds: string[]
+  /** Ids under the eraser (queued for deletion) — drawn at half opacity as a cue. */
+  erasingIds?: Set<string>
   viewport: { zoom: number; panX: number; panY: number }
   /** A hand-posed / field-preset real camera (takes precedence over homography):
    *  arrows render with correct 3D height + shadow through it. */
@@ -85,7 +87,7 @@ function hexColor(fill: string): { color: number; alpha: number } {
   return { color: parseInt(hex, 16), alpha: 1 }
 }
 
-export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow3DLayer({ elements, selectedIds, viewport, camera, homography, svgRef, containerRef }, ref) {
+export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow3DLayer({ elements, selectedIds, erasingIds, viewport, camera, homography, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -160,7 +162,9 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
       mesh.translateZ(-e.splineWidth) // local: head at -splineWidth, tail at 0
       const mat = mesh.material as THREE.MeshPhongMaterial
       mat.color.setHex(color)
-      mat.opacity = e.opacity
+      // Halve opacity while queued for deletion under the eraser.
+      const dim = erasingIds?.has(e.id) ? 0.5 : 1
+      mat.opacity = e.opacity * dim
       mesh.castShadow = e.opacity > 0
       mesh.visible = e.opacity > 0
       mesh.userData = { id: e.id, data: meshData(e) }
@@ -234,7 +238,7 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, selectedIds, viewport, camera, homography])
+  }, [elements, selectedIds, erasingIds, viewport, camera, homography])
 
   // Re-render on container resize (the letterbox rect moves/scales).
   useEffect(() => {

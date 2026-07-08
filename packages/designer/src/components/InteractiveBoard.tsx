@@ -2479,9 +2479,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         )}
       </BoardCanvas>
       {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
-      <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
+      <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
       {/* 3D objects ("3D materials"): WebGL overlay (pointer-transparent). */}
-      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={navigating ? [] : selectedIds} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} />
+      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={navigating ? [] : selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} />
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
