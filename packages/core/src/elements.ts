@@ -228,6 +228,15 @@ export interface TextElement extends BaseElement {
   align: TextAlign
   /** Render bold (font weight 800) instead of the regular weight. */
   bold: boolean
+  /** When true, the text is written onto the 3D field surface (lying flat, leaning
+   *  in perspective) instead of floating flat on the board. Pinned via `ground`. */
+  text3d?: boolean
+  /** For 3D text: the reading direction on the pitch, in degrees about the field's
+   *  X axis — one of 0 / 90 / 180 / 270. No auto-rotation (unlike a tape label). */
+  orientation?: number
+  /** World-ground anchor `[x, z]` (metres, y=0) — the 3D text's centre pinned to the
+   *  pitch, so it follows the field camera. Absent = not pinned (a flat board text). */
+  ground?: [number, number]
 }
 
 /** A real 3D arrow rendered with three.js (designer overlay), not SVG. Its shape
@@ -986,6 +995,9 @@ export function parseElement(raw: unknown): BoardElement | null {
       fontSize: fs === null ? DEFAULT_TEXT_FONT_SIZE : clamp(fs, TEXT_MIN_FONT, TEXT_MAX_FONT),
       align: aligns.includes(o.align as TextAlign) ? (o.align as TextAlign) : 'center',
       bold: o.bold === true,
+      text3d: o.text3d === true || undefined,
+      orientation: [0, 90, 180, 270].includes(o.orientation as number) ? (o.orientation as number) : undefined,
+      ground: parseGround(o.ground),
     }
   }
   if (o.type === 'arrow3d') {

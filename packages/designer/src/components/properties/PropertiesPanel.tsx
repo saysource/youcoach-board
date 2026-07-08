@@ -431,6 +431,14 @@ const ALIGN_ITEMS: { value: TextAlign; label: string; render: ReactNode }[] = [
   { value: 'right', label: 'Right', render: <AlignRight className="size-4" /> },
 ]
 
+// 3D-text reading direction about the field X axis.
+const ORIENT_ITEMS: { value: number; label: string; render: ReactNode }[] = [
+  { value: 0, label: '0°', render: <span className="text-[11px]">0°</span> },
+  { value: 90, label: '90°', render: <span className="text-[11px]">90°</span> },
+  { value: 180, label: '180°', render: <span className="text-[11px]">180°</span> },
+  { value: 270, label: '270°', render: <span className="text-[11px]">270°</span> },
+]
+
 // Text element settings popover: font size (2–200) + line alignment. Color and
 // background are their own toolbar buttons (like a shape's border/fill).
 function TextSettingsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
@@ -459,6 +467,15 @@ function TextSettingsButton({ side, small, translucent }: { side: 'right' | 'top
             <span className="text-[11px] font-medium text-muted-foreground">Bold</span>
             <Switch checked={!!p.values.bold} onCheckedChange={p.setBold} />
           </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">On field (3D)</span>
+            <Switch checked={!!p.values.text3d} onCheckedChange={p.setText3d} />
+          </div>
+          {p.values.text3d && (
+            <Field label="Orientation">
+              <Segmented items={ORIENT_ITEMS} value={p.values.orientation ?? 0} onChange={p.setOrientation} />
+            </Field>
+          )}
           <Field label="Opacity">
             <WaveSlider min={0} max={100} value={Math.round((p.values.opacity ?? 1) * 100)} onChange={(v) => p.setOpacity(v / 100)} />
           </Field>

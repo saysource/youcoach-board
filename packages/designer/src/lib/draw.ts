@@ -326,6 +326,10 @@ export interface TextStyle {
   fontSize: number
   align: TextAlign
   bold: boolean
+  /** Write the text onto the 3D field surface (pinned, leaning) rather than flat. */
+  text3d: boolean
+  /** 3D text reading direction about the field X axis (0/90/180/270°). */
+  orientation: number
 }
 export const DEFAULT_TEXT_STYLE: TextStyle = {
   textColor: DEFAULT_TEXT_COLOR,
@@ -333,6 +337,8 @@ export const DEFAULT_TEXT_STYLE: TextStyle = {
   fontSize: DEFAULT_TEXT_FONT_SIZE,
   align: 'center',
   bold: false,
+  text3d: false,
+  orientation: 0,
 }
 /** The "next text" defaults (= its style); no starting content (text starts empty). */
 export type TextDefaults = TextStyle
@@ -386,6 +392,7 @@ export function makeText(id: string, cx: number, cy: number, style: TextStyle = 
     fontSize: style.fontSize,
     align: style.align,
     bold: style.bold,
+    ...(style.text3d ? { text3d: true, orientation: style.orientation } : {}),
     transform: { ...IDENTITY_TRANSFORM },
     stroke: '#111111',
     strokeWidth: 3,

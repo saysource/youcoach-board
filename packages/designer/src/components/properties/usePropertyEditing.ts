@@ -9,6 +9,8 @@ export type TokenVisualStyle = { shape: TokenShape; tokenFill: TokenFill; color1
 import { useEditorStore } from '../../store/context'
 import { isCreationTool } from '../../store/editorStore'
 import { toolCreatesClosed, nextTokenText, measureTextBox } from '../../lib/draw'
+import { makeCalibratedCamera } from '../../lib/field-camera'
+import { boardToGround } from '../../lib/arrow3d'
 import { useAssets } from '../../lib/assets'
 import { playerSvgs, SKIN_SLOT, HAIR_SLOT, JERSEY_SLOT, SHORTS_SLOT, VSTRIPE_SLOT, HSTRIPE_SLOT, SOCKS_SLOT, DEFAULT_SKIN, DEFAULT_HAIR, stripeFills, type KitStyle, type PlayerKit } from '../../lib/player-kit'
 import { isObject3DColorable, isObject3DMultiColor, isObject3DPlayer, object3dColorSlots, object3dDefaultColor, object3dSlotDefault, type Object3DColorSlot } from '../../lib/objects3d'
@@ -112,6 +114,8 @@ export function usePropertyEditing() {
         fontSize: textTool ? textDefaults.fontSize : undefined,
         align: textTool ? textDefaults.align : undefined,
         bold: textTool ? textDefaults.bold : undefined,
+        text3d: textTool ? textDefaults.text3d : undefined,
+        orientation: textTool ? textDefaults.orientation : undefined,
         materialColor: undefined as string | undefined,
         // Player skin/kit (selection-only).
         skin: undefined as string | undefined,
@@ -157,6 +161,8 @@ export function usePropertyEditing() {
       setFontSize: (fontSize: number) => setTextDefaults({ fontSize }),
       setAlign: (align: TextAlign) => setTextDefaults({ align }),
       setBold: (bold: boolean) => setTextDefaults({ bold }),
+      setText3d: (text3d: boolean) => setTextDefaults({ text3d }),
+      setOrientation: (orientation: number) => setTextDefaults({ orientation }),
       setMaterialColor: () => {},
       setObject3DColor: () => {},
       setObject3DUseGlobal: () => {},
@@ -289,6 +295,8 @@ export function usePropertyEditing() {
       fontSize: firstText?.fontSize,
       align: firstText?.align,
       bold: firstText?.bold,
+      text3d: firstText?.text3d,
+      orientation: firstText?.orientation ?? 0,
       // A material's current custom color (its first slot; falls back to the default).
       materialColor: materialSlot ? (firstFigure!.colors?.[materialSlot] ?? defaultColorFor(materialSlot)) : undefined,
       // Player skin/hair + kit (from the first selected player).
@@ -420,6 +428,27 @@ export function usePropertyEditing() {
     setAlign: (align: TextAlign) => {
       patch(texts, (e) => ({ before: { align: (e as Extract<BoardElement, { type: 'text' }>).align }, after: { align } }))
       setTextDefaults({ align })
+    },
+    // Toggle "on the field" (3D). Enabling pins the text's box centre to the pitch
+    // (so it appears on the surface immediately); disabling clears the anchor.
+    setText3d: (text3d: boolean) => {
+      const cfg = doc.background.field3d
+      const cam = text3d && cfg ? makeCalibratedCamera(cfg) : null
+      patch(texts, (e) => {
+        const t = e as Extract<BoardElement, { type: 'text' }>
+        if (!text3d) return { before: { text3d: t.text3d, ground: t.ground }, after: { text3d: false, ground: undefined } }
+        let ground = t.ground
+        if (cam && !ground) {
+          const g = boardToGround(t.x + t.width / 2 + t.transform.x, t.y + t.height / 2 + t.transform.y, cam)
+          if (g) ground = [g.x, g.z]
+        }
+        return { before: { text3d: t.text3d, orientation: t.orientation, ground: t.ground }, after: { text3d: true, orientation: t.orientation ?? 0, ground } }
+      })
+      setTextDefaults({ text3d })
+    },
+    setOrientation: (orientation: number) => {
+      patch(texts, (e) => ({ before: { orientation: (e as Extract<BoardElement, { type: 'text' }>).orientation ?? 0 }, after: { orientation } }))
+      setTextDefaults({ orientation })
     },
     // Bold toggles weight 800; the box is re-measured (bold is wider) about its center.
     setBold: (bold: boolean) => {

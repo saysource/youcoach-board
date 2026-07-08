@@ -73,6 +73,7 @@ import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
 import { FieldSceneLayer } from './FieldSceneLayer'
 import { TapeDecorations } from './TapeDecoration'
+import { Text3DDecorations } from './Text3DDecoration'
 import { FieldEditOverlay } from './FieldEditOverlay'
 import { FieldZoneTool } from './FieldZoneTool'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
@@ -80,7 +81,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement, polylineGround, pinNewToken } from '../lib/field-anchor'
+import { buildPinOps, anchorPPM, tokenSizeChanges, referencePPM, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -1226,7 +1227,14 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         if (moved) return moved
       }
       const d = moveDelta(move)
-      return { ...el, transform: { ...o, x: o.x + d.x, y: o.y + d.y } }
+      const t = { ...o, x: o.x + d.x, y: o.y + d.y }
+      // 3D text drags along the pitch: shift its ground anchor live so the field
+      // glyphs (drawn from `ground`) follow the box instead of lagging until commit.
+      if (isText3d(el) && fieldCamCfg && el.ground) {
+        const dg = groundDelta(arrow3dCam, move.start, move.current)
+        if (dg) return { ...el, transform: t, ground: [el.ground[0] + dg.dgx, el.ground[1] + dg.dgz] as [number, number] }
+      }
+      return { ...el, transform: t }
     }
     if (gesture && gesture.id === el.id) {
       if (gesture.kind === 'rotate') {
@@ -1389,7 +1397,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     // opens the inline editor (Excalidraw-style). Blurring it empty discards it.
     if (activeTool === 'text') {
       const c = clampToCanvas(p)
-      const txt = makeText(crypto.randomUUID(), c.x, c.y, textDefaults, '')
+      // 3D text only when on a 3D field; pin its centre to the drop point's pitch spot.
+      const style = fieldCamCfg ? textDefaults : { ...textDefaults, text3d: false }
+      let txt = makeText(crypto.randomUUID(), c.x, c.y, style, '')
+      if (fieldCamCfg && txt.type === 'text' && txt.text3d) {
+        const g = boardToGround(c.x, c.y, arrow3dCam)
+        if (g) txt = { ...txt, ground: [g.x, g.z] }
+      }
       createFigure(txt)
       // Defer opening the editor until AFTER this click's pointerup, so the
       // trailing pointerup doesn't blur the freshly-focused textarea (which would
@@ -1936,7 +1950,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           const orig = doc.elements.find((e) => e.id === id)
           return { id, orig, m: dg && orig ? groundMoveElement(orig, arrow3dCam, dg.dgx, dg.dgz) : null }
         })
-        if (dg && moved.some((x) => x.m)) {
+        if (dg && moved.some((x) => x.m || (x.orig && isText3d(x.orig)))) {
           const ops: Operation[] = []
           const updates: ElementChange[] = []
           for (const { id, orig, m } of moved) {
@@ -1947,6 +1961,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
               const p = orig as PolylineElement
               const mp = m as PolylineElement
               updates.push({ id, before: { points: p.points, ground: p.ground, transform: origins[id] }, after: { points: mp.points, ground: mp.ground, transform: mp.transform } })
+            } else if (orig && isText3d(orig)) {
+              // 3D text: translate the box AND shift its ground anchor, so it stays
+              // pinned (reproject re-centres the box from `ground` on camera moves).
+              const ng: [number, number] | undefined = orig.ground && dg ? [orig.ground[0] + dg.dgx, orig.ground[1] + dg.dgz] : orig.ground
+              updates.push({ id, before: { transform: origins[id], ground: orig.ground }, after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y }, ground: ng } })
             } else {
               updates.push({ id, before: { transform: origins[id] }, after: { transform: { ...origins[id], x: origins[id].x + d.x, y: origins[id].y + d.y } } })
             }
@@ -2421,12 +2440,19 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             // Hide the token field being edited (the HTML input shows the live
             // value) ONLY in the rendered element — the selection chrome still
             // sees the real `showLabel`, so the frame doesn't shrink while editing.
+            const beingEdited = !!editing && editing.id === el.id
+            // A pitch-pinned 3D text draws its glyphs through the field overlay
+            // (Text3DDecorations); here render only its transparent box as the
+            // select/move hit area — EXCEPT while editing it, when the flat box +
+            // live text back the inline textarea.
             const render =
-              editing && editing.id === el.id && live.type === 'token'
-                ? editing.field === 'label'
+              beingEdited && live.type === 'token'
+                ? editing!.field === 'label'
                   ? { ...live, showLabel: false }
                   : { ...live, text: '' }
-                : live
+                : isText3d(live) && fieldCamCfg && !beingEdited
+                  ? { ...live, text: '', bgColor: 'transparent' }
+                  : live
             return (
               <g key={el.id} style={{ cursor: 'move', opacity: erasing ? 0.25 : undefined }} onPointerDown={(e) => onElementPointerDown(e, el)}>
                 {render.type === 'figure' ? <FigureView element={render} /> : <ElementView element={render} viewScale={scale} />}
@@ -2439,6 +2465,15 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             elements={doc.elements
               .map(liveElement)
               .filter((e): e is PolylineElement => e.type === 'polyline' && !!e.tape)}
+            cam={arrow3dCam}
+          />
+        )}
+        {fieldCamCfg && (
+          <Text3DDecorations
+            elements={doc.elements
+              .map(liveElement)
+              // The text being inline-edited shows its flat box instead, so skip it.
+              .filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground && !(editing && editing.id === e.id))}
             cam={arrow3dCam}
           />
         )}

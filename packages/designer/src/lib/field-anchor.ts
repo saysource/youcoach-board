@@ -14,7 +14,7 @@
 // See specs/start.md "Elements on the 3D space". Framework-free (three.js only).
 
 import * as THREE from 'three'
-import { type BoardElement, type PolylineElement, type DrawElement, type TokenElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
+import { type BoardElement, type PolylineElement, type DrawElement, type TokenElement, type TextElement, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { rectToPolyline, ellipseToPolyline } from './draw'
@@ -80,6 +80,17 @@ export function bottomCenterBoard(el: GroundElement): { x: number; y: number } {
   const { cx, cy, h } = localCenter(el)
   const t = el.transform
   return { x: cx + t.x, y: cy + (h * t.scale) / 2 + t.y }
+}
+
+/** A pitch-pinned 3D text: written on the field surface, anchored by its box centre. */
+export function isText3d(el: BoardElement): el is TextElement {
+  return el.type === 'text' && el.text3d === true
+}
+
+/** A text element's box CENTRE in board units (transform translate applied). 3D text
+ *  keeps scale 1, so this is the anchor we pin to the pitch. */
+export function textCenterBoard(el: TextElement): { x: number; y: number } {
+  return { x: el.x + el.width / 2 + el.transform.x, y: el.y + el.height / 2 + el.transform.y }
 }
 
 /** Point-path elements that carry a per-point ground footprint. */
@@ -271,6 +282,13 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera, opts?: {
       const g = polylineGround(poly, cam)
       ops.push({ kind: 'remove', element: el, index })
       ops.push({ kind: 'add', element: g ? { ...poly, ground: g } : poly, index })
+    } else if (isText3d(el)) {
+      const c = textCenterBoard(el)
+      const g = boardToGround(c.x, c.y, cam)
+      if (!g) return
+      const next: [number, number] = [g.x, g.z]
+      if (el.ground && closePt(el.ground, next)) return
+      updates.push({ id: el.id, before: { ground: el.ground }, after: { ground: next } })
     }
   })
   if (updates.length) ops.push({ kind: 'update', changes: updates })
@@ -297,6 +315,11 @@ export function withGroundAnchors(elements: BoardElement[], cfg: PosedCamera): B
     if ((el.type === 'polyline' || el.type === 'draw') && !el.ground) {
       const g = polylineGround(el, cam)
       return g ? { ...el, ground: g } : el
+    }
+    if (isText3d(el) && !el.ground) {
+      const c = textCenterBoard(el)
+      const g = boardToGround(c.x, c.y, cam)
+      return g ? { ...el, ground: [g.x, g.z] as [number, number] } : el
     }
     return el
   })
@@ -372,6 +395,14 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
     if ((el.type === 'polyline' || el.type === 'draw') && el.ground) {
       const pts: Array<[number, number]> = projectGroundPath(newCam, el.ground)
       changes.push({ id: el.id, before: { points: el.points, transform: el.transform }, after: { points: pts, transform: { ...el.transform, x: 0, y: 0, rotate: 0, scale: 1 } } })
+      continue
+    }
+    if (isText3d(el) && el.ground) {
+      // 3D text: keep its (invisible) selection box centred on the anchor — the
+      // visible glyphs are drawn by the field overlay from `ground`. Translate only.
+      const [tx, ty] = projectGround(newCam, el.ground[0], el.ground[1])
+      const after = { ...el.transform, x: tx - (el.x + el.width / 2), y: ty - (el.y + el.height / 2), rotate: 0, scale: 1 }
+      changes.push({ id: el.id, before: { transform: el.transform }, after: { transform: after } })
       continue
     }
     if (!isGroundElement(el) || !el.ground) continue
