@@ -335,6 +335,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const updateElements = useEditorStore((s) => s.updateElements)
   const pinSetup = useEditorStore((s) => s.pinSetup)
   const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
+  const tokenTextScale = useEditorStore((s) => s.tokenTextScale)
+  const tokenLabelScale = useEditorStore((s) => s.tokenLabelScale)
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
   const viewport = useEditorStore((s) => s.viewport)
@@ -1705,17 +1707,17 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       // BASE — which sits at (centre + half-height × perspective scale). Mirrors the
       // renderer so the textarea overlays the glyph 1:1 whatever the token's size.
       const gapBoard = TOKEN_LABEL_GAP_PX / scale
-      const fontBoard = TOKEN_LABEL_PX / scale
+      const fontBoard = (TOKEN_LABEL_PX / scale) * tokenLabelScale
       const baseY = el.y + el.height / 2 + (el.height / 2) * el.transform.scale + el.transform.y
       cx = el.x + el.width / 2 + el.transform.x
       cy = baseY + gapBoard + fontBoard / 2
-      font = TOKEN_LABEL_PX
+      font = TOKEN_LABEL_PX * tokenLabelScale
     } else {
       // Badge number: anchored at the geometry's text point, sized into the box.
       const g = TOKEN_GEOMETRY[el.shape]
       cx = el.x + (g.text.x / TOKEN_VIEW) * el.width + el.transform.x
       cy = el.y + (g.text.y / TOKEN_VIEW) * el.height + el.transform.y
-      font = (g.text.size / TOKEN_VIEW) * (el.width * el.transform.scale * scale)
+      font = (g.text.size / TOKEN_VIEW) * (el.width * el.transform.scale * scale) * tokenTextScale
     }
     const pos = boardToContainer(cx, cy)
     if (pos) {
@@ -2516,7 +2518,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 ) : render.type === 'figure' ? (
                   <FigureView element={render} />
                 ) : (
-                  <ElementView element={render} viewScale={scale} />
+                  <ElementView element={render} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} />
                 )}
               </g>
             )

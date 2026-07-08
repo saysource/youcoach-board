@@ -658,12 +658,20 @@ function TokenSettingsWidget() {
           placeholder="Player"
         />
       )}
-      {/* Global token size (Small → Big), shared by every token on the board (2–10 m). */}
-      <Field label={`Size (${Math.round(p.values.tokenSize ?? 5)} m)`}>
-        <WaveSlider min={2} max={10} value={Math.round(p.values.tokenSize ?? 5)} onChange={p.setTokenSize} />
-      </Field>
       <Field label="Opacity">
         <WaveSlider min={0} max={100} value={Math.round((p.values.opacity ?? 1) * 100)} onChange={(v) => p.setOpacity(v / 100)} />
+      </Field>
+      {/* Global settings — shared by EVERY token on the board, not just the selection:
+          the badge-number font, the caption-label font, and the token size (2–10 m). */}
+      <SectionDivider label="Global Settings" />
+      <Field label={`Text size (${Math.round((p.values.tokenTextScale ?? 1) * 100)}%)`}>
+        <WaveSlider min={50} max={200} value={Math.round((p.values.tokenTextScale ?? 1) * 100)} onChange={(v) => p.setTokenTextScale(v / 100)} />
+      </Field>
+      <Field label={`Label size (${Math.round((p.values.tokenLabelScale ?? 1) * 100)}%)`}>
+        <WaveSlider min={50} max={200} value={Math.round((p.values.tokenLabelScale ?? 1) * 100)} onChange={(v) => p.setTokenLabelScale(v / 100)} />
+      </Field>
+      <Field label={`Token size (${Math.round(p.values.tokenSize ?? 5)} m)`}>
+        <WaveSlider min={2} max={10} value={Math.round(p.values.tokenSize ?? 5)} onChange={p.setTokenSize} />
       </Field>
     </div>
   )
@@ -679,6 +687,17 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     <div className="grid gap-1.5">
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
       {children}
+    </div>
+  )
+}
+
+// A labelled section separator: a caption flanked by a hairline rule, used to mark
+// off the "Global Settings" block (properties that apply board-wide, not per-element).
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <div className="h-px flex-1 bg-border" />
     </div>
   )
 }

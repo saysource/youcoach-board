@@ -41,6 +41,11 @@ export function usePropertyEditing() {
   const storeTokenSizeM = useEditorStore((s) => s.tokenSizeM)
   const setTokenSizeM = useEditorStore((s) => s.setTokenSizeM)
   const tokenSize = (doc.elements.find((e) => e.type === 'token') as Extract<BoardElement, { type: 'token' }> | undefined)?.sizeM ?? storeTokenSizeM
+  // Global token font multipliers (badge number / caption label) — store-level, shared.
+  const tokenTextScale = useEditorStore((s) => s.tokenTextScale)
+  const tokenLabelScale = useEditorStore((s) => s.tokenLabelScale)
+  const setTokenTextScale = useEditorStore((s) => s.setTokenTextScale)
+  const setTokenLabelScale = useEditorStore((s) => s.setTokenLabelScale)
   const { catalog } = useAssets()
   const els = doc.elements.filter((e) => selectedIds.includes(e.id))
   // Map a figure's SVG path → the recolor-class slots it exposes (from the catalog).
@@ -114,8 +119,10 @@ export function usePropertyEditing() {
         text: tokenTool ? tokenDefaults.text : undefined,
         label: tokenTool ? tokenDefaults.label : undefined,
         showLabel: tokenTool ? tokenDefaults.showLabel : undefined,
-        // Global token size (metres) — same value whether or not a token is selected.
+        // Global token size (metres) + font multipliers — same whether or not a token is selected.
         tokenSize,
+        tokenTextScale,
+        tokenLabelScale,
         // Text-tool defaults (the next text to be placed); undefined otherwise.
         bgColor: textTool ? textDefaults.bgColor : undefined,
         fontSize: textTool ? textDefaults.fontSize : undefined,
@@ -164,6 +171,8 @@ export function usePropertyEditing() {
       setLabel: (label: string) => setTokenDefaults({ label }),
       setShowLabel: (showLabel: boolean) => setTokenDefaults({ showLabel }),
       setTokenSize: (m: number) => setTokenSizeM(m),
+      setTokenTextScale: (n: number) => setTokenTextScale(n),
+      setTokenLabelScale: (n: number) => setTokenLabelScale(n),
       // Text-tool defaults.
       setBgColor: (bgColor: string) => setTextDefaults({ bgColor }),
       setFontSize: (fontSize: number) => setTextDefaults({ fontSize }),
@@ -300,6 +309,8 @@ export function usePropertyEditing() {
       label: firstToken?.label,
       showLabel: firstToken?.showLabel,
       tokenSize,
+      tokenTextScale,
+      tokenLabelScale,
       bgColor: firstText?.bgColor,
       fontSize: firstText?.fontSize,
       align: firstText?.align,
@@ -493,5 +504,7 @@ export function usePropertyEditing() {
       setTokenDefaults({ showLabel })
     },
     setTokenSize: (m: number) => setTokenSizeM(m),
+    setTokenTextScale: (n: number) => setTokenTextScale(n),
+    setTokenLabelScale: (n: number) => setTokenLabelScale(n),
   }
 }

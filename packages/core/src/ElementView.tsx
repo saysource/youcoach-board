@@ -12,7 +12,7 @@ import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, 
 // `viewScale` = screen px per board unit. When provided, the token caption renders
 // at a FIXED on-screen size (TOKEN_LABEL_PX) regardless of the board's fit-scale or
 // the token's size; without it (viewer/export) the caption falls back to board units.
-export function ElementView({ element, viewScale }: { element: BoardElement; viewScale?: number }) {
+export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1 }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number }) {
   // 3D arrows/objects are drawn by the designer's WebGL overlay, never as SVG.
   if (element.type === 'arrow3d' || element.type === 'object3d') return null
   const { x, y, rotate, scale, opacity } = element.transform
@@ -26,7 +26,7 @@ export function ElementView({ element, viewScale }: { element: BoardElement; vie
 
   return (
     <g transform={transform} opacity={opacity}>
-      <Shape element={element} viewScale={viewScale} />
+      <Shape element={element} viewScale={viewScale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} />
     </g>
   )
 }
@@ -52,7 +52,7 @@ function freehandPath(pts: Array<[number, number]>): string {
 // color over transparent gaps.
 const STRIPE = 12
 
-function Shape({ element, viewScale }: { element: BoardElement; viewScale?: number }) {
+function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1 }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number }) {
   // Unique per instance, so each element's marker/pattern/clip defs don't collide.
   const markerId = useId()
   const patternId = useId()
@@ -129,7 +129,7 @@ function Shape({ element, viewScale }: { element: BoardElement; viewScale?: numb
     // token renders, sitting a fixed gap below the (scaled) base. `viewScale` keeps
     // it constant against board zoom too.
     const labelScale = element.transform.scale || 1
-    const labelFont = (viewScale && viewScale > 0 ? TOKEN_LABEL_PX / viewScale : TOKEN_LABEL_PX) / labelScale
+    const labelFont = ((viewScale && viewScale > 0 ? TOKEN_LABEL_PX / viewScale : TOKEN_LABEL_PX) / labelScale) * tokenLabelScale
     const labelGap = (viewScale && viewScale > 0 ? TOKEN_LABEL_GAP_PX / viewScale : TOKEN_LABEL_GAP_PX) / labelScale
     return (
       <>
@@ -159,7 +159,7 @@ function Shape({ element, viewScale }: { element: BoardElement; viewScale?: numb
               y={g.text.y}
               textAnchor="middle"
               dominantBaseline="central"
-              fontSize={g.text.size}
+              fontSize={g.text.size * tokenTextScale}
               fontWeight={TOKEN_FONT_WEIGHT}
               fill={element.textColor}
               style={{ fontFamily: TOKEN_FONT }}

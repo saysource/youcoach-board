@@ -93,6 +93,13 @@ export interface EditorState {
    *  The properties slider maps 2 m … 10 m. */
   tokenSizeM: number
 
+  /** GLOBAL font multipliers, shared by every token on the board: the badge NUMBER
+   *  (`tokenTextScale`) and the caption LABEL (`tokenLabelScale`), 1 = default.
+   *  Purely visual — applied at render time, not baked into element data — so every
+   *  token scales uniformly. The properties sliders map 50 % … 200 %. */
+  tokenTextScale: number
+  tokenLabelScale: number
+
   /** Style for the next element to be created — editable in the properties panel
    *  before anything is selected (so the user can pre-set stroke/fill/… ), and
    *  refreshed to the last created/edited element's style. */
@@ -124,6 +131,9 @@ export interface EditorState {
   /** Set the global token size (metric diameter, metres) and resize EVERY token on
    *  the board to it at once (one undo step). */
   setTokenSizeM: (m: number) => void
+  /** Set the global token badge-number / caption-label font multipliers (0.5–2). */
+  setTokenTextScale: (n: number) => void
+  setTokenLabelScale: (n: number) => void
   /** Merge changes into the next-element style defaults. */
   setToolDefaults: (patch: Partial<FigureStyle>) => void
   /** Merge changes into the next-token defaults (style/text/label). */
@@ -254,6 +264,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       keepToolActive: false,
       snapToObjects: false,
       tokenSizeM: TOKEN_DEFAULT_SIZE_M,
+      tokenTextScale: 1,
+      tokenLabelScale: 1,
       toolDefaults: { ...DEFAULT_FIGURE_STYLE },
       figureAddedTick: 0,
       styleClipboard: null,
@@ -283,6 +295,10 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         const changes = tokenSizeChanges(doc.elements, f3d, size)
         if (changes.length) get().updateElements(changes)
       },
+
+      setTokenTextScale: (n) => set({ tokenTextScale: Math.max(0.5, Math.min(2, n)) }),
+
+      setTokenLabelScale: (n) => set({ tokenLabelScale: Math.max(0.5, Math.min(2, n)) }),
 
       setToolDefaults: (patch) => set((s) => ({ toolDefaults: { ...s.toolDefaults, ...patch } })),
 
