@@ -121,6 +121,11 @@ export interface PolylineElement extends BaseElement {
   /** A CAD-style measurement "tape": a strictly 2-point straight line rendered with
    *  end ticks and its ground length (metres) labelled along it. */
   tape?: boolean
+  /** An OVAL rendered through the polyline machinery (so it warps onto the pitch),
+   *  but presented to the user as an ellipse: box resize handles, no vertex/anchor
+   *  handles. Stores only the few control points needed; `curve` renders it smooth.
+   *  Internal detail — the user never sees "polyline". */
+  oval?: boolean
 }
 
 /** A freehand stroke: a dense point path, always open and unfilled, rendered
@@ -930,6 +935,7 @@ export function parseElement(raw: unknown): BoardElement | null {
       endTip: parseTip(o.endTip),
       ground: parseGroundArray(o.ground),
       tape: o.tape === true || undefined,
+      oval: o.oval === true || undefined,
     }
   }
   if (o.type === 'draw') {

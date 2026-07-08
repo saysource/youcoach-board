@@ -12,6 +12,8 @@ type Subject = { icon: ComponentType<{ className?: string }>; label: string }
 // What kind of figure a polyline currently is (line / arrow / closed shape /
 // multi-point polyline), so the header reflects the actual element.
 function polylineSubject(el: Extract<BoardElement, { type: 'polyline' }>): Subject {
+  // A pitch-warped oval is a polyline internally, but presented as an ellipse.
+  if (el.oval) return { icon: Circle, label: 'Oval' }
   if (el.closed) return { icon: Shapes, label: 'Shape' }
   const arrow = el.startTip === 'arrow' || el.endTip === 'arrow'
   if (el.zigzag) return { icon: LineZigzagArrowIcon, label: arrow ? 'Zigzag arrow' : 'Zigzag line' }

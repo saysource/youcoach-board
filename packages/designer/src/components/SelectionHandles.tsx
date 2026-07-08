@@ -32,9 +32,9 @@ interface Props {
 // midpoint of each straight segment, or the curve's midpoint (t=0.5) when curved.
 // Anchor `i` sits on the segment between vertex i and i+1 (closed wraps).
 function polylineAnchors(el: Extract<BoardElement, { type: 'polyline' }>): Array<{ seg: number; at: Pt }> {
-  // A tape is strictly a 2-point measurement segment — never offer the
-  // mid-segment "add point" anchor.
-  if (el.tape) return []
+  // A tape (strict 2-point measure) and an oval (presented as an ellipse) never
+  // offer the mid-segment "add point" anchor.
+  if (el.tape || el.oval) return []
   const pts = el.points
   const n = pts.length
   if (n < 2) return []
@@ -215,6 +215,7 @@ export function SelectionHandles({ element, scale, onHandleDown, hideFrame = fal
           drawn last so they sit above the corners. */}
       {anchors}
       {element.type === 'polyline' &&
+        !element.oval &&
         element.points.map((p, i) => (
           <EndpointHandle
             key={`pt-${i}`}

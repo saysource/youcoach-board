@@ -433,15 +433,17 @@ export function rectToPolyline(rect: Extract<BoardElement, { type: 'rect' }>): B
   }
 }
 
-/** How many points to sample an ellipse into when converting it to a curve. 20
- *  points through a smooth (curved) closed polyline hug the oval closely and,
- *  once each point is pinned to the pitch, reproduce the warped oval smoothly. */
-const ELLIPSE_SAMPLES = 20
+/** Control points stored for an oval. We keep only the MINIMUM that defines it —
+ *  8 points around the perimeter — and let `curve: true` (catmull-rom) render the
+ *  long, smooth path; the user never sees these points (no vertex handles). Pinned,
+ *  these few points reproject and re-smooth into the warped oval on the pitch. */
+const ELLIPSE_SAMPLES = 8
 
-/** Convert an ellipse into an equivalent CLOSED SMOOTH polyline (points sampled
- *  around its perimeter, `curve: true`), preserving id, transform and style — the
- *  ellipse analog of {@link rectToPolyline}, so a pinned oval can warp onto the
- *  field surface (only a point-defined shape can). */
+/** Convert an ellipse into an equivalent CLOSED SMOOTH polyline flagged `oval`, so
+ *  it renders through the polyline machinery (and can warp onto the pitch — only a
+ *  point-defined shape can) yet is presented as an ellipse (box resize handles, no
+ *  vertex handles). Preserves id, transform and style. The ellipse analog of
+ *  {@link rectToPolyline}. */
 export function ellipseToPolyline(ellipse: Extract<BoardElement, { type: 'ellipse' }>): BoardElement {
   const { x, y, width, height } = ellipse
   const cx = x + width / 2
@@ -456,6 +458,7 @@ export function ellipseToPolyline(ellipse: Extract<BoardElement, { type: 'ellips
   return {
     id: ellipse.id,
     type: 'polyline',
+    oval: true,
     points,
     closed: true,
     curve: true,
