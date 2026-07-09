@@ -2410,6 +2410,18 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       onPointerUp={onPointerUp}
       onPointerLeave={() => setTokenPreview(null)}
     >
+      {/* 2D fields have no 3D camera, so the flat viewport zoom shrinks the whole
+          board toward the centre. Paint the area it recedes over with the surface
+          colour (the same fill BackgroundView gives the board base) so zooming out
+          reads like a camera pulling back over the surround, not a board shrinking
+          on the blank app background. Transparent surface → no fill (unchanged). */}
+      {!field3d && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{ backgroundColor: doc.background.surfaceColor ?? 'transparent' }}
+        />
+      )}
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
       {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} surface={doc.background.surfaceColor} lineColor={doc.background.lineColor} showLines={doc.background.showLines} bandsOpacity={doc.background.bandsOpacity} centerLight={doc.background.centerLight} renderTick={editing3d} />}
