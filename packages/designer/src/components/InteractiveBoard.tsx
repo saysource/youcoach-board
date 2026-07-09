@@ -113,10 +113,6 @@ const ZOOM_MAX_DIST = 400
 const ZOOM_MIN_CAM_Y = 0.5 // keep the camera a little above the grass
 const OBJECT3D_MOVE_PX = 9 // firmer drag threshold for 3D objects (more resistance)
 const SNAP_PX = 6 // on-screen distance within which a move snaps to another object
-const BG_MOVE_HANDLE_PX = 72 // on-screen size of the background pan handle (icon viewBox 46×46)
-// 4-way move arrows (assets/move_background.svg), centered in a 46×46 viewBox.
-const BG_MOVE_PATH =
-  'M18.648,18.648L18.648,6.688L15.815,6.688L22.504,0L29.192,6.688L26.36,6.688L26.36,18.648L38.319,18.648L38.319,15.815L45.008,22.504L38.319,29.192L38.319,26.36L26.36,26.36L26.36,38.319L29.192,38.319L22.504,45.008L15.815,38.319L18.648,38.319L18.648,26.36L6.688,26.36L6.688,29.192L0,22.504L6.688,15.815L6.688,18.648L18.648,18.648Z'
 
 
 interface Draft {
@@ -398,9 +394,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // which text the current press landed on (badge number vs label).
   const tokenTapRef = useRef<{ id: string; field: EditField; t: number } | null>(null)
   const pressTokenFieldRef = useRef<EditField>('text')
-  // In-progress background pan (dragging the move handle): the pointer-down
-  // board point + the field's offset at that moment.
-  const [bgPan, setBgPan] = useState<{ start: Point; origin: [number, number] } | null>(null)
   // Screen pixels per board unit (CTM x-scale); selection chrome divides by it
   // to stay a constant on-screen size. Recomputed when the SVG resizes.
   const [scale, setScale] = useState(1)
@@ -1902,18 +1895,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     else startMove(selectedIds, from, e.pointerId)
   }
 
-  // Grab the background move handle: pan the field SVG by dragging it.
-  function onBgPanPointerDown(e: React.PointerEvent) {
-    if (e.button !== 0) return
-    e.stopPropagation()
-    const svg = svgRef.current
-    if (!svg) return
-    // Coalesce the whole pan drag into one undo step.
-    beginTransaction()
-    setBgPan({ start: clientToBoard(svg, e.clientX, e.clientY), origin: doc.background.position })
-    containerRef.current?.setPointerCapture(e.pointerId)
-  }
-
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     cancelLongPress() // any movement aborts a pending long-press
     const svg = svgRef.current
@@ -1981,9 +1962,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       dragObject3D(g, p, e.shiftKey)
       return
     }
-    if (bgPan) {
-      setBackground({ position: [bgPan.origin[0] + (p.x - bgPan.start.x), bgPan.origin[1] + (p.y - bgPan.start.y)] })
-    } else if (freeDraft) {
+    if (freeDraft) {
       const cp = clampToCanvas(p)
       setFreeDraft((pts) => {
         if (!pts) return pts
@@ -2038,9 +2017,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     } else if (object3dGesture) {
       setObject3dGesture(null)
       if (object3dSnapGuides.length) setObject3dSnapGuides([])
-      commitTransaction()
-    } else if (bgPan) {
-      setBgPan(null)
       commitTransaction()
     } else if (freeDraft) {
       const pts = freeDraft
@@ -2625,22 +2601,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 )}
               </>
             )}
-            {/* Background pan handle: drag to move the field SVG. Shown only in
-                background-edit mode when a field overlay is present. Sits at the
-                field's current center (board center + offset). */}
-            {backgroundMode && doc.background.fieldSvg && (() => {
-              const hx = BOARD_WIDTH / 2 + doc.background.position[0]
-              const hy = BOARD_HEIGHT / 2 + doc.background.position[1]
-              const size = BG_MOVE_HANDLE_PX / scale
-              return (
-                <g transform={`translate(${hx} ${hy})`} style={{ cursor: 'move' }} onPointerDown={onBgPanPointerDown}>
-                  <circle r={size * 0.7} fill="var(--color-selection-frame)" fillOpacity={0.18} stroke="var(--color-selection-handle)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-                  <g transform={`translate(${-size / 2} ${-size / 2}) scale(${size / 46})`}>
-                    <path d={BG_MOVE_PATH} fill="var(--color-selection-handle)" />
-                  </g>
-                </g>
-              )
-            })()}
             {/* Eraser tail: an opaque grey "comet" following the recent pointer path
                 (so it bends with the trajectory) — a rounded head dot (a little
                 bigger than the pointer circle) at the cursor tapering to a point
