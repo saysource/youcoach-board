@@ -67,12 +67,11 @@ export function BackgroundView({ doc }: { doc: BoardDoc }) {
 
   return (
     <g data-layer="background-content">
-      {bg.image ? (
-        <image href={bg.image} x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} preserveAspectRatio="xMidYMid slice" />
-      ) : (
-        <rect x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} fill={bg.surfaceColor} />
-      )}
-
+      {/* The base surface (grass image / solid colour) is drawn as a FIXED layer in
+          InteractiveBoard, NOT here: it's the working area the field recedes over and
+          must not zoom. Only the field-lines SVG + logo below scale with the flat
+          viewport, so zooming out shrinks the field over a stationary surface — like a
+          camera pulling away from a real pitch. */}
       {field && (
         <g transform={fieldTransform}>
           <svg

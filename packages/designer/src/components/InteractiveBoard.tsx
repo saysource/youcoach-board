@@ -2410,17 +2410,29 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       onPointerUp={onPointerUp}
       onPointerLeave={() => setTokenPreview(null)}
     >
-      {/* 2D fields have no 3D camera, so the flat viewport zoom shrinks the whole
-          board toward the centre. Paint the area it recedes over with the surface
-          colour (the same fill BackgroundView gives the board base) so zooming out
-          reads like a camera pulling back over the surround, not a board shrinking
-          on the blank app background. Transparent surface → no fill (unchanged). */}
+      {/* 2D base surface (grass image / solid colour): the fixed working area the field
+          recedes over. It fills the board rect and does NOT zoom — an identical viewBox +
+          preserveAspectRatio to the board SVG at 100% pins it exactly where the board
+          content sits, so as the flat viewport shrinks the field-lines SVG + objects
+          above it, the surface stays put (a camera pulling away from a real pitch).
+          A surface colour REPLACES the grass image; transparent surface shows the image. */}
       {!field3d && (
-        <div
+        <svg
           aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{ backgroundColor: doc.background.surfaceColor ?? 'transparent' }}
-        />
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          // zIndex −1 keeps the base BELOW the board SVG (which is statically
+          // positioned, so it would otherwise paint under this absolute layer),
+          // mirroring FieldSceneLayer's negative-z backdrop.
+          style={{ zIndex: -1 }}
+          viewBox={`0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          {doc.background.image && (!doc.background.surfaceColor || doc.background.surfaceColor === 'transparent') ? (
+            <image href={doc.background.image} x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} preserveAspectRatio="xMidYMid slice" />
+          ) : (
+            <rect x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} fill={doc.background.surfaceColor ?? 'transparent'} />
+          )}
+        </svg>
       )}
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
