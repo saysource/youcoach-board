@@ -606,7 +606,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const pitchLen = fieldCamCfg ? (PITCH_MODELS[fieldCamCfg.ref as PitchType] ?? PITCH_MODELS.soccer11).size[0] : 105
   const pitchK = pitchLen / 105
   const arrow3dDefaults = arrow3dMetric
-    ? { ...ARROW3D_DEFAULTS, splineWidth: 18 * pitchK, splineHeight: 4 * pitchK, stickWidth: 1.2 * pitchK, thickness: 0.3 * pitchK, tipWidth: 3 * pitchK, tipLength: 5 * pitchK }
+    ? { ...ARROW3D_DEFAULTS, splineWidth: 18 * pitchK, splineHeight: 4 * pitchK, stickWidth: 1.2 * pitchK, thickness: 0.3 * pitchK, tipWidth: 1.5 * pitchK, tipLength: 2.5 * pitchK }
     : ARROW3D_DEFAULTS
   // Draft while drag-creating (tail + head on the ground), preview-rendered.
   const [arrow3dDraft, setArrow3dDraft] = useState<{ tail: { x: number; z: number }; head: { x: number; z: number } } | null>(null)

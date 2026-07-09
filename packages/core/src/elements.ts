@@ -1061,8 +1061,8 @@ export const ARROW3D_DEFAULTS = {
   splineLength: 1,
   stickWidth: 0.3,
   thickness: 0.05,
-  tipWidth: 0.15,
-  tipLength: 0.5,
+  tipWidth: 0.075,
+  tipLength: 0.25,
   fill: '#FF0000',
   opacity: 1,
 } as const

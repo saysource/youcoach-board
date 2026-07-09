@@ -294,7 +294,7 @@ function Arrow3DControls({ side }: { side: 'right' | 'top' }) {
               <WaveSlider min={0} max={100} value={Math.round(first.opacity * 100)} onChange={(v) => setField('opacity', v / 100)} />
             </Field>
             <Field label="Curve height">
-              <WaveSlider min={0} max={80} value={Math.round(first.splineHeight * 10)} onChange={(v) => setField('splineHeight', v / 10)} />
+              <WaveSlider min={0} max={240} value={Math.round(first.splineHeight * 10)} onChange={(v) => setField('splineHeight', v / 10)} />
             </Field>
             <Field label="Completeness">
               <WaveSlider min={10} max={100} value={Math.round(first.splineLength * 100)} onChange={(v) => setField('splineLength', v / 100)} />
@@ -303,7 +303,7 @@ function Arrow3DControls({ side }: { side: 'right' | 'top' }) {
               <WaveSlider min={1} max={40} value={Math.round(first.thickness * 100)} onChange={(v) => setField('thickness', v / 100)} />
             </Field>
             <Field label="Stick width">
-              <WaveSlider min={5} max={100} value={Math.round(first.stickWidth * 100)} onChange={(v) => setField('stickWidth', v / 100)} />
+              <WaveSlider min={5} max={1000} value={Math.round(first.stickWidth * 100)} onChange={(v) => setField('stickWidth', v / 100)} />
             </Field>
             <Field label="Tip width">
               <WaveSlider min={5} max={80} value={Math.round(first.tipWidth * 100)} onChange={(v) => setField('tipWidth', v / 100)} />
