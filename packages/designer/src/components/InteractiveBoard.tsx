@@ -69,6 +69,7 @@ import { SelectionHandles, GroupHandles, SELECTION_PAD_PX, type HandleId } from 
 import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
 import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMark, type SnapLine } from '../lib/snapping'
+import { ExportGuideFrame } from './ExportGuideFrame'
 import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
 import { Object3DLayer, type Object3DLayerHandle, type Token3D } from './Object3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
@@ -336,6 +337,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const updateElements = useEditorStore((s) => s.updateElements)
   const pinSetup = useEditorStore((s) => s.pinSetup)
   const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
+  const exportGuide = useEditorStore((s) => s.exportGuide)
   const tokenTextScale = useEditorStore((s) => s.tokenTextScale)
   const tokenLabelScale = useEditorStore((s) => s.tokenLabelScale)
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
@@ -2731,6 +2733,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             style={{ pointerEvents: 'auto', cursor: 'grab' }}
             onPointerDown={(e) => onObject3DRotateDown(selectedObject3D, e)}
           />
+        </svg>
+      )}
+      {/* Export-aspect guide frame (4:3 / 16:9 / 9:16): a composition aid drawn on
+          top of everything, marking the region an image export would capture. */}
+      {exportGuide !== 'off' && (
+        <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
+          <ExportGuideFrame guide={exportGuide} />
         </svg>
       )}
       {editing && editPos && (

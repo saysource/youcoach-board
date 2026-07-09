@@ -48,6 +48,10 @@ const STYLE_KEYS: (keyof ElementPatch)[] = [
 /** Alignment / distribution modes for a multi-selection. */
 export type AlignMode = 'left' | 'centerX' | 'right' | 'distributeX' | 'top' | 'centerY' | 'bottom' | 'distributeY'
 
+/** Which export-aspect guide frame to overlay on the canvas (for composing an
+ *  image export), or 'off'. */
+export type ExportGuide = 'off' | '4:3' | '16:9' | '9:16'
+
 export interface EditorState {
   doc: BoardDoc
   activeTool: ToolId
@@ -90,6 +94,9 @@ export interface EditorState {
    *  in a dedicated main-menu section. Off for final users; toggled via ?admin=1 in
    *  the URL or the ⌥⇧A shortcut. */
   adminMode: boolean
+  /** Export-aspect guide frame overlaid on the canvas (4:3 / 16:9 / 9:16), or 'off'
+   *  — a composition aid for framing an image export. */
+  exportGuide: ExportGuide
   /** The GLOBAL token size (metric diameter, metres) shared by every token on the
    *  board — tokens are always this size, always perspective-scaled by depth (like
    *  circular objects facing the camera). This holds the value for the NEXT token /
@@ -135,6 +142,8 @@ export interface EditorState {
   /** Toggle / set admin mode (authoring tools visibility). */
   toggleAdminMode: () => void
   setAdminMode: (on: boolean) => void
+  /** Set the export-aspect guide frame (or 'off'). */
+  setExportGuide: (g: ExportGuide) => void
   /** Set the global token size (metric diameter, metres) and resize EVERY token on
    *  the board to it at once (one undo step). */
   setTokenSizeM: (m: number) => void
@@ -274,6 +283,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       keepToolActive: false,
       snapToObjects: false,
       adminMode: false,
+      exportGuide: 'off',
       tokenSizeM: TOKEN_DEFAULT_SIZE_M,
       tokenTextScale: 1,
       tokenLabelScale: 1,
@@ -303,6 +313,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       toggleAdminMode: () => set((s) => ({ adminMode: !s.adminMode })),
 
       setAdminMode: (on) => set({ adminMode: on }),
+
+      setExportGuide: (g) => set({ exportGuide: g }),
 
       setTokenSizeM: (m) => {
         const size = Math.max(2, Math.min(10, m))

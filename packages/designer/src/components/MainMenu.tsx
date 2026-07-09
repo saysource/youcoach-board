@@ -56,6 +56,8 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
   const toggleSnapToObjects = useEditorStore((s) => s.toggleSnapToObjects)
   const adminMode = useEditorStore((s) => s.adminMode)
   const resetCanvas = useEditorStore((s) => s.resetCanvas)
+  const exportGuide = useEditorStore((s) => s.exportGuide)
+  const setExportGuide = useEditorStore((s) => s.setExportGuide)
   return (
     <DropdownMenu>
       <Tooltip>
@@ -106,6 +108,21 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
               {snapToObjects && <Check className="ml-auto size-4" />}
               <DropdownMenuShortcut>⌥S</DropdownMenuShortcut>
             </DropdownMenuItem>
+            {/* Export guide: overlay a target-aspect frame on the canvas to help
+                compose an image export. */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <ImageDown /> Export guide
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {(['off', '4:3', '16:9', '9:16'] as const).map((g) => (
+                  <DropdownMenuItem key={g} onSelect={(e) => { e.preventDefault(); setExportGuide(g) }}>
+                    {g === 'off' ? 'Off' : g}
+                    {exportGuide === g && <Check className="ml-auto size-4" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
