@@ -82,13 +82,14 @@ export interface BoardBackground {
   /** Render disc tokens as real 3D pucks on the pitch (the profiled token disc)
    *  instead of flat SVG badges. Labels/interaction stay 2D. */
   tokens3d: boolean
-  /** Opacity (0–1) of the field markings AND the mown shading bands on the 3D
-   *  pitch — lets the white lines fade into the surface (e.g. on a dark board). */
-  linesOpacity: number
+  /** Whether the 3D field markings (lines) are drawn. */
+  showLines: boolean
+  /** Opacity (0–1) of the mown shading bands (the mowing pattern) on the 3D pitch. */
+  bandsOpacity: number
   /** Central point-light intensity as a fraction of the default (1 = default). The
    *  properties slider spans 0 … 1.25 (0 % … +25 %). */
   centerLight: number
-  /** Orientation of the mown shading bands (or none). */
+  /** Orientation of the mown shading bands / mowing pattern (or none). */
   bands: FieldBands
   /** YouCoach logo placement over the background, or null for none. */
   logo: LogoPosition | null
@@ -129,7 +130,8 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   objectScale: 4, // materials are real-size (a cone is a dot on a full pitch); 4× makes them legible by default
   showGoals: true,
   tokens3d: false,
-  linesOpacity: 1,
+  showLines: true,
+  bandsOpacity: 1,
   centerLight: 1,
   bands: 'vertical',
   logo: 'center',
@@ -202,7 +204,9 @@ function parseBackground(raw: unknown): BoardBackground {
     objectScale: num(o.objectScale, DEFAULT_BACKGROUND.objectScale),
     showGoals: o.showGoals !== false,
     tokens3d: o.tokens3d === true,
-    linesOpacity: Math.min(1, Math.max(0, num(o.linesOpacity, DEFAULT_BACKGROUND.linesOpacity))),
+    showLines: o.showLines !== false,
+    // bandsOpacity supersedes the former linesOpacity (which faded lines + bands).
+    bandsOpacity: Math.min(1, Math.max(0, num(o.bandsOpacity, num(o.linesOpacity, DEFAULT_BACKGROUND.bandsOpacity)))),
     centerLight: Math.min(1.25, Math.max(0, num(o.centerLight, DEFAULT_BACKGROUND.centerLight))),
     bands: o.bands === 'horizontal' || o.bands === 'cross' || o.bands === 'none' ? o.bands : DEFAULT_BACKGROUND.bands,
     // Absent → default (center); explicit null → no logo; valid → that position.

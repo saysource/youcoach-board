@@ -30,8 +30,10 @@ interface Props {
   surface?: string
   /** Colour of the field markings/lines (background.lineColor); not the bands. */
   lineColor?: string
-  /** Opacity (0–1) of the markings + shading bands (background.linesOpacity). */
-  linesOpacity?: number
+  /** Whether the field markings/lines are drawn (background.showLines). */
+  showLines?: boolean
+  /** Opacity (0–1) of the mown shading bands (background.bandsOpacity). */
+  bandsOpacity?: number
   /** Central point-light intensity as a fraction of default (background.centerLight). */
   centerLight?: number
   /** Bump/flip to force an on-demand redraw when neither camera nor viewport
@@ -56,7 +58,7 @@ interface Ctx {
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', surface = 'transparent', lineColor = '#ffffff', linesOpacity = 1, centerLight = 1, renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', surface = 'transparent', lineColor = '#ffffff', showLines = true, bandsOpacity = 1, centerLight = 1, renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -122,9 +124,9 @@ export function FieldSceneLayer({ camera, viewport, image, svgRef, containerRef,
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport, showGoals, image, bands, fieldType, layout, surface, lineColor, linesOpacity, centerLight })
+  const propsRef = useRef({ camera, viewport, showGoals, image, bands, fieldType, layout, surface, lineColor, showLines, bandsOpacity, centerLight })
   useEffect(() => {
-    propsRef.current = { camera, viewport, showGoals, image, bands, fieldType, layout, surface, lineColor, linesOpacity, centerLight }
+    propsRef.current = { camera, viewport, showGoals, image, bands, fieldType, layout, surface, lineColor, showLines, bandsOpacity, centerLight }
   })
 
   function render() {
@@ -156,29 +158,17 @@ export function FieldSceneLayer({ camera, viewport, image, svgRef, containerRef,
       ctx.lineW = 0
     }
     if (ctx.goals) ctx.goals.visible = propsRef.current.showGoals
-    // Fade the markings + bands (background.linesOpacity). The lines material is
-    // opaque by default; it only goes transparent when actually faded. The line
-    // geometry OVERLAPS itself (ribbon joins, line crossings), so plain alpha
-    // would double-blend there (dark blotches): when faded, keep depthWrite on
-    // and reject EQUAL depths — every pixel blends exactly once, as if the whole
-    // group had one opacity — and draw AFTER the bands so lines shade over them.
-    const lop = propsRef.current.linesOpacity
+    // Field markings: on/off (background.showLines) + colour (background.lineColor),
+    // the lines only — NOT the mown bands.
     if (ctx.lines) {
-      const m = ctx.lines.material as THREE.MeshBasicMaterial
-      const faded = lop < 1
-      if (m.transparent !== faded) {
-        m.transparent = faded
-        m.depthFunc = faded ? THREE.LessDepth : THREE.LessEqualDepth
-        m.needsUpdate = true
-      }
-      ctx.lines.renderOrder = faded ? 2 : 0
-      m.opacity = lop
-      // Line colour (background.lineColor) — the markings only, NOT the bands.
-      m.color.set(propsRef.current.lineColor)
+      ctx.lines.visible = propsRef.current.showLines
+      ;(ctx.lines.material as THREE.MeshBasicMaterial).color.set(propsRef.current.lineColor)
     }
-    // 'cross' draws both band sets in one mesh; halve each so the overlaps (which
-    // blend twice) reach a full band while a single strip reads at half intensity.
-    if (ctx.bands) (ctx.bands.material as THREE.MeshBasicMaterial).opacity = (propsRef.current.bands === 'cross' ? BAND_OPACITY / 2 : BAND_OPACITY) * lop
+    // Mown shading bands opacity (background.bandsOpacity). 'cross' draws both band
+    // sets in one mesh; halve each so the overlaps (which blend twice) reach a full
+    // band while a single strip reads at half intensity.
+    const bop = propsRef.current.bandsOpacity
+    if (ctx.bands) (ctx.bands.material as THREE.MeshBasicMaterial).opacity = (propsRef.current.bands === 'cross' ? BAND_OPACITY / 2 : BAND_OPACITY) * bop
     // Central point-light intensity, scaled by background.centerLight (0 … 1.25).
     if (ctx.centerLight) ctx.centerLight.intensity = CENTER_LIGHT_INTENSITY * propsRef.current.centerLight
     // Toggle/recolor the infinite ground plane live.
@@ -224,7 +214,7 @@ export function FieldSceneLayer({ camera, viewport, image, svgRef, containerRef,
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick, showGoals, image, bands, fieldType, layout, surface, lineColor, linesOpacity, centerLight])
+  }, [camera, viewport, renderTick, showGoals, image, bands, fieldType, layout, surface, lineColor, showLines, bandsOpacity, centerLight])
 
   useEffect(() => {
     const container = containerRef.current

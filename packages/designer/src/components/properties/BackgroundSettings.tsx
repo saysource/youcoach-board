@@ -6,7 +6,6 @@ import { Switch } from '../ui/switch'
 import { Segmented } from './PropertyControls'
 import { ColorPickerWidget } from './ColorPickerWidget'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import { CHECKER_IMAGE } from '../../lib/checker'
 import { LogoTopLeftIcon, LogoTopRightIcon, LogoCenterIcon, LogoBottomLeftIcon, LogoBottomRightIcon } from '../icons'
 
 const BANDS_OPTIONS: { value: FieldBands; label: string; render: React.ReactNode }[] = [
@@ -80,72 +79,64 @@ export function SurfaceColorPicker() {
   )
 }
 
-// Background settings (field scale + logo position) — the field is panned directly
-// on the canvas via the move handle (InteractiveBoard).
+// The object/token sizing popover (cube button): global 3D-object display scale,
+// the shared token size, and the 3D-tokens toggle. (Token size + 3D tokens are also
+// in the token settings' global section — same store state.)
+export function ObjectTokenSettings() {
+  const bg = useEditorStore((s) => s.doc.background)
+  const setBackground = useEditorStore((s) => s.setBackground)
+  const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
+  const setTokenSizeM = useEditorStore((s) => s.setTokenSizeM)
+  const arm = useDragTransaction()
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground">Object size</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{bg.objectScale}× {bg.objectScale === 1 ? '(real)' : ''}</span>
+        </div>
+        {/* Stepped 1×–8×: models (and players) are real-size — this scales them up for a top-down board. */}
+        <Slider min={1} max={8} step={1} value={[bg.objectScale]} onValueChange={([v]) => { arm(); setBackground({ objectScale: v }) }} />
+      </div>
+
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground">Token size</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round(tokenSizeM)} m</span>
+        </div>
+        {/* Global token diameter (2–10 m), shared with every token on the board. */}
+        <Slider min={2} max={10} step={1} value={[Math.round(tokenSizeM)]} onValueChange={([v]) => { arm(); setTokenSizeM(v) }} />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">3D tokens</span>
+        <Switch checked={bg.tokens3d} onCheckedChange={(v) => setBackground({ tokens3d: v })} />
+      </div>
+    </div>
+  )
+}
+
+// Background settings — field/pitch appearance. Object + token sizing live in their
+// own (cube) popover; the surface colour is its own toolbar button.
 export function BackgroundSettings() {
   const bg = useEditorStore((s) => s.doc.background)
   const setBackground = useEditorStore((s) => s.setBackground)
   const arm = useDragTransaction()
   return (
     <div className="grid gap-3">
-      <div className="grid gap-1.5">
-        <span className="text-[11px] font-medium text-muted-foreground">Field scale</span>
-        <Slider
-          min={20}
-          max={300}
-          step={5}
-          value={[Math.round(bg.scale * 100)]}
-          onValueChange={([v]) => {
-            // First change arms the (one) undo transaction, committed on window pointerup.
-            arm()
-            setBackground({ scale: v / 100 })
-          }}
-        />
-      </div>
-
-      <div className="grid gap-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground">Object size</span>
-          <span className="text-[11px] tabular-nums text-muted-foreground">{bg.objectScale}× {bg.objectScale === 1 ? '(real)' : ''}</span>
-        </div>
-        {/* Stepped 1×–8×: models are real-size, this scales them up for a top-down board. */}
-        <Slider
-          min={1}
-          max={8}
-          step={1}
-          value={[bg.objectScale]}
-          onValueChange={([v]) => {
-            arm()
-            setBackground({ objectScale: v })
-          }}
-        />
-      </div>
-
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium text-muted-foreground">Goals</span>
         <Switch checked={bg.showGoals} onCheckedChange={(v) => setBackground({ showGoals: v })} />
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-muted-foreground">Surface color</span>
-        {/* Unified surface: the flat 2D background + the 3D ground plane. Transparent = off. */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button type="button" aria-label="Surface color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
-              <span className="block size-full" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' }}>
-                <span className="block size-full" style={bg.surfaceColor === 'transparent' ? undefined : { background: bg.surfaceColor }} />
-              </span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent side="left" align="start" className="w-60 p-3">
-            <SurfaceColorPicker />
-          </PopoverContent>
-        </Popover>
+        <span className="text-[11px] font-medium text-muted-foreground">Field lines</span>
+        <Switch checked={bg.showLines} onCheckedChange={(v) => setBackground({ showLines: v })} />
       </div>
 
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium text-muted-foreground">Line color</span>
-        {/* Field markings colour (not the bands); default white. */}
+        {/* Field markings colour (not the mowing bands); default white. */}
         <Popover>
           <PopoverTrigger asChild>
             <button type="button" aria-label="Line color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
@@ -165,19 +156,15 @@ export function BackgroundSettings() {
 
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground">Lines &amp; bands opacity</span>
-          <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round(bg.linesOpacity * 100)}%</span>
+          <span className="text-[11px] font-medium text-muted-foreground">Mowing opacity</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round(bg.bandsOpacity * 100)}%</span>
         </div>
-        <Slider
-          min={0}
-          max={100}
-          step={5}
-          value={[Math.round(bg.linesOpacity * 100)]}
-          onValueChange={([v]) => {
-            arm()
-            setBackground({ linesOpacity: v / 100 })
-          }}
-        />
+        <Slider min={0} max={100} step={5} value={[Math.round(bg.bandsOpacity * 100)]} onValueChange={([v]) => { arm(); setBackground({ bandsOpacity: v / 100 }) }} />
+      </div>
+
+      <div className="grid gap-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">Mowing</span>
+        <Segmented items={BANDS_OPTIONS} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
       </div>
 
       <div className="grid gap-1.5">
@@ -186,21 +173,7 @@ export function BackgroundSettings() {
           <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round((bg.centerLight ?? 1) * 100)}%</span>
         </div>
         {/* Central point-light intensity: 0 … 125 % of the default (1 = default). */}
-        <Slider
-          min={0}
-          max={125}
-          step={5}
-          value={[Math.round((bg.centerLight ?? 1) * 100)]}
-          onValueChange={([v]) => {
-            arm()
-            setBackground({ centerLight: v / 100 })
-          }}
-        />
-      </div>
-
-      <div className="grid gap-1.5">
-        <span className="text-[11px] font-medium text-muted-foreground">Bands</span>
-        <Segmented items={BANDS_OPTIONS} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
+        <Slider min={0} max={125} step={5} value={[Math.round((bg.centerLight ?? 1) * 100)]} onValueChange={([v]) => { arm(); setBackground({ centerLight: v / 100 }) }} />
       </div>
 
       <div className="grid gap-1.5">

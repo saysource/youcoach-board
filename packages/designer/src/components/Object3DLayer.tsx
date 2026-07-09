@@ -7,14 +7,10 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement, type Arrow3DElement } from '@youcoach-board/core'
 import { createArrowGeometry, makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
-import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, makeCenterLight, buildGoalsOverlay } from '../lib/field3d'
+import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, buildGoalsOverlay } from '../lib/field3d'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildObject3D, buildTokenDisc, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots, setTokenDiscFace, type TokenFaceStyle } from '../lib/objects3d'
 
-// A 3D player is near real human height, so it reads well at a modest multiplier;
-// beyond this the materials scale would make players cartoonishly large (esp. on
-// the small training area). Cones/hurdles/etc. keep the full materials scale.
-const PLAYER_SCALE_CAP = 4
 
 /** Imperative API to hit-test 3D objects (they aren't SVG, so InteractiveBoard
  *  can't click them through the normal element handlers). */
@@ -166,8 +162,10 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       scene.add(spot)
       scene.add(spot.target)
     }
-    // Soft centre glow (matches the field scene's lighting).
-    scene.add(makeCenterLight())
+    // NOTE: the centre glow (makeCenterLight) lives ONLY in the field scene,
+    // where background.centerLight drives it — objects/players must not receive
+    // it, or anything placed mid-field gets overexposed (and thumbnails, shot at
+    // pitch centre, come out washed).
     const sun = new THREE.DirectionalLight(0xffffff, 2.6)
     sun.position.copy(SUN_POSITION)
     sun.target.position.copy(SUN_TARGET)
@@ -269,10 +267,9 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       // structural objects, so they ignore the global "make materials bigger" scale.
       const rel = e.useGlobalSize ? 1 : e.size
       // Goals are real-metric structural objects (ignore the global scale). 3D
-      // players are near real height, so they'd balloon at a high materials scale
-      // (e.g. the training area's) — cap their multiplier so raising the materials
-      // default enlarges cones/hurdles without turning players into giants.
-      const mult = isObject3DPlayer(e.objectId) ? Math.min(objectScale, PLAYER_SCALE_CAP) : objectScale
+      // players scale with the same materials multiplier as cones/hurdles/etc., so
+      // players and materials stay the same relative size (aligned defaults).
+      const mult = objectScale
       const scale = isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(1, rel * mult)
       obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5

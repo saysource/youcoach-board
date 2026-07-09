@@ -51,7 +51,7 @@ import { ColorPickerWidget } from './ColorPickerWidget'
 import { usePropertyEditing, type TokenVisualStyle } from './usePropertyEditing'
 import { PlayerSettingsButton } from './PlayerSettings'
 import { SubjectHeader } from './SubjectHeader'
-import { BackgroundSettings, SurfaceColorPicker } from './BackgroundSettings'
+import { BackgroundSettings, SurfaceColorPicker, ObjectTokenSettings } from './BackgroundSettings'
 
 const isTransparent = (c?: string) => !c || c === 'transparent'
 // Translucent, blurred buttons for the mobile bar — float over the canvas.
@@ -98,10 +98,25 @@ function BackgroundEditBar() {
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>Scale & logo</TooltipContent>
+          <TooltipContent>Pitch settings</TooltipContent>
         </Tooltip>
         <PopoverContent side="right" align="start" className="w-52">
           <BackgroundSettings />
+        </PopoverContent>
+      </Popover>
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button size="icon" aria-label="Object & token sizes">
+                <Box />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Object & token sizes</TooltipContent>
+        </Tooltip>
+        <PopoverContent side="right" align="start" className="w-52">
+          <ObjectTokenSettings />
         </PopoverContent>
       </Popover>
       <Tooltip>
