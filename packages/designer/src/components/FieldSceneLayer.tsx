@@ -169,7 +169,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       ctx.lines.renderOrder = faded ? 2 : 0
       m.opacity = lop
     }
-    if (ctx.bands) (ctx.bands.material as THREE.MeshBasicMaterial).opacity = BAND_OPACITY * lop
+    // 'cross' draws both band sets in one mesh; halve each so the overlaps (which
+    // blend twice) reach a full band while a single strip reads at half intensity.
+    if (ctx.bands) (ctx.bands.material as THREE.MeshBasicMaterial).opacity = (propsRef.current.bands === 'cross' ? BAND_OPACITY / 2 : BAND_OPACITY) * lop
     // Toggle/recolor the infinite ground plane live.
     if (ctx.ground) {
       const sc = propsRef.current.surround

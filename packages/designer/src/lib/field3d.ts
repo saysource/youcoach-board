@@ -235,7 +235,7 @@ function soccerMarkings(w: number): THREE.BufferGeometry {
  *  default — bands span the width), across (horizontal — bands span the length), or
  *  off (empty geometry). For the zones area, the "bands" are instead a single fill
  *  over each of the two external zones (unless off). */
-export type FieldBandsOrientation = 'vertical' | 'horizontal' | 'none'
+export type FieldBandsOrientation = 'vertical' | 'horizontal' | 'cross' | 'none'
 export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', halfL = HALF_L, halfW = HALF_W, fieldType: FieldType = 'soccer11', layout: TrainingLayout = 'plain'): THREE.BufferGeometry {
   const p: number[] = []
   // A non-plain training layout replaces the mowing stripes with its own shaded
@@ -254,13 +254,18 @@ export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', h
     const z0 = -halfW
     const z1 = halfW
     const bands = 14
-    if (orientation === 'vertical') {
+    // 'cross' lays down BOTH sets (a chequered mow); the caller halves the band
+    // opacity so a single strip reads at half intensity and the overlaps (where the
+    // two sets cross) compound back up to a full band. The bands material has
+    // depthWrite off, so the coplanar quads blend rather than z-fight.
+    if (orientation === 'vertical' || orientation === 'cross') {
       const bw = (x1 - x0) / bands
       for (let b = 0; b < bands; b += 2) {
         const bx0 = x0 + b * bw
         quad(p, bx0, z0, bx0 + bw, z0, bx0 + bw, z1, bx0, z1)
       }
-    } else {
+    }
+    if (orientation === 'horizontal' || orientation === 'cross') {
       const bh = (z1 - z0) / bands
       for (let b = 0; b < bands; b += 2) {
         const bz0 = z0 + b * bh
@@ -345,7 +350,7 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
 
   // Translucent white shading bands (over the field extent), then crisp lines.
   // Named so the layer can rebuild the geometry when the orientation changes.
-  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical', halfL, halfW, fieldType, layout), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
+  const bands = new THREE.Mesh(bandsGeometry(opts.bands ?? 'vertical', halfL, halfW, fieldType, layout), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: opts.bands === 'cross' ? BAND_OPACITY / 2 : BAND_OPACITY, depthWrite: false, side: THREE.DoubleSide }))
   bands.name = 'field-bands'
   bands.position.y = BAND_Y
   bands.renderOrder = 1

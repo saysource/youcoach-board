@@ -20,8 +20,8 @@ export const BOARD_VERSION = 3
 export type LogoPosition = 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
 /** The mown "shading" bands on the pitch: lengthwise (vertical), across
- *  (horizontal), or off. */
-export type FieldBands = 'vertical' | 'horizontal' | 'none'
+ *  (horizontal), both (cross — a chequered/plaid mow), or off. */
+export type FieldBands = 'vertical' | 'horizontal' | 'cross' | 'none'
 
 /** The kind of playing surface. Each type has its own markings, default goals and
  *  set of camera zones. (Futsal is planned; not yet rendered.) */
@@ -187,7 +187,7 @@ function parseBackground(raw: unknown): BoardBackground {
     tokens3d: o.tokens3d === true,
     surroundColor: typeof o.surroundColor === 'string' ? o.surroundColor : DEFAULT_BACKGROUND.surroundColor,
     linesOpacity: Math.min(1, Math.max(0, num(o.linesOpacity, DEFAULT_BACKGROUND.linesOpacity))),
-    bands: o.bands === 'horizontal' || o.bands === 'none' ? o.bands : DEFAULT_BACKGROUND.bands,
+    bands: o.bands === 'horizontal' || o.bands === 'cross' || o.bands === 'none' ? o.bands : DEFAULT_BACKGROUND.bands,
     // Absent → default (center); explicit null → no logo; valid → that position.
     logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : o.logo === null ? null : DEFAULT_BACKGROUND.logo,
   }

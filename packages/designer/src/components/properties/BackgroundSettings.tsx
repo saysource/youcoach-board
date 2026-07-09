@@ -37,6 +37,16 @@ const BANDS_OPTIONS: { value: FieldBands; label: string; render: React.ReactNode
     ),
   },
   {
+    value: 'cross',
+    label: 'Cross',
+    render: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+        <rect x="3" y="2" width="3" height="16" /><rect x="8.5" y="2" width="3" height="16" /><rect x="14" y="2" width="3" height="16" />
+        <rect x="2" y="3" width="16" height="3" /><rect x="2" y="8.5" width="16" height="3" /><rect x="2" y="14" width="16" height="3" />
+      </svg>
+    ),
+  },
+  {
     value: 'none',
     label: 'None',
     render: (
