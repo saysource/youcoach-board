@@ -551,7 +551,20 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const onWheel = (e: WheelEvent) => {
       if (!e.altKey) return
       const f3d = storeApi.getState().doc.background.field3d
-      if (!f3d) return
+      if (!f3d) {
+        // 2D flat viewport: Alt+wheel zooms toward the cursor. No 3D camera and no
+        // undo step (the viewport isn't part of the document) — re-anchor the pan so
+        // the board point under the pointer stays put as the zoom changes. Down =
+        // zoom out (matches the 3D dolly); clamp mirrors the store's setViewport.
+        e.preventDefault()
+        const { zoom, panX, panY } = storeApi.getState().viewport
+        const next = clamp(zoom * Math.exp(-e.deltaY * WHEEL_ZOOM_K), 0.1, 8)
+        if (next === zoom) return
+        const p = clientToBoard(svg, e.clientX, e.clientY)
+        const k = zoom / next
+        storeApi.getState().setViewport({ zoom: next, panX: p.x - (p.x - panX) * k, panY: p.y - (p.y - panY) * k })
+        return
+      }
       e.preventDefault()
       const p = clientToBoard(svg, e.clientX, e.clientY)
       const g = boardToGround(p.x, p.y, makeCalibratedCamera(f3d))
