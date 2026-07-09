@@ -96,6 +96,15 @@ const OPPOSITE_CORNER: Record<CornerId, CornerId> = { nw: 'se', ne: 'sw', se: 'n
 const CANVAS_KEEP = 28 // min board units of a moved figure that must stay on-canvas
 const POLY_END_R_PX = 7 // on-screen radius of the first/last polyline finish dots
 const FREEHAND_MIN_STEP = 2 // min board-unit gap between captured freehand samples
+// Selected OPEN paths show no bbox frame; instead a wider frame-colour stroke is
+// drawn UNDER the path to highlight it (on-screen px added to the real stroke width).
+const SELECTION_HALO_PX = 8
+// A selected open polyline's under-path highlight: the same geometry, re-stroked in
+// the selection-frame colour, wider + solid + no tips, at half opacity — so the real
+// path (and any arrowhead) still reads clearly on top.
+function pathHalo(el: Extract<BoardElement, { type: 'polyline' }>, scale: number): BoardElement {
+  return { ...el, stroke: 'var(--color-selection-frame)', strokeWidth: el.strokeWidth + SELECTION_HALO_PX / scale, strokeStyle: 'solid', fill: 'transparent', startTip: 'none', endTip: 'none', transform: { ...el.transform, opacity: 0.5 } }
+}
 const MOVE_THRESHOLD_PX = 4 // on-screen drag distance before a move engages
 // Alt/Option + wheel 3D zoom-to-cursor of the field camera (normal mode).
 const WHEEL_ZOOM_K = 0.0015 // wheel delta → dolly factor (negative delta = zoom in)
@@ -340,6 +349,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
   const exportGuide = useEditorStore((s) => s.exportGuide)
   const tokenTextScale = useEditorStore((s) => s.tokenTextScale)
+  const dropReplaceId = useEditorStore((s) => s.dropReplaceId)
   const tokenLabelScale = useEditorStore((s) => s.tokenLabelScale)
   const duplicateInPlace = useEditorStore((s) => s.duplicateInPlace)
   const toolDefaults = useEditorStore((s) => s.toolDefaults)
@@ -2391,8 +2401,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           ? { ...live, showLabel: false }
           : { ...live, text: '' }
         : live
+    // Single-selected open path: draw the highlight halo UNDER the path.
+    const showHalo = render.type === 'polyline' && !render.closed && !erasing && selectedIds.length === 1 && selectedIds[0] === el.id
     return (
       <g key={el.id} style={{ cursor: 'move', opacity: erasing ? 0.25 : undefined }} onPointerDown={(e) => onElementPointerDown(e, el)}>
+        {showHalo && render.type === 'polyline' && <ElementView element={pathHalo(render, scale)} viewScale={scale} />}
         {t3dHit ? (
           <polygon points={text3dHitPoints(live)} fill="transparent" />
         ) : render.type === 'figure' ? (
@@ -2707,7 +2720,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           this layer only draws them in the legacy homography/fixed modes. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={fieldCamCfg ? [] : arrow3dLayerElements} selectedIds={selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
       {/* 3D objects ("3D materials") + tokens + arrows: WebGL overlay (pointer-transparent). */}
-      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} tokens={token3dList} arrows={fieldCamCfg ? arrow3dLayerElements : []} selectedIds={navigating ? [] : selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} />
+      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} tokens={token3dList} arrows={fieldCamCfg ? arrow3dLayerElements : []} selectedIds={navigating ? [] : selectedIds} replaceTargetId={dropReplaceId} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} minScale={field3d ? 1 : 0.05} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} />
       {/* 3D-token captions: the WebGL canvas sits above the SVG, so the discs would
           occlude their own labels — re-render them here, above the canvas, anchored
           just below each disc's camera-facing edge. Fixed on-screen size like the

@@ -144,6 +144,27 @@ export function SelectionHandles({ element, scale, onHandleDown, hideFrame = fal
     )
   }
 
+  // Open polyline (line / arrow / curve / multi-point path): NO bounding-box frame.
+  // The per-vertex handles already convey the selection, and a wider frame-colour
+  // stroke drawn UNDER the path (in InteractiveBoard) highlights the curve. We drop
+  // rotation + uniform resize, which are rarely useful for an open path.
+  if (element.type === 'polyline' && !element.closed) {
+    return (
+      <g>
+        {anchors}
+        {element.points.map((p, i) => (
+          <EndpointHandle
+            key={`pt-${i}`}
+            at={elementToBoard({ x: p[0], y: p[1] }, box, t)}
+            scale={scale}
+            handle={`point-${i}`}
+            onDown={(e) => onHandleDown!(`point-${i}`, e)}
+          />
+        ))}
+      </g>
+    )
+  }
+
   // Text: frame + corner resize handles (no rotation). Dragging a corner scales
   // the FONT (the box re-fits the text; see InteractiveBoard.textFontResize).
   if (element.type === 'text') {
