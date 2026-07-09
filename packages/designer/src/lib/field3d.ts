@@ -124,8 +124,9 @@ export function makeFloodlight(f: { pos: [number, number, number]; target: [numb
  *  point (not a spot) gives the pure radial falloff of the reference look —
  *  brightest at midfield, fading smoothly in every direction with no cone
  *  edge. The height sets the spread: lower = tighter hotspot. */
+export const CENTER_LIGHT_INTENSITY = 12000 // default centre-glow intensity (scaled by background.centerLight)
 export function makeCenterLight(): THREE.PointLight {
-  const light = new THREE.PointLight(0xffffff, 12000, 0, 2)
+  const light = new THREE.PointLight(0xffffff, CENTER_LIGHT_INTENSITY, 0, 2)
   light.position.set(HALF_L, 45, HALF_W)
   return light
 }

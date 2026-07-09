@@ -167,6 +167,24 @@ export function BackgroundSettings() {
       </div>
 
       <div className="grid gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground">Central light</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round((bg.centerLight ?? 1) * 100)}%</span>
+        </div>
+        {/* Central point-light intensity: 0 … 125 % of the default (1 = default). */}
+        <Slider
+          min={0}
+          max={125}
+          step={5}
+          value={[Math.round((bg.centerLight ?? 1) * 100)]}
+          onValueChange={([v]) => {
+            arm()
+            setBackground({ centerLight: v / 100 })
+          }}
+        />
+      </div>
+
+      <div className="grid gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">Bands</span>
         <Segmented items={BANDS_OPTIONS} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
       </div>

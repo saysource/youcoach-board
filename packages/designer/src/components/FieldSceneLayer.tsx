@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldBands, type FieldType, type TrainingLayout } from '@youcoach-board/core'
-import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, BAND_OPACITY, FIELD_DIMS, SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, makeCenterLight } from '../lib/field3d'
+import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, BAND_OPACITY, CENTER_LIGHT_INTENSITY, FIELD_DIMS, SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, makeCenterLight } from '../lib/field3d'
 import { applyViewCamera } from '../lib/field-camera'
 
 // A WebGL layer rendering the real 3D pitch, viewed through the board's field
@@ -31,6 +31,8 @@ interface Props {
   surround?: string
   /** Opacity (0–1) of the markings + shading bands (background.linesOpacity). */
   linesOpacity?: number
+  /** Central point-light intensity as a fraction of default (background.centerLight). */
+  centerLight?: number
   /** Bump/flip to force an on-demand redraw when neither camera nor viewport
    *  changed but the layout might have (e.g. entering/leaving Edit-Background) —
    *  avoids a stale pitch until the next camera move. */
@@ -47,12 +49,13 @@ interface Ctx {
   goals: THREE.Object3D | null
   bands: THREE.Mesh | null
   bandsOrient: FieldBands
+  centerLight: THREE.PointLight | null
   fieldType: FieldType
   layout: TrainingLayout
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', surround = 'transparent', linesOpacity = 1, renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', surround = 'transparent', linesOpacity = 1, centerLight = 1, renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -77,7 +80,8 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       scene.add(spot.target)
     }
     // Soft centre glow: brightest at midfield, fading radially (point light).
-    scene.add(makeCenterLight())
+    const centerLight = makeCenterLight()
+    scene.add(centerLight)
     const sun = new THREE.DirectionalLight(0xffffff, 2.4)
     sun.position.copy(SUN_POSITION)
     sun.target.position.copy(SUN_TARGET)
@@ -96,7 +100,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, layout: propsRef.current.layout, surround: propsRef.current.surround })
     scene.add(group)
 
-    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, ground: (group.getObjectByName('field-ground') as THREE.Mesh) ?? null, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, fieldType: propsRef.current.fieldType, layout: propsRef.current.layout, lineW: 0 }
+    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, ground: (group.getObjectByName('field-ground') as THREE.Mesh) ?? null, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, centerLight, fieldType: propsRef.current.fieldType, layout: propsRef.current.layout, lineW: 0 }
     return ctxRef.current
   }
 
@@ -117,9 +121,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity })
+  const propsRef = useRef({ camera, viewport, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity, centerLight })
   useEffect(() => {
-    propsRef.current = { camera, viewport, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity }
+    propsRef.current = { camera, viewport, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity, centerLight }
   })
 
   function render() {
@@ -172,6 +176,8 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     // 'cross' draws both band sets in one mesh; halve each so the overlaps (which
     // blend twice) reach a full band while a single strip reads at half intensity.
     if (ctx.bands) (ctx.bands.material as THREE.MeshBasicMaterial).opacity = (propsRef.current.bands === 'cross' ? BAND_OPACITY / 2 : BAND_OPACITY) * lop
+    // Central point-light intensity, scaled by background.centerLight (0 … 1.25).
+    if (ctx.centerLight) ctx.centerLight.intensity = CENTER_LIGHT_INTENSITY * propsRef.current.centerLight
     // Toggle/recolor the infinite ground plane live.
     if (ctx.ground) {
       const sc = propsRef.current.surround
@@ -215,7 +221,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity])
+  }, [camera, viewport, renderTick, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity, centerLight])
 
   useEffect(() => {
     const container = containerRef.current
