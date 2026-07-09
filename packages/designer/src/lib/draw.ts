@@ -42,8 +42,10 @@ export const DEFAULT_FIGURE_STYLE: FigureStyle = {
   stroke: FIGURE_STROKE,
   strokeWidth: FIGURE_STROKE_WIDTH,
   strokeStyle: 'solid',
-  fill: FIGURE_FILL,
-  fillStyle: 'solid',
+  // New shapes (rectangle / oval / …) default to a striped red fill at 20% opacity
+  // (the 8-digit hex alpha 0x33 ≈ 20%). Stroke stays fully opaque.
+  fill: '#ff000033',
+  fillStyle: 'striped',
   opacity: 1,
 }
 

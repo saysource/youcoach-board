@@ -8,14 +8,6 @@ import { ColorPickerWidget } from './ColorPickerWidget'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { CHECKER_IMAGE } from '../../lib/checker'
 import { LogoTopLeftIcon, LogoTopRightIcon, LogoCenterIcon, LogoBottomLeftIcon, LogoBottomRightIcon } from '../icons'
-import defaultFieldImage from '../../assets/field0.jpg'
-
-// Background swatch presets (first = restore the default field image).
-const BG_COLORS = ['transparent', '#2f8a3e', '#3b7a57', '#5b8c3a', '#d1d1d1', '#9f9f9f', '#a6c58b', '#3389e0', '#ffffff']
-
-// Surround (infinite 3D ground) presets — first = off (no plane, 2D background
-// shows as before). Greens near the pitch grass, plus stadium greys/dark.
-const SURROUND_COLORS = ['transparent', '#2f8a3e', '#256e31', '#3b7a57', '#5b8c3a', '#8a8a8a', '#4a4a4a', '#22301f', '#d1d1d1']
 
 const BANDS_OPTIONS: { value: FieldBands; label: string; render: React.ReactNode }[] = [
   {
@@ -65,17 +57,24 @@ const LOGO_OPTIONS: { value: LogoPosition; label: string; render: React.ReactNod
   { value: 'bottom-right', label: 'Bottom right', render: <LogoBottomRightIcon className="size-5" /> },
 ]
 
-// The background color picker (its own toolbar button): the same widget as the
-// stroke color, but without opacity and with the background presets. The
-// "transparent" swatch restores the default field image; any color is a solid fill.
-export function BackgroundColorPicker() {
+// Merged surface presets: transparent (= grass image / no surround) + the greens
+// and stadium greys used near the pitch.
+const SURFACE_COLORS = ['transparent', '#2f8a3e', '#256e31', '#3b7a57', '#5b8c3a', '#a6c58b', '#8a8a8a', '#4a4a4a', '#22301f', '#d1d1d1', '#3389e0', '#ffffff']
+
+// Common field-line colours (default white).
+const LINE_COLORS = ['#ffffff', '#000000', '#e6e6e6', '#f5d90a', '#111827', '#3389e0']
+
+// The unified "Surface color" picker (its own toolbar button): one colour driving
+// both the flat 2D board background and the 3D ground plane. 'transparent' = off
+// (the default field image shows, no surround).
+export function SurfaceColorPicker() {
   const bg = useEditorStore((s) => s.doc.background)
   const setBackground = useEditorStore((s) => s.setBackground)
   return (
     <ColorPickerWidget
-      value={bg.image ? 'transparent' : bg.color}
-      onChange={(c) => (c === 'transparent' || c === '' ? setBackground({ image: defaultFieldImage }) : setBackground({ color: c, image: null }))}
-      presets={BG_COLORS}
+      value={bg.surfaceColor}
+      onChange={(c) => setBackground({ surfaceColor: c === '' ? 'transparent' : c })}
+      presets={SURFACE_COLORS}
       showOpacity={false}
     />
   )
@@ -128,21 +127,36 @@ export function BackgroundSettings() {
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-muted-foreground">Surround</span>
-        {/* Infinite 3D ground plane under the field; transparent swatch = off. */}
+        <span className="text-[11px] font-medium text-muted-foreground">Surface color</span>
+        {/* Unified surface: the flat 2D background + the 3D ground plane. Transparent = off. */}
         <Popover>
           <PopoverTrigger asChild>
-            <button type="button" aria-label="Surround color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+            <button type="button" aria-label="Surface color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
               <span className="block size-full" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' }}>
-                <span className="block size-full" style={bg.surroundColor === 'transparent' ? undefined : { background: bg.surroundColor }} />
+                <span className="block size-full" style={bg.surfaceColor === 'transparent' ? undefined : { background: bg.surfaceColor }} />
               </span>
             </button>
           </PopoverTrigger>
           <PopoverContent side="left" align="start" className="w-60 p-3">
+            <SurfaceColorPicker />
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">Line color</span>
+        {/* Field markings colour (not the bands); default white. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" aria-label="Line color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+              <span className="block size-full" style={{ background: bg.lineColor }} />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="left" align="start" className="w-60 p-3">
             <ColorPickerWidget
-              value={bg.surroundColor}
-              onChange={(c) => setBackground({ surroundColor: c === '' ? 'transparent' : c })}
-              presets={SURROUND_COLORS}
+              value={bg.lineColor}
+              onChange={(c) => setBackground({ lineColor: c === '' || c === 'transparent' ? '#ffffff' : c })}
+              presets={LINE_COLORS}
               showOpacity={false}
             />
           </PopoverContent>

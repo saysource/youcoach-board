@@ -109,7 +109,7 @@ async function drawBackground(g: CanvasRenderingContext2D, env: ExportEnv, br: {
       /* fall through to color */
     }
   }
-  g.fillStyle = bg.color && bg.color !== 'transparent' ? bg.color : '#ffffff'
+  g.fillStyle = bg.surfaceColor && bg.surfaceColor !== 'transparent' ? bg.surfaceColor : '#ffffff'
   g.fillRect(br.x, br.y, br.width, br.height)
 }
 

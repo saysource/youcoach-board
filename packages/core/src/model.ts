@@ -45,7 +45,14 @@ export interface FieldView {
 }
 
 export interface BoardBackground {
-  color: string
+  /** The surface colour behind/around the pitch: drives BOTH the flat 2D board
+   *  background AND the infinite 3D ground plane (world-space horizon). CSS color;
+   *  'transparent' = off (the default field image shows, no 3D surround). Unifies
+   *  the former `color` + `surroundColor`. */
+  surfaceColor: string
+  /** Colour of the 3D field markings (lines) — NOT the mown shading bands. Default
+   *  white. */
+  lineColor: string
   /** URL of a raster background image (e.g. grass), or null. */
   image: string | null
   /** URL of an overlay field SVG (e.g. an 11v11 pitch), or null. */
@@ -75,10 +82,6 @@ export interface BoardBackground {
   /** Render disc tokens as real 3D pucks on the pitch (the profiled token disc)
    *  instead of flat SVG badges. Labels/interaction stay 2D. */
   tokens3d: boolean
-  /** An infinite ground plane under the 3D field (world-space, so grazing views
-   *  get a real horizon). CSS color; 'transparent' = off (the flat 2D background
-   *  image/color shows instead, as before). */
-  surroundColor: string
   /** Opacity (0–1) of the field markings AND the mown shading bands on the 3D
    *  pitch — lets the white lines fade into the surface (e.g. on a dark board). */
   linesOpacity: number
@@ -112,7 +115,8 @@ export interface BoardDoc {
 }
 
 export const DEFAULT_BACKGROUND: BoardBackground = {
-  color: 'transparent',
+  surfaceColor: 'transparent',
+  lineColor: '#ffffff',
   image: null,
   fieldSvg: null,
   field3d: null,
@@ -125,7 +129,6 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   objectScale: 4, // materials are real-size (a cone is a dot on a full pitch); 4× makes them legible by default
   showGoals: true,
   tokens3d: false,
-  surroundColor: 'transparent',
   linesOpacity: 1,
   centerLight: 1,
   bands: 'vertical',
@@ -173,7 +176,17 @@ function parseBackground(raw: unknown): BoardBackground {
   const o = raw as Record<string, unknown>
   const pos = Array.isArray(o.position) && o.position.length === 2 ? o.position : DEFAULT_BACKGROUND.position
   return {
-    color: typeof o.color === 'string' ? o.color : DEFAULT_BACKGROUND.color,
+    // surfaceColor unifies the former `color` + `surroundColor`; migrate old docs
+    // (prefer an explicit surroundColor, then the flat color).
+    surfaceColor:
+      typeof o.surfaceColor === 'string'
+        ? o.surfaceColor
+        : typeof o.surroundColor === 'string' && o.surroundColor !== 'transparent'
+          ? o.surroundColor
+          : typeof o.color === 'string'
+            ? o.color
+            : DEFAULT_BACKGROUND.surfaceColor,
+    lineColor: typeof o.lineColor === 'string' ? o.lineColor : DEFAULT_BACKGROUND.lineColor,
     image: typeof o.image === 'string' ? o.image : null,
     fieldSvg: typeof o.fieldSvg === 'string' ? o.fieldSvg : null,
     field3d: parseFieldView(o.field3d),
@@ -189,7 +202,6 @@ function parseBackground(raw: unknown): BoardBackground {
     objectScale: num(o.objectScale, DEFAULT_BACKGROUND.objectScale),
     showGoals: o.showGoals !== false,
     tokens3d: o.tokens3d === true,
-    surroundColor: typeof o.surroundColor === 'string' ? o.surroundColor : DEFAULT_BACKGROUND.surroundColor,
     linesOpacity: Math.min(1, Math.max(0, num(o.linesOpacity, DEFAULT_BACKGROUND.linesOpacity))),
     centerLight: Math.min(1.25, Math.max(0, num(o.centerLight, DEFAULT_BACKGROUND.centerLight))),
     bands: o.bands === 'horizontal' || o.bands === 'cross' || o.bands === 'none' ? o.bands : DEFAULT_BACKGROUND.bands,

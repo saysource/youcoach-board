@@ -51,7 +51,7 @@ import { ColorPickerWidget } from './ColorPickerWidget'
 import { usePropertyEditing, type TokenVisualStyle } from './usePropertyEditing'
 import { PlayerSettingsButton } from './PlayerSettings'
 import { SubjectHeader } from './SubjectHeader'
-import { BackgroundSettings, BackgroundColorPicker } from './BackgroundSettings'
+import { BackgroundSettings, SurfaceColorPicker } from './BackgroundSettings'
 
 const isTransparent = (c?: string) => !c || c === 'transparent'
 // Translucent, blurred buttons for the mobile bar — float over the canvas.
@@ -76,17 +76,17 @@ function BackgroundEditBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <Button size="icon" aria-label="Background color">
+              <Button size="icon" aria-label="Surface color">
                 <span className="size-6 flex items-center justify-center rounded-lg" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' }}>
-                  <span className="size-6 rounded-lg border border-border/70" style={bg.image ? undefined : { background: bg.color }} />
+                  <span className="size-6 rounded-lg border border-border/70" style={bg.surfaceColor === 'transparent' ? undefined : { background: bg.surfaceColor }} />
                 </span>
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>Background color</TooltipContent>
+          <TooltipContent>Surface color</TooltipContent>
         </Tooltip>
         <PopoverContent side="right" align="start" className="w-56">
-          <BackgroundColorPicker />
+          <SurfaceColorPicker />
         </PopoverContent>
       </Popover>
       <Popover>

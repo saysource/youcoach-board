@@ -70,7 +70,7 @@ export function BackgroundView({ doc }: { doc: BoardDoc }) {
       {bg.image ? (
         <image href={bg.image} x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} preserveAspectRatio="xMidYMid slice" />
       ) : (
-        <rect x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} fill={bg.color} />
+        <rect x={0} y={0} width={BOARD_WIDTH} height={BOARD_HEIGHT} fill={bg.surfaceColor} />
       )}
 
       {field && (
