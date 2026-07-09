@@ -17,6 +17,9 @@ const L = 105
 const W = 68
 const HALF_L = L / 2 // 52.5
 const HALF_W = W / 2 // 34
+/** World-space pitch centre: every field type is built centred and translated here,
+ *  so a field of half-extent FIELD_DIMS[type] spans [centre ± halfExtent]. */
+export const FIELD_WORLD_CENTER: [number, number] = [HALF_L, HALF_W]
 // Per-field-type half-dimensions + goal width (metres). Every field is built
 // CENTRED and then translated to the pitch centre (52.5, 0, 34), so objects,
 // arrows and cameras keep sharing one world frame; the camera zones frame each

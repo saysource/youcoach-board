@@ -5,6 +5,7 @@ import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldType } from '@youc
 import { projectToBoard } from '../lib/arrow3d'
 import { orbitStep, panStep, dollyStep, type PitchType } from '../lib/field-camera'
 import { zonesForField } from '../lib/field-zones'
+import { FIELD_DIMS, FIELD_WORLD_CENTER } from '../lib/field3d'
 
 // Edit-Background overlay for the real 3D field: real OrbitControls (drag = orbit,
 // wheel = zoom) around a LOCKED target, plus numbered zone markers. Clicking a
@@ -55,8 +56,12 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
   // rAF loop (created once) the latest list without re-subscribing.
   const zones = zonesForField(fieldType)
   const zonesRef = useRef(zones)
+  // Pitch half-extent (metres) for the current field type, fed to the rAF loop so the
+  // pan clamp keeps the look-at on the pitch even after a field-type change.
+  const dimsRef = useRef(FIELD_DIMS[fieldType])
   useEffect(() => {
     zonesRef.current = zones
+    dimsRef.current = FIELD_DIMS[fieldType]
   })
   const camRef = useRef<THREE.PerspectiveCamera | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
@@ -91,7 +96,11 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
     cam.position.set(field3d.position[0], field3d.position[1], field3d.position[2])
     cam.up.set(0, 1, 0)
     const controls = new OrbitControls(cam, el)
-    controls.enablePan = false // lock the look-at target
+    controls.enablePan = true // pan the look-at (Shift+drag on mouse, two fingers on touch)
+    // Touch: one finger rotates (or pans in pan mode — set in the panMode effect),
+    // two fingers pinch-zoom AND pan together (DOLLY_PAN). Without this explicit map a
+    // two-finger drag never pans reliably across devices.
+    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
     controls.enableDamping = true
     controls.dampingFactor = 0.09
     controls.rotateSpeed = 0.45
@@ -137,6 +146,17 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
       if (cam.position.y < MIN_CAM_Y) {
         cam.position.y = MIN_CAM_Y
         cam.lookAt(controls.target)
+      }
+      // Limit the pan so the field can't be pushed out of the scene: keep the look-at
+      // on the pitch (target within the pitch rectangle). Shift the camera by the same
+      // delta so the orbit angle/distance are preserved — OrbitControls pans both.
+      const clx = Math.max(FIELD_WORLD_CENTER[0] - dimsRef.current.halfL, Math.min(FIELD_WORLD_CENTER[0] + dimsRef.current.halfL, controls.target.x))
+      const clz = Math.max(FIELD_WORLD_CENTER[1] - dimsRef.current.halfW, Math.min(FIELD_WORLD_CENTER[1] + dimsRef.current.halfW, controls.target.z))
+      if (clx !== controls.target.x || clz !== controls.target.z) {
+        cam.position.x += clx - controls.target.x
+        cam.position.z += clz - controls.target.z
+        controls.target.x = clx
+        controls.target.z = clz
       }
       // Project the zone targets to board coords; flag ones behind the camera.
       setMarkers(
@@ -187,6 +207,9 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
     controls.enableRotate = !panMode
     controls.enablePan = true
     controls.mouseButtons.LEFT = panMode ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
+    // One finger follows the mouse-left mapping (pan in pan mode, else rotate); two
+    // fingers always pinch-zoom + pan.
+    controls.touches = { ONE: panMode ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
   }, [panMode])
 
   // Arrow keys orbit the camera (Shift pans), mirroring a mouse drag — the same as
