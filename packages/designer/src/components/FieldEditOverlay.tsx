@@ -99,7 +99,12 @@ export function FieldEditOverlay({ field3d, fieldType, viewBox, panMode, onPose,
     controls.minDistance = 2
     controls.maxDistance = 400
     controls.screenSpacePanning = true
-    controls.zoomToCursor = true // wheel zooms toward the mouse, not the target
+    // Wheel dollies toward the LOCKED target, not the cursor. zoomToCursor drove the
+    // camera toward a ground point, so a wheel-in near the horizon sank it into the
+    // MIN_CAM_Y floor and stalled well before minDistance — the "can't zoom in" cap
+    // (the keyboard dolly, which keeps the orbit angle, wasn't affected). Target-dolly
+    // preserves the elevation, so the wheel now reaches minDistance like the keyboard.
+    controls.zoomToCursor = false
     controls.maxPolarAngle = Math.PI / 2 - 0.04 // stay above the grass
     controls.target.set(field3d.target[0], field3d.target[1], field3d.target[2])
     cam.lookAt(controls.target)
