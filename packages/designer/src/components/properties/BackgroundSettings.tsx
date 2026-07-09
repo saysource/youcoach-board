@@ -140,6 +140,23 @@ export function BackgroundSettings() {
       </div>
 
       <div className="grid gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground">Lines &amp; bands opacity</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round(bg.linesOpacity * 100)}%</span>
+        </div>
+        <Slider
+          min={0}
+          max={100}
+          step={5}
+          value={[Math.round(bg.linesOpacity * 100)]}
+          onValueChange={([v]) => {
+            arm()
+            setBackground({ linesOpacity: v / 100 })
+          }}
+        />
+      </div>
+
+      <div className="grid gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">Bands</span>
         <Segmented items={BANDS_OPTIONS} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
       </div>

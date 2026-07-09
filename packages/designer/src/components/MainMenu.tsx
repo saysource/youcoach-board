@@ -35,6 +35,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/cn'
 import { useEditorStore } from '../store/context'
+import { boardExporter } from '../lib/export-image'
 import type { ThemeSetting } from '../lib/use-theme'
 
 interface MainMenuProps {
@@ -80,10 +81,15 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
         <DropdownMenuItem disabled>
           <Save /> Save to…
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <ImageDown /> Export image…
-          <DropdownMenuShortcut>⌘⇧E</DropdownMenuShortcut>
-        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <ImageDown /> Export as…
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem onSelect={() => void boardExporter()?.(1440, 1080)}>Image 4:3 (1440×1080)</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void boardExporter()?.(1920, 1080)}>Image 16:9 (1920×1080)</DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
 
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled>

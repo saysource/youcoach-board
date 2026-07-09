@@ -297,5 +297,5 @@ export const Arrow3DLayer = forwardRef<Arrow3DLayerHandle, Props>(function Arrow
 
   // The canvas is pointer-transparent: all interaction is driven by the
   // InteractiveBoard (which calls `pick` for selection).
-  return <canvas ref={canvasRef} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} />
+  return <canvas ref={canvasRef} data-layer="arrow3d" style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} />
 })

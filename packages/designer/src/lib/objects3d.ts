@@ -75,6 +75,7 @@ import playerKitPrint from '../assets/players3d/kit_print.png?inline'
 // texture_neutral.png, downscaled) — a neutral grey strip the kit editor paints over.
 import playerNeutralTex from '../assets/players3d/player_neutral.png?inline'
 import tokenOverlayUrl from '../assets/token_overlay_gray.png?inline'
+import tokenShadowUrl from '../assets/token_overlay_shadow.png?inline'
 
 // GLB-backed objects: embedded model bytes + toon colour. The models are authored
 // at real metric scale with their base on the ground (y=0), so they render as-is
@@ -501,7 +502,16 @@ function mannequinDecalTexture(): THREE.CanvasTexture {
   const g = canvas.getContext('2d')!
   g.scale(W / vw, H / vh)
   g.fillStyle = '#141414' // fixed dark ink — the drawing does NOT take the body tint
-  if (d) g.fill(new Path2D(d))
+  if (d) {
+    const path = new Path2D(d)
+    g.fill(path)
+    // Beef the strokes up: outline every filled shape so the hairline artwork
+    // stays readable at board scales (the raw line-art nearly vanishes there).
+    g.strokeStyle = '#141414'
+    g.lineWidth = 20 // viewBox units (~1.2% of the artwork width)
+    g.lineJoin = 'round'
+    g.stroke(path)
+  }
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = 4
@@ -509,65 +519,54 @@ function mannequinDecalTexture(): THREE.CanvasTexture {
   return tex
 }
 
-/** The projected front decal, sharing the body geometry so it hugs the curvature.
- *  `pushOut` lifts it a hair off the skin (along the normal) so it doesn't z-fight
- *  the body. Clipping-plane aware (matches the toon body / outline at the y=0 clip). */
-function mannequinDecal(geom: THREE.BufferGeometry, pushOut: number): THREE.Mesh {
+/** Print the decal INSIDE the body's toon material (onBeforeCompile): the ink
+ *  multiplies the tinted diffuse before lighting — no overlay mesh, no alpha
+ *  blending, no coplanar tricks, so no fringe/ghost artifacts of any kind. A
+ *  planar projection (X→u, Y→v) masked by the object-space normal keeps the
+ *  print on the front hemisphere, fading toward the sides like a real print. */
+function applyMannequinDecal(mat: THREE.MeshToonMaterial, geom: THREE.BufferGeometry): void {
   const bb = geom.boundingBox!
   const tex = mannequinDecalTexture()
-  const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      map: { value: tex },
-      bboxMin: { value: bb.min.clone() },
-      bboxSize: { value: bb.getSize(new THREE.Vector3()) },
-      imageAspect: { value: tex.image.width / tex.image.height },
-      frontDir: { value: new THREE.Vector3(0, 0, 1) },
-      pushOut: { value: pushOut },
-    },
-    transparent: true,
-    depthWrite: false,
-    clipping: true,
-    side: THREE.FrontSide,
-    vertexShader: `
-      #include <clipping_planes_pars_vertex>
-      uniform vec3 bboxMin; uniform vec3 bboxSize; uniform float imageAspect;
-      uniform vec3 frontDir; uniform float pushOut;
-      varying vec2 vUv; varying float vMask;
-      void main() {
-        float ny = (position.y - bboxMin.y) / bboxSize.y;       // 0..1, bottom→top
-        float nx = (position.x - bboxMin.x) / bboxSize.x - 0.5; // -0.5..0.5
-        float bandFracX = (bboxSize.y * imageAspect) / bboxSize.x; // aspect-correct band
-        // CanvasTexture flipY=true → image-top samples at v=1, so the model top
-        // (ny=1 = the head) must map to v=1: vUv.y = ny (NOT 1-ny, else upside-down).
-        vUv = vec2(nx / bandFracX + 0.5, ny);
-        vMask = dot(normalize(normal), normalize(frontDir));
-        vec3 p = position + normalize(normal) * pushOut;
-        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
-        gl_Position = projectionMatrix * mvPosition;
-        #include <clipping_planes_vertex>
-      }
-    `,
-    fragmentShader: `
-      #include <clipping_planes_pars_fragment>
-      uniform sampler2D map;
-      varying vec2 vUv; varying float vMask;
-      void main() {
-        #include <clipping_planes_fragment>
-        if (vUv.x < 0.0 || vUv.x > 1.0 || vUv.y < 0.0 || vUv.y > 1.0) discard;
-        float m = smoothstep(0.15, 0.5, vMask); // front-facing only; fades to the sides
-        if (m <= 0.001) discard;
-        vec4 tex = texture2D(map, vUv);
-        float a = tex.a * m;
-        if (a < 0.02) discard;
-        gl_FragColor = vec4(tex.rgb, a);
-      }
-    `,
-  })
-  const mesh = new THREE.Mesh(geom, mat)
-  mesh.name = 'mannequinDecal'
-  mesh.renderOrder = 2
-  mesh.raycast = () => {} // decorative — pick the body, not the print
-  return mesh
+  const size = bb.getSize(new THREE.Vector3())
+  const aspect = (tex.image as HTMLCanvasElement).width / (tex.image as HTMLCanvasElement).height
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.decalMap = { value: tex }
+    shader.uniforms.decalBboxMin = { value: bb.min.clone() }
+    shader.uniforms.decalBboxSize = { value: size.clone() }
+    shader.uniforms.decalAspect = { value: aspect }
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform vec3 decalBboxMin; uniform vec3 decalBboxSize; uniform float decalAspect; varying vec2 vDecalUv; varying float vDecalMask;',
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        {
+          float dny = (position.y - decalBboxMin.y) / decalBboxSize.y;       // 0..1 bottom→top
+          float dnx = (position.x - decalBboxMin.x) / decalBboxSize.x - 0.5; // -0.5..0.5
+          float dBand = (decalBboxSize.y * decalAspect) / decalBboxSize.x;   // aspect-correct band
+          vDecalUv = vec2(dnx / dBand + 0.5, dny);
+          vDecalMask = normalize(normal).z; // object-space front = +Z
+        }`,
+      )
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform sampler2D decalMap; varying vec2 vDecalUv; varying float vDecalMask;',
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        if (vDecalUv.x >= 0.0 && vDecalUv.x <= 1.0 && vDecalUv.y >= 0.0 && vDecalUv.y <= 1.0) {
+          float dm = smoothstep(0.15, 0.5, vDecalMask); // front only; fades to the sides
+          vec4 dtex = texture2D(decalMap, vDecalUv);
+          diffuseColor.rgb *= mix(vec3(1.0), dtex.rgb, dtex.a * dm);
+        }`,
+      )
+  }
+  // One shader program for every mannequin (the injection is identical).
+  mat.customProgramCacheKey = () => 'mannequin-decal'
 }
 
 /* ---- 3D-player kit textures --------------------------------------------------
@@ -744,9 +743,11 @@ export interface TokenFaceStyle {
   color2: string
   text: string
   textColor: string
+  /** The board-wide token number size multiplier (the "Text size" global). */
+  textScale: number
 }
 export function tokenFaceKey(s: TokenFaceStyle): string {
-  return [s.tokenFill, s.color1, s.color2, s.text, s.textColor].join('|')
+  return [s.tokenFill, s.color1, s.color2, s.text, s.textColor, String(s.textScale)].join('|')
 }
 
 // The shading overlay stamped on every token face (a pre-rendered disc with
@@ -771,9 +772,34 @@ function tokenOverlay(): HTMLImageElement | null {
   return tokenOverlayReady ? tokenOverlayImg : null
 }
 function faceStyleFromKey(key: string): TokenFaceStyle {
-  const [tokenFill, color1, color2, text, textColor] = key.split('|')
-  return { tokenFill: tokenFill as TokenFill, color1, color2, text, textColor }
+  const [tokenFill, color1, color2, text, textColor, textScale] = key.split('|')
+  return { tokenFill: tokenFill as TokenFill, color1, color2, text, textColor, textScale: Number(textScale) || 1 }
 }
+
+// Fake contact shadow under each puck: a small flat quad textured with the
+// pre-rendered crescent (token_overlay_shadow.png). The artwork is authored
+// against the face texture with their TOP-RIGHT corners aligned, so the
+// crescent falls to the bottom-left; and since the quad is a child of the puck
+// (which yaws to keep its number upright), the shadow reads bottom-left ON
+// SCREEN from any camera — matching the baked top-light face shading.
+const TOKEN_SHADOW_W = 556 / 504 // shadow artwork size in disc units
+const TOKEN_SHADOW_H = 563 / 503 // (the face texture spans the unit footprint)
+let tokenShadowTex: THREE.Texture | null = null
+function tokenShadowTexture(): THREE.Texture {
+  if (!tokenShadowTex) {
+    const img = new Image()
+    const tex = new THREE.Texture(img)
+    tex.colorSpace = THREE.SRGBColorSpace
+    img.onload = () => {
+      tex.needsUpdate = true
+      notifyAssetReady()
+    }
+    img.src = tokenShadowUrl
+    tokenShadowTex = tex
+  }
+  return tokenShadowTex
+}
+let tokenShadowGeom: THREE.PlaneGeometry | null = null
 
 const tokenFaceTextures = new Map<string, { tex: THREE.CanvasTexture; canvas: HTMLCanvasElement }>()
 function tokenFaceTexture(s: TokenFaceStyle): THREE.CanvasTexture {
@@ -812,7 +838,7 @@ function drawTokenFace(canvas: HTMLCanvasElement, s: TokenFaceStyle): void {
   if (s.text) {
     const t = TOKEN_GEOMETRY.token.text
     g.fillStyle = s.textColor
-    g.font = `${TOKEN_FONT_WEIGHT} ${t.size * k}px ${TOKEN_FONT}`
+    g.font = `${TOKEN_FONT_WEIGHT} ${t.size * k * s.textScale}px ${TOKEN_FONT}`
     g.textAlign = 'center'
     g.textBaseline = 'middle'
     g.fillText(s.text, t.x * k, t.y * k)
@@ -831,6 +857,20 @@ let tokenDiscGeom: THREE.BufferGeometry | null = null
 function tokenDiscGeometry(): THREE.BufferGeometry {
   if (!tokenDiscGeom) {
     const geom = parseGlbGeometry(base64ToArrayBuffer(TOKEN_DISC_GLB_BASE64))
+    // Half the authored height (the GLB is unit-diameter × 0.2 tall): a slimmer
+    // puck; base stays at y=0, the dome just flattens proportionally. Normals
+    // must follow the inverse-transpose of the squash (y × 2, renormalized) or
+    // the flattened dome would shade as if it were still tall.
+    geom.scale(1, 0.5, 1)
+    const nrm = geom.getAttribute('normal')
+    for (let i = 0; i < nrm.count; i++) {
+      const nx = nrm.getX(i)
+      const ny = nrm.getY(i) * 2
+      const nz = nrm.getZ(i)
+      const len = Math.hypot(nx, ny, nz) || 1
+      nrm.setXYZ(i, nx / len, ny / len, nz / len)
+    }
+    nrm.needsUpdate = true
     // Planar UVs from above (unit disc: x/z in [-0.5, 0.5]); the rim inherits the
     // face's edge texels, so stripes visually continue down the side.
     const pos = geom.getAttribute('position')
@@ -862,6 +902,18 @@ export function buildTokenDisc(style: TokenFaceStyle): THREE.Mesh {
   mesh.userData.outlineOffset = outlineOffset
   mesh.userData.originAtGround = true
   mesh.userData.faceKey = tokenFaceKey(style)
+  // Contact shadow: textured quad just above the grass, top-right-aligned with
+  // the disc footprint (see TOKEN_SHADOW_* above). Per-mesh material so each
+  // token's opacity can dim its own shadow; geometry + texture are shared.
+  tokenShadowGeom ??= new THREE.PlaneGeometry(TOKEN_SHADOW_W, TOKEN_SHADOW_H)
+  const shadow = new THREE.Mesh(tokenShadowGeom, new THREE.MeshBasicMaterial({ map: tokenShadowTexture(), transparent: true, depthWrite: false }))
+  shadow.name = 'token-contact-shadow'
+  shadow.rotation.x = -Math.PI / 2
+  shadow.position.set(0.5 - TOKEN_SHADOW_W / 2, 0.004, -0.5 + TOKEN_SHADOW_H / 2)
+  shadow.renderOrder = -1
+  shadow.raycast = () => {} // pure visual effect: no picking…
+  shadow.layers.set(1) // …and no selection outline (the OutlinePass camera only sees layer 0)
+  mesh.add(shadow)
   // Raycastable: the disc IS the click target (the SVG badge is hidden and inert
   // while tokens3d is on) — Object3DLayer.pick resolves it to the element id.
   return mesh
@@ -915,12 +967,14 @@ export function buildObject3D(objectId: string): THREE.Object3D {
     const s = geom.boundingBox!.getSize(new THREE.Vector3())
     const median = [s.x, s.y, s.z].sort((a, b) => a - b)[1]
     const outlineOffset = OUTLINE_FRACTION * (median || 1)
-    const mesh = new THREE.Mesh(geom, extremeToon(glb.color))
+    const bodyMat = extremeToon(glb.color)
+    // The inflatable mannequin carries a printed "fake defender" on its front —
+    // baked into the body material itself (see applyMannequinDecal).
+    if (objectId === 'mannequin') applyMannequinDecal(bodyMat, geom)
+    const mesh = new THREE.Mesh(geom, bodyMat)
     mesh.castShadow = true
     mesh.add(toonOutline(geom, outlineOffset)) // silhouette ink (shares the mesh geometry)
     mesh.add(creaseEdges(geom)) // internal strokes along the rim/creases
-    // The inflatable mannequin also carries a printed "fake defender" on its front.
-    if (objectId === 'mannequin') mesh.add(mannequinDecal(geom, outlineOffset * 0.5))
     mesh.userData.outlineOffset = outlineOffset
     return mesh
   }

@@ -42,6 +42,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { cn } from '../../lib/cn'
 import { CHECKER_IMAGE } from '../../lib/checker'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
+import { TOKEN_DEFAULT_SIZE_M } from '../../lib/field-anchor'
 import { useEditorStore } from '../../store/context'
 import type { Breakpoint } from '../../lib/use-breakpoint'
 import { ClosePathIcon, LineStylePlainIcon, LineStyleCurvedIcon, LineStyleZigzagIcon, LineStyleDoubleIcon, OpenPathIcon, PolylineIcon, TokenDiscIcon, JerseyIcon } from '../icons'
@@ -300,16 +301,16 @@ function Arrow3DControls({ side }: { side: 'right' | 'top' }) {
               <WaveSlider min={10} max={100} value={Math.round(first.splineLength * 100)} onChange={(v) => setField('splineLength', v / 100)} />
             </Field>
             <Field label="Thickness">
-              <WaveSlider min={1} max={40} value={Math.round(first.thickness * 100)} onChange={(v) => setField('thickness', v / 100)} />
+              <WaveSlider min={1} max={200} value={Math.round(first.thickness * 100)} onChange={(v) => setField('thickness', v / 100)} />
             </Field>
             <Field label="Stick width">
               <WaveSlider min={5} max={1000} value={Math.round(first.stickWidth * 100)} onChange={(v) => setField('stickWidth', v / 100)} />
             </Field>
             <Field label="Tip width">
-              <WaveSlider min={5} max={80} value={Math.round(first.tipWidth * 100)} onChange={(v) => setField('tipWidth', v / 100)} />
+              <WaveSlider min={5} max={200} value={Math.round(first.tipWidth * 100)} onChange={(v) => setField('tipWidth', v / 100)} />
             </Field>
             <Field label="Tip length">
-              <WaveSlider min={10} max={150} value={Math.round(first.tipLength * 100)} onChange={(v) => setField('tipLength', v / 100)} />
+              <WaveSlider min={10} max={500} value={Math.round(first.tipLength * 100)} onChange={(v) => setField('tipLength', v / 100)} />
             </Field>
           </div>
         </PopoverContent>
@@ -672,8 +673,8 @@ function TokenSettingsWidget() {
       <Field label={`Label size (${Math.round((p.values.tokenLabelScale ?? 1) * 100)}%)`}>
         <WaveSlider min={50} max={200} value={Math.round((p.values.tokenLabelScale ?? 1) * 100)} onChange={(v) => p.setTokenLabelScale(v / 100)} />
       </Field>
-      <Field label={`Token size (${Math.round(p.values.tokenSize ?? 5)} m)`}>
-        <WaveSlider min={2} max={10} value={Math.round(p.values.tokenSize ?? 5)} onChange={p.setTokenSize} />
+      <Field label={`Token size (${Math.round(p.values.tokenSize ?? TOKEN_DEFAULT_SIZE_M)} m)`}>
+        <WaveSlider min={2} max={10} value={Math.round(p.values.tokenSize ?? TOKEN_DEFAULT_SIZE_M)} onChange={p.setTokenSize} />
       </Field>
       {/* Render disc tokens as real 3D pucks (background.tokens3d) — a board-wide
           style, so it lives here with the other global token settings. */}

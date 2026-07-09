@@ -111,11 +111,13 @@ export interface BoardCtm {
 export function Text3DHtml({ elements, cam, ctm }: { elements: TextElement[]; cam: THREE.Camera; ctm: BoardCtm | null }) {
   if (!ctm) return null
   const boardToPx = (b: [number, number]) => ({ x: ctm.a * b[0] + ctm.c * b[1] + ctm.ex, y: ctm.b * b[0] + ctm.d * b[1] + ctm.ey })
-  // z-index 1 keeps the perspective-transformed glyphs ABOVE the WebGL layers (the
-  // pitch, 3D arrows/objects are z-index auto) — a 3D-transformed div is composited
-  // and would otherwise be painted behind them regardless of DOM order.
+  // z-index 0 (an explicit stacking level, NOT auto — a plain 3D-transformed div
+  // would composite behind the WebGL canvases regardless of DOM order) puts the
+  // glyphs ABOVE the flat board SVG but BELOW the WebGL layers, which are later
+  // in the DOM: the text is written on the grass, so standing 3D things (tokens,
+  // players, arrows, goals) paint over it.
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 1 }}>
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0 }}>
       {elements.map((el) => (
         <Text3DHtmlItem key={el.id} el={el} cam={cam} boardToPx={boardToPx} />
       ))}

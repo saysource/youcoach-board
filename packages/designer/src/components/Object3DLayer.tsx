@@ -7,7 +7,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement, type Arrow3DElement } from '@youcoach-board/core'
 import { createArrowGeometry, makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
-import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, buildGoalsOverlay } from '../lib/field3d'
+import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, makeCenterLight, buildGoalsOverlay } from '../lib/field3d'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildObject3D, buildTokenDisc, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots, setTokenDiscFace, type TokenFaceStyle } from '../lib/objects3d'
 
@@ -67,6 +67,7 @@ interface Ctx {
   scene: THREE.Scene
   fixedCam: THREE.PerspectiveCamera
   calibCam: THREE.PerspectiveCamera
+  outlineCam: THREE.PerspectiveCamera
   meshes: Map<string, THREE.Object3D>
   tokenMeshes: Map<string, THREE.Mesh>
   arrowMeshes: Map<string, THREE.Mesh>
@@ -159,12 +160,14 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     const scene = new THREE.Scene()
     scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x4a7a3a, 0.7))
     // Four shadowless stadium pylons (illumination only — matches the field
-    // scene, and puts glancing highlights on the glossy token pucks).
+    // scene, and puts glancing highlights on the token pucks).
     for (const f of FLOODLIGHTS) {
       const spot = makeFloodlight(f)
       scene.add(spot)
       scene.add(spot.target)
     }
+    // Soft centre glow (matches the field scene's lighting).
+    scene.add(makeCenterLight())
     const sun = new THREE.DirectionalLight(0xffffff, 2.6)
     sun.position.copy(SUN_POSITION)
     sun.target.position.copy(SUN_TARGET)
@@ -188,6 +191,10 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
 
     const fixedCam = makeArrow3DCamera()
     const calibCam = new THREE.PerspectiveCamera()
+    // Layer 1 carries visual-only helpers (the tokens' contact shadows): the
+    // render cameras see it, the OutlinePass mask camera (layer 0 only) doesn't.
+    fixedCam.layers.enable(1)
+    calibCam.layers.enable(1)
 
     // Post-processing: a proper screen-space selection outline (OutlinePass) —
     // uniform pixel width regardless of geometry, unlike an inverted-hull shell.
@@ -207,7 +214,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     composer.addPass(outlinePass)
     composer.addPass(new OutputPass())
 
-    ctxRef.current = { renderer, scene, fixedCam, calibCam, meshes: new Map(), tokenMeshes: new Map(), arrowMeshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '' }
+    ctxRef.current = { renderer, scene, fixedCam, calibCam, outlineCam: new THREE.PerspectiveCamera(), meshes: new Map(), tokenMeshes: new Map(), arrowMeshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '' }
     return ctxRef.current
   }
 
@@ -367,6 +374,10 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         mat.needsUpdate = true
       }
       mat.opacity = op
+      // The contact-shadow quad fades with its token (its material is per-mesh;
+      // the crescent texture's own alpha is multiplied by this opacity).
+      const shadow = mesh.getObjectByName('token-contact-shadow') as THREE.Mesh | undefined
+      if (shadow) (shadow.material as THREE.MeshBasicMaterial).opacity = op
       mesh.visible = op > 0
       mesh.castShadow = op > 0
     }
@@ -457,7 +468,11 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     }
     // Render through the composer so OutlinePass highlights the selection.
     ctx.renderPass.camera = activeCam
-    ctx.outlinePass.renderCamera = activeCam
+    // The outline mask renders through a layer-0-only copy of the camera, so a
+    // selected token's contact-shadow quad (layer 1) never joins the silhouette.
+    ctx.outlineCam.copy(activeCam)
+    ctx.outlineCam.layers.set(0)
+    ctx.outlinePass.renderCamera = ctx.outlineCam
     ctx.outlinePass.selectedObjects = selectedIds.map((id) => ctx.meshes.get(id) ?? ctx.tokenMeshes.get(id)).filter((o): o is THREE.Object3D => !!o)
     ctx.composer.render()
   }

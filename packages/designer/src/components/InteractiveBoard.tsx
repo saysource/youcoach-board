@@ -86,6 +86,7 @@ import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-referen
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
 import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
+import { exportBoardImage, registerBoardExporter } from '../lib/export-image'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -723,7 +724,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           z: ground[1],
           sizeM,
           opacity: live.transform.opacity,
-          style: { tokenFill: live.tokenFill, color1: live.color1, color2: live.color2, text: live.text, textColor: live.textColor },
+          style: { tokenFill: live.tokenFill, color1: live.color1, color2: live.color2, text: live.text, textColor: live.textColor, textScale: tokenTextScale },
         }]
       })
 
@@ -2310,6 +2311,99 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     ? { x: groupUnion.x - groupPad, y: groupUnion.y - groupPad, width: groupUnion.width + 2 * groupPad, height: groupUnion.height + 2 * groupPad }
     : null
 
+  // Elements are inert (no pointer events) in the calibration/creation modes.
+  const elementsInert = creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || eraserTool || lassoTool
+
+  // "Export as…" (main menu): composite the live layer stack into a PNG. The
+  // latest closure lives in a ref (it captures doc/camera/ctm) — refreshed in an
+  // effect (not during render) — and is registered once on mount.
+  const exportImageRef = useRef<(w: number, h: number) => Promise<void>>(async () => {})
+  useEffect(() => {
+    exportImageRef.current = async (w, h) => {
+      if (!containerRef.current || !svgRef.current) return
+      const prevSel = selectedIds
+      setSelection([]) // no selection chrome in the export
+      // Wait for the deselected frame to paint. rAF can stall entirely in
+      // throttled/headless contexts, so race it against a short timeout.
+      await new Promise<void>((r) => {
+        let settled = false
+        const fin = () => {
+          if (!settled) {
+            settled = true
+            r()
+          }
+        }
+        requestAnimationFrame(() => requestAnimationFrame(fin))
+        setTimeout(fin, 150)
+      })
+      try {
+        const ctm = boardCtm
+        await exportBoardImage(
+          {
+            container: containerRef.current,
+            svg: svgRef.current,
+            background: doc.background,
+            texts: fieldCamCfg && ctm ? doc.elements.map(liveElement).filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground) : [],
+            cam: arrow3dCam,
+            boardToPx: (b) => (ctm ? { x: ctm.a * b[0] + ctm.c * b[1] + ctm.ex, y: ctm.b * b[0] + ctm.d * b[1] + ctm.ey } : { x: 0, y: 0 }),
+          },
+          w,
+          h,
+          `${doc.title || 'board'}-${w}x${h}.png`,
+        )
+      } finally {
+        setSelection(prevSel)
+      }
+    }
+  })
+  useEffect(() => {
+    registerBoardExporter((w, h) => exportImageRef.current(w, h))
+    // Dev-only automation hook (CDP tests drive exports directly through it).
+    if (import.meta.env.DEV) (window as unknown as { __ycbExport?: unknown }).__ycbExport = (w: number, h: number) => exportImageRef.current(w, h)
+    return () => {
+      registerBoardExporter(null)
+      if (import.meta.env.DEV) delete (window as unknown as { __ycbExport?: unknown }).__ycbExport
+    }
+  }, [])
+
+  // A 2D-badge token on a 3D field is lifted OUT of the main SVG into its own
+  // layer painted ABOVE the 3D-text overlay (a badge "stands" on the grass, so
+  // pitch-written text must go under it). 3D disc tokens are the WebGL layer's.
+  const isElevatedToken = (el: BoardElement): boolean => !!fieldCamCfg && el.type === 'token' && !(tokens3d && el.shape === 'token')
+
+  // One board element as its interactive SVG node — shared by the main canvas
+  // and the elevated 2D-token layer, so both paint and behave identically.
+  function renderBoardElement(el: BoardElement) {
+    const live = liveElement(el)
+    const erasing = erase?.ids.has(el.id)
+    // Hide the token field being edited (the HTML input shows the live
+    // value) ONLY in the rendered element — the selection chrome still
+    // sees the real `showLabel`, so the frame doesn't shrink while editing.
+    const beingEdited = !!editing && editing.id === el.id
+    // A pitch-pinned 3D text draws its glyphs through the HTML overlay; here
+    // its hit area is the PROJECTED footprint quad (so clicking the leaning
+    // text selects it), EXCEPT while editing it, when the flat box + live text
+    // back the inline textarea.
+    const t3dHit = isText3dHit(live) && !beingEdited
+    const render =
+      beingEdited && live.type === 'token'
+        ? editing!.field === 'label'
+          ? { ...live, showLabel: false }
+          : { ...live, text: '' }
+        : live
+    return (
+      <g key={el.id} style={{ cursor: 'move', opacity: erasing ? 0.25 : undefined }} onPointerDown={(e) => onElementPointerDown(e, el)}>
+        {t3dHit ? (
+          <polygon points={text3dHitPoints(live)} fill="transparent" />
+        ) : render.type === 'figure' ? (
+          <FigureView element={render} />
+        ) : (
+          <ElementView element={render} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokens3d && render.type === 'token' && render.shape === 'token'} />
+        )}
+      </g>
+    )
+  }
+
   // The eraser turns the pointer into a filled circle matching the erase radius.
   const eraserD = ERASER_RADIUS_PX * 2 + 2
   const eraserCursor = `url("data:image/svg+xml,${encodeURIComponent(
@@ -2329,7 +2423,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     >
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
-      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} surround={doc.background.surroundColor} renderTick={editing3d} />}
+      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} surround={doc.background.surroundColor} linesOpacity={doc.background.linesOpacity} renderTick={editing3d} />}
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
@@ -2562,37 +2656,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           </>
         }
       >
-        <g style={{ pointerEvents: creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || eraserTool || lassoTool ? 'none' : 'auto' }}>
-          {doc.elements.map((el) => {
-            const live = liveElement(el)
-            const erasing = erase?.ids.has(el.id)
-            // Hide the token field being edited (the HTML input shows the live
-            // value) ONLY in the rendered element — the selection chrome still
-            // sees the real `showLabel`, so the frame doesn't shrink while editing.
-            const beingEdited = !!editing && editing.id === el.id
-            // A pitch-pinned 3D text draws its glyphs through the HTML overlay; here
-            // its hit area is the PROJECTED footprint quad (so clicking the leaning
-            // text selects it), EXCEPT while editing it, when the flat box + live text
-            // back the inline textarea.
-            const t3dHit = isText3dHit(live) && !beingEdited
-            const render =
-              beingEdited && live.type === 'token'
-                ? editing!.field === 'label'
-                  ? { ...live, showLabel: false }
-                  : { ...live, text: '' }
-                : live
-            return (
-              <g key={el.id} style={{ cursor: 'move', opacity: erasing ? 0.25 : undefined }} onPointerDown={(e) => onElementPointerDown(e, el)}>
-                {t3dHit ? (
-                  <polygon points={text3dHitPoints(live)} fill="transparent" />
-                ) : render.type === 'figure' ? (
-                  <FigureView element={render} />
-                ) : (
-                  <ElementView element={render} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokens3d && render.type === 'token' && render.shape === 'token'} />
-                )}
-              </g>
-            )
-          })}
+        <g style={{ pointerEvents: elementsInert ? 'none' : 'auto' }}>
+          {doc.elements.map((el) => (isElevatedToken(el) ? null : renderBoardElement(el)))}
         </g>
         {fieldCamCfg && (
           <TapeDecorations
@@ -2612,6 +2677,31 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           />
         )}
       </BoardCanvas>
+      {/* 3D text: HTML overlay carrying a perspective matrix3d (pointer-transparent;
+          the SVG hit-box drives selection/move). Skips the text being inline-edited.
+          Rendered BELOW the WebGL layers (DOM order + equal stacking level): the
+          text is written on the grass, so standing 3D things (tokens, players,
+          arrows) paint over it — while it still sits above the flat board SVG. */}
+      {fieldCamCfg && (
+        <Text3DHtml
+          elements={doc.elements
+            .map(liveElement)
+            .filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground && !(editing && editing.id === e.id))}
+          cam={arrow3dCam}
+          ctm={boardCtm}
+        />
+      )}
+      {/* Elevated 2D tokens: badge tokens on a 3D field, in their own SVG layer
+          ABOVE the 3D-text overlay (badges stand on the grass, pitch-written text
+          goes under them) but BELOW the WebGL layers. Same interactive markup as
+          the main canvas (renderBoardElement), so drag/select/edit work as usual. */}
+      {fieldCamCfg && doc.elements.some(isElevatedToken) && (
+        <svg data-layer="tokens-2d" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
+          <g style={{ pointerEvents: elementsInert ? 'none' : 'auto' }}>
+            {doc.elements.map((el) => (isElevatedToken(el) ? renderBoardElement(el) : null))}
+          </g>
+        </svg>
+      )}
       {/* 3D arrows: in real-camera mode they render inside the Object3DLayer scene
           (one depth buffer with objects/tokens/goals, so occlusion is correct);
           this layer only draws them in the legacy homography/fixed modes. */}
@@ -2623,7 +2713,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           just below each disc's camera-facing edge. Fixed on-screen size like the
           2D token captions; pointer-transparent (the SVG hit-box owns interaction). */}
       {token3dList.length > 0 && (
-        <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
+        <svg data-layer="captions" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           {token3dList.map((t) => {
             const el = doc.elements.find((e) => e.id === t.id)
             if (!el || el.type !== 'token' || !el.showLabel) return null
@@ -2644,17 +2734,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             )
           })}
         </svg>
-      )}
-      {/* 3D text: HTML overlay carrying a perspective matrix3d (pointer-transparent;
-          the SVG hit-box drives selection/move). Skips the text being inline-edited. */}
-      {fieldCamCfg && (
-        <Text3DHtml
-          elements={doc.elements
-            .map(liveElement)
-            .filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground && !(editing && editing.id === e.id))}
-          cam={arrow3dCam}
-          ctm={boardCtm}
-        />
       )}
       {/* Field-perspective calibration overlays (dedicated modes). */}
       {homographyMode && <FieldHomographyLayer viewBox={viewBox} />}

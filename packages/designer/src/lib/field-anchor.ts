@@ -196,10 +196,10 @@ export function tokenBoardH(cam: THREE.Camera, m: number, g: [number, number]): 
   return m * groundPPM(cam, g[0], g[1])
 }
 
-/** Default global token size: 5 m DIAMETER (2.5 m radius). A token box is square
+/** Default global token size: 4 m DIAMETER (2 m radius). A token box is square
  *  (width = height = diameter), and `sizeM` is that metric diameter. The properties
  *  slider maps 2 m … 10 m; every token shares one size. */
-export const TOKEN_DEFAULT_SIZE_M = 5
+export const TOKEN_DEFAULT_SIZE_M = 4
 
 /** Pin a freshly-stamped token to the pitch at the global size `sizeM` (metres):
  *  capture its ground anchor + set `sizeM` and the on-board `scale` so it renders

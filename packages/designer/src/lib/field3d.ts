@@ -87,7 +87,7 @@ const GOAL_D = 2.0
 const POST_R = 0.06
 const LINE_W = 0.45 // base pitch line width (metres); scaled down when zoomed in
 const LINE_W_MIN = 0.18 // thinnest line (close zoom) — ~real pitch line width
-const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
+export const BAND_OPACITY = 0.16 // semi-transparent white "shading" bands
 // Stack heights (metres) so the bands / lines never z-fight.
 const BAND_Y = 0.05
 const LINE_Y = 0.15
@@ -97,23 +97,37 @@ const GOAL_Y = 0.18 // lift the goals just above the lines so posts don't collid
 export const SUN_POSITION = new THREE.Vector3(120, 165, 70)
 export const SUN_TARGET = new THREE.Vector3(HALF_L, 0, HALF_W)
 
-/** The four stadium pylons, ~10 m outside each corner at 65 m, aimed a bit
- *  inward. Pure ILLUMINATION (no shadows — the sun casts those): their physical
- *  falloff grades the pitch/surround brightness and puts glancing highlights on
- *  glossy surfaces (token pucks, the reflective surround plane). */
+/** The four stadium pylons: HIGH (85 m), ~12 m outside each corner, each aimed
+ *  a little INSIDE its corner (~13 m in along the length, ~8 m along the width)
+ *  and only slightly inclined. With the 30° half-angle cone each spot paints a
+ *  ~48 m circle of light: it reaches the pitch centre and spills ~35 m outside
+ *  the perimeter — four overlapping circles covering the whole field. Pure
+ *  ILLUMINATION (no shadows — the sun casts those). */
 export const FLOODLIGHTS: { pos: [number, number, number]; target: [number, number, number] }[] = (
   [[0, 0], [105, 0], [0, 68], [105, 68]] as const
 ).map(([cx, cz]) => ({
-  pos: [cx + (cx < HALF_L ? -10 : 10), 65, cz + (cz < HALF_W ? -10 : 10)],
-  target: [cx + (HALF_L - cx) * 0.45, 0, cz + (HALF_W - cz) * 0.45],
+  pos: [cx + (cx < HALF_L ? -12 : 12), 85, cz + (cz < HALF_W ? -12 : 12)],
+  target: [cx + (cx < HALF_L ? 13 : -13), 0, cz + (cz < HALF_W ? 8 : -8)],
 }))
 
-/** A shadowless stadium floodlight (physical falloff, decay 2). */
+/** A shadowless stadium floodlight (physical falloff). Proper SPOT behavior: a
+ *  tight cone with a hard edge, so each pylon paints a distinct circle of light
+ *  on the surface (esp. on a dark surround). */
 export function makeFloodlight(f: { pos: [number, number, number]; target: [number, number, number] }): THREE.SpotLight {
-  const spot = new THREE.SpotLight(0xffffff, 5000, 400, Math.PI / 4, 0.4, 2)
+  const spot = new THREE.SpotLight(0xffffff, 129500, 400, Math.PI / 6, 0.08, 2.7)
   spot.position.set(...f.pos)
   spot.target.position.set(...f.target)
   return spot
+}
+
+/** The CENTRE glow: a shadowless point light hung above the pitch centre. A
+ *  point (not a spot) gives the pure radial falloff of the reference look —
+ *  brightest at midfield, fading smoothly in every direction with no cone
+ *  edge. The height sets the spread: lower = tighter hotspot. */
+export function makeCenterLight(): THREE.PointLight {
+  const light = new THREE.PointLight(0xffffff, 12000, 0, 2)
+  light.position.set(HALF_L, 45, HALF_W)
+  return light
 }
 
 /** Line width for a given camera→target distance: roughly constant on-screen
@@ -309,12 +323,11 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
   // NOTE it is opaque, so when visible it covers the 2D background image/color
   // everywhere the plane projects (including inside the pitch).
   const surroundOn = !!opts.surround && opts.surround !== 'transparent'
-  // Lit (not Basic) so the corner floodlights' falloff grades the plane away
-  // from the pitch; a mild Phong specular gives the surface a slight sheen
-  // under the pylons' glancing light.
+  // Lit standard material: the floodlights' falloff grades the plane away from
+  // the pitch, and its low roughness gives the surface a slight sheen.
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(4000, 4000),
-    new THREE.MeshPhongMaterial({ color: surroundOn ? opts.surround : '#ffffff', specular: 0x2f2f2f, shininess: 18 }),
+    new THREE.MeshStandardMaterial({ color: surroundOn ? opts.surround : '#ffffff', roughness: 0.55, metalness: 0 }),
   )
   ground.name = 'field-ground'
   ground.rotation.x = -Math.PI / 2

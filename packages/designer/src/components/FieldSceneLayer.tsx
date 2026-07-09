@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldBands, type FieldType, type TrainingLayout } from '@youcoach-board/core'
-import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, FIELD_DIMS, SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight } from '../lib/field3d'
+import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, BAND_OPACITY, FIELD_DIMS, SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, makeCenterLight } from '../lib/field3d'
 import { applyViewCamera } from '../lib/field-camera'
 
 // A WebGL layer rendering the real 3D pitch, viewed through the board's field
@@ -29,6 +29,8 @@ interface Props {
   /** Color of the infinite 3D ground plane under the field ('transparent' = off).
    *  When on it covers the 2D background (image/color) — it's a real horizon. */
   surround?: string
+  /** Opacity (0–1) of the markings + shading bands (background.linesOpacity). */
+  linesOpacity?: number
   /** Bump/flip to force an on-demand redraw when neither camera nor viewport
    *  changed but the layout might have (e.g. entering/leaving Edit-Background) —
    *  avoids a stale pitch until the next camera move. */
@@ -50,7 +52,7 @@ interface Ctx {
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', surround = 'transparent', renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', surround = 'transparent', linesOpacity = 1, renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -67,13 +69,15 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
 
     const scene = new THREE.Scene()
     scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x4a7a3a, 0.75))
-    // Four shadowless stadium pylons: their falloff grades the pitch/surround
-    // and adds glancing highlights; the sun below remains the shadow caster.
+    // Four shadowless stadium pylons: their circles of light grade the pitch/
+    // surround; the sun below remains the shadow caster.
     for (const f of FLOODLIGHTS) {
       const spot = makeFloodlight(f)
       scene.add(spot)
       scene.add(spot.target)
     }
+    // Soft centre glow: brightest at midfield, fading radially (point light).
+    scene.add(makeCenterLight())
     const sun = new THREE.DirectionalLight(0xffffff, 2.4)
     sun.position.copy(SUN_POSITION)
     sun.target.position.copy(SUN_TARGET)
@@ -113,9 +117,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport, showGoals, image, color, bands, fieldType, layout, surround })
+  const propsRef = useRef({ camera, viewport, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity })
   useEffect(() => {
-    propsRef.current = { camera, viewport, showGoals, image, color, bands, fieldType, layout, surround }
+    propsRef.current = { camera, viewport, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity }
   })
 
   function render() {
@@ -147,12 +151,31 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       ctx.lineW = 0
     }
     if (ctx.goals) ctx.goals.visible = propsRef.current.showGoals
+    // Fade the markings + bands (background.linesOpacity). The lines material is
+    // opaque by default; it only goes transparent when actually faded. The line
+    // geometry OVERLAPS itself (ribbon joins, line crossings), so plain alpha
+    // would double-blend there (dark blotches): when faded, keep depthWrite on
+    // and reject EQUAL depths — every pixel blends exactly once, as if the whole
+    // group had one opacity — and draw AFTER the bands so lines shade over them.
+    const lop = propsRef.current.linesOpacity
+    if (ctx.lines) {
+      const m = ctx.lines.material as THREE.MeshBasicMaterial
+      const faded = lop < 1
+      if (m.transparent !== faded) {
+        m.transparent = faded
+        m.depthFunc = faded ? THREE.LessDepth : THREE.LessEqualDepth
+        m.needsUpdate = true
+      }
+      ctx.lines.renderOrder = faded ? 2 : 0
+      m.opacity = lop
+    }
+    if (ctx.bands) (ctx.bands.material as THREE.MeshBasicMaterial).opacity = BAND_OPACITY * lop
     // Toggle/recolor the infinite ground plane live.
     if (ctx.ground) {
       const sc = propsRef.current.surround
       const on = !!sc && sc !== 'transparent'
       ctx.ground.visible = on
-      if (on) (ctx.ground.material as THREE.MeshPhongMaterial).color.set(sc)
+      if (on) (ctx.ground.material as THREE.MeshStandardMaterial).color.set(sc)
     }
     // Rebuild the shading bands when the orientation changes (cheap flat geometry).
     if (ctx.bands && propsRef.current.bands !== ctx.bandsOrient) {
@@ -190,7 +213,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick, showGoals, image, color, bands, fieldType, layout, surround])
+  }, [camera, viewport, renderTick, showGoals, image, color, bands, fieldType, layout, surround, linesOpacity])
 
   useEffect(() => {
     const container = containerRef.current
@@ -209,7 +232,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
         {image && <img src={image} alt="" className="h-full w-full object-cover" />}
       </div>
       {/* zIndex -1 keeps the pitch below the 2D SVG (static) but above the bg. */}
-      <canvas ref={canvasRef} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', zIndex: -1 }} />
+      <canvas ref={canvasRef} data-layer="field3d" style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', zIndex: -1 }} />
     </>
   )
 }

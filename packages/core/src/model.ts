@@ -79,6 +79,9 @@ export interface BoardBackground {
    *  get a real horizon). CSS color; 'transparent' = off (the flat 2D background
    *  image/color shows instead, as before). */
   surroundColor: string
+  /** Opacity (0–1) of the field markings AND the mown shading bands on the 3D
+   *  pitch — lets the white lines fade into the surface (e.g. on a dark board). */
+  linesOpacity: number
   /** Orientation of the mown shading bands (or none). */
   bands: FieldBands
   /** YouCoach logo placement over the background, or null for none. */
@@ -120,6 +123,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   showGoals: true,
   tokens3d: false,
   surroundColor: 'transparent',
+  linesOpacity: 1,
   bands: 'vertical',
   logo: 'center',
 }
@@ -182,6 +186,7 @@ function parseBackground(raw: unknown): BoardBackground {
     showGoals: o.showGoals !== false,
     tokens3d: o.tokens3d === true,
     surroundColor: typeof o.surroundColor === 'string' ? o.surroundColor : DEFAULT_BACKGROUND.surroundColor,
+    linesOpacity: Math.min(1, Math.max(0, num(o.linesOpacity, DEFAULT_BACKGROUND.linesOpacity))),
     bands: o.bands === 'horizontal' || o.bands === 'none' ? o.bands : DEFAULT_BACKGROUND.bands,
     // Absent → default (center); explicit null → no logo; valid → that position.
     logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : o.logo === null ? null : DEFAULT_BACKGROUND.logo,

@@ -154,7 +154,9 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       if (lower === 'f') { e.preventDefault(); if (deps.bgEditing) deps.finishBackground(); else deps.editBackground(); return }
       if (lower === 'g' && deps.toggleGrid) { e.preventDefault(); deps.toggleGrid(); return }
       if (lower === 'b') { deps.addBall(); return }
-      // Space toggles 3D scene navigation (orbit) mode.
+      // Space: in background editing it FINISHES the editor (like F); otherwise
+      // it toggles 3D scene navigation (orbit) mode.
+      if (e.code === 'Space' && deps.bgEditing) { e.preventDefault(); deps.finishBackground(); return }
       if (e.code === 'Space' && deps.onToggleNav) { e.preventDefault(); deps.onToggleNav(); return }
       if (lower === 'p') { deps.openPlayers(); return }
       if (lower === 'm') { deps.openMaterials(); return }
