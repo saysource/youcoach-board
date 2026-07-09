@@ -281,7 +281,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       playerColors: {},
       kitHistory: [],
       keepToolActive: false,
-      snapToObjects: false,
+      snapToObjects: true,
       adminMode: false,
       exportGuide: 'off',
       tokenSizeM: TOKEN_DEFAULT_SIZE_M,
