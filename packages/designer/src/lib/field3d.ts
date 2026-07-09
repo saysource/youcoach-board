@@ -253,23 +253,23 @@ export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', h
     const x1 = halfL
     const z0 = -halfW
     const z1 = halfW
-    const bands = 14
+    // One band WIDTH (metres) for both orientations, so vertical and horizontal
+    // stripes match (and 'cross' makes square cells). Derived from splitting the
+    // length into 14 — the long-axis look is unchanged; the cross-axis now uses the
+    // same width instead of length/14 ≠ width/14.
+    const bw = (x1 - x0) / 14
     // 'cross' lays down BOTH sets (a chequered mow); the caller halves the band
     // opacity so a single strip reads at half intensity and the overlaps (where the
     // two sets cross) compound back up to a full band. The bands material has
     // depthWrite off, so the coplanar quads blend rather than z-fight.
     if (orientation === 'vertical' || orientation === 'cross') {
-      const bw = (x1 - x0) / bands
-      for (let b = 0; b < bands; b += 2) {
-        const bx0 = x0 + b * bw
-        quad(p, bx0, z0, bx0 + bw, z0, bx0 + bw, z1, bx0, z1)
+      for (let bx0 = x0; bx0 < x1; bx0 += 2 * bw) {
+        quad(p, bx0, z0, Math.min(bx0 + bw, x1), z0, Math.min(bx0 + bw, x1), z1, bx0, z1)
       }
     }
     if (orientation === 'horizontal' || orientation === 'cross') {
-      const bh = (z1 - z0) / bands
-      for (let b = 0; b < bands; b += 2) {
-        const bz0 = z0 + b * bh
-        quad(p, x0, bz0, x1, bz0, x1, bz0 + bh, x0, bz0 + bh)
+      for (let bz0 = z0; bz0 < z1; bz0 += 2 * bw) {
+        quad(p, x0, bz0, x1, bz0, x1, Math.min(bz0 + bw, z1), x0, Math.min(bz0 + bw, z1))
       }
     }
   }
