@@ -82,6 +82,23 @@ export function bottomCenterBoard(el: GroundElement): { x: number; y: number } {
   return { x: cx + t.x, y: cy + (h * t.scale) / 2 + t.y }
 }
 
+/** The element's current box CENTER in board units (transform applied). TOKENS
+ *  anchor here — the badge circle's center is the position the user perceives,
+ *  and a center anchor is rotation-invariant (a bottom-center pin sits half a
+ *  badge away in the CURRENT screen-down direction, so orbiting the camera
+ *  would drift the visible circle across the pitch). Upright figures keep the
+ *  bottom-center "standing" anchor (their feet ARE the position). */
+export function centerBoard(el: GroundElement): { x: number; y: number } {
+  const { cx, cy } = localCenter(el)
+  return { x: cx + el.transform.x, y: cy + el.transform.y }
+}
+
+/** The board point a ground element's pin derives from: center for tokens,
+ *  bottom-center (feet) for figures. */
+function anchorBoard(el: GroundElement): { x: number; y: number } {
+  return el.type === 'token' ? centerBoard(el) : bottomCenterBoard(el)
+}
+
 /** A pitch-pinned 3D text: written on the field surface, anchored by its box centre. */
 export function isText3d(el: BoardElement): el is TextElement {
   return el.type === 'text' && el.text3d === true
@@ -147,7 +164,7 @@ export function anchorPPM(el: GroundElement, cfg: PosedCamera): number | null {
   const cam = makeCalibratedCamera(cfg)
   let g = el.ground
   if (!g) {
-    const bc = bottomCenterBoard(el)
+    const bc = anchorBoard(el)
     const hit = boardToGround(bc.x, bc.y, cam)
     if (!hit) return null
     g = [hit.x, hit.z]
@@ -190,7 +207,7 @@ export const TOKEN_DEFAULT_SIZE_M = 5
  *  the pitch. */
 export function pinNewToken(el: TokenElement, cfg: PosedCamera, sizeM: number): TokenElement {
   const cam = makeCalibratedCamera(cfg)
-  const bc = bottomCenterBoard(el)
+  const bc = centerBoard(el)
   const g = boardToGround(bc.x, bc.y, cam)
   if (!g) return el
   const h = localCenter(el).h
@@ -209,7 +226,8 @@ export function standingTransform(el: GroundElement, cam: THREE.Camera, gx: numb
   else if (el.sizeM != null) scale = clamp((el.sizeM * groundPPM(cam, gx, gz)) / (h || 1), 0.05, 30)
   else scale = el.transform.scale
   const [bcx, bcy] = projectGround(cam, gx, gz)
-  return { ...el.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }
+  // Tokens center ON the anchor; figures stand on it (feet at the ground point).
+  return { ...el.transform, x: bcx - cx, y: bcy - cy - (el.type === 'token' ? 0 : (h * scale) / 2), scale }
 }
 
 /** Pin a batch of tokens to the pitch at given metric ground spots (metres), all at
@@ -265,7 +283,7 @@ export function buildPinOps(elements: BoardElement[], cfg: PosedCamera): Operati
   const updates: ElementChange[] = []
   elements.forEach((el, index) => {
     if (el.type === 'figure' || el.type === 'token') {
-      const bc = bottomCenterBoard(el)
+      const bc = anchorBoard(el)
       const g = boardToGround(bc.x, bc.y, cam)
       if (!g) return
       const next: [number, number] = [g.x, g.z]
@@ -314,7 +332,7 @@ export function withGroundAnchors(elements: BoardElement[], cfg: PosedCamera): B
   const cam = makeCalibratedCamera(cfg)
   return elements.map((el) => {
     if ((el.type === 'figure' || el.type === 'token') && !el.ground) {
-      const bc = bottomCenterBoard(el)
+      const bc = anchorBoard(el)
       const g = boardToGround(bc.x, bc.y, cam)
       if (!g) return el
       // Tokens default to the fixed 2.5 m radius (or their explicit resized `sizeM`);
@@ -432,7 +450,8 @@ export function reprojectChanges(elements: BoardElement[], before: PosedCamera, 
       scale = clamp(el.transform.scale * ratio, 0.05, 30)
     }
     const [bcx, bcy] = projectGround(newCam, gx, gz)
-    const after2 = { ...el.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }
+    // Tokens center ON the anchor; figures stand on it.
+    const after2 = { ...el.transform, x: bcx - cx, y: bcy - cy - (el.type === 'token' ? 0 : (h * scale) / 2), scale }
     changes.push({ id: el.id, before: { transform: el.transform }, after: { transform: after2 } })
   }
   return changes
@@ -450,7 +469,7 @@ export function tokenSizeChanges(elements: BoardElement[], cfg: PosedCamera, siz
   for (const t of tokens) {
     let g = t.ground
     if (!g) {
-      const bc = bottomCenterBoard(t)
+      const bc = centerBoard(t)
       const hit = boardToGround(bc.x, bc.y, cam)
       if (!hit) continue
       g = [hit.x, hit.z]
@@ -458,7 +477,7 @@ export function tokenSizeChanges(elements: BoardElement[], cfg: PosedCamera, siz
     const { cx, cy, h } = localCenter(t)
     const scale = clamp(tokenBoardH(cam, sizeM, g) / (h || 1), 0.05, 30)
     const [bcx, bcy] = projectGround(cam, g[0], g[1])
-    const after = { transform: { ...t.transform, x: bcx - cx, y: bcy - cy - (h * scale) / 2, scale }, ground: g, sizeM }
+    const after = { transform: { ...t.transform, x: bcx - cx, y: bcy - cy, scale }, ground: g, sizeM }
     const t0 = t.transform
     const unchanged = Math.abs(scale - t0.scale) < 1e-4 && Math.abs(after.transform.x - t0.x) < 1e-2 && Math.abs(after.transform.y - t0.y) < 1e-2 && t.ground != null && t.sizeM === sizeM
     if (unchanged) continue

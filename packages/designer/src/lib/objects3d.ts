@@ -6,8 +6,10 @@
 // Framework-free (three.js only). Extend KNOWN_OBJECTS to grow the palette.
 
 import * as THREE from 'three'
+import { TOKEN_VIEW, TOKEN_STRIPE_PERIOD, TOKEN_SINGLE_STRIPE, TOKEN_CHECKER_SIZE, TOKEN_FONT, TOKEN_FONT_WEIGHT, TOKEN_GEOMETRY, type TokenFill } from '@youcoach-board/core'
 import { toonGradientMap } from './toon'
 import { buildGoal, type GoalStyle } from './goal'
+import { TOKEN_DISC_GLB_BASE64 } from './token-disc-glb'
 // Real modelled assets (Blender → glTF), embedded as base64 so they ship inside
 // the JS bundle — no runtime fetch, so they stay embed-safe in every host (App2,
 // bare page, …) regardless of asset-serving base paths.
@@ -30,6 +32,30 @@ import { PLAYER_MAN_C_GLB_BASE64 } from './player-man-c-glb'
 import { PLAYER_WOMAN_A_GLB_BASE64 } from './player-woman-a-glb'
 import { PLAYER_WOMAN_B_GLB_BASE64 } from './player-woman-b-glb'
 import { PLAYER_WOMAN_C_GLB_BASE64 } from './player-woman-c-glb'
+import { POSE_MAN_IDLE_GLB_BASE64 } from './pose-man-idle-glb'
+import { POSE_MAN_JOG_GLB_BASE64 } from './pose-man-jog-glb'
+import { POSE_MAN_RUN_GLB_BASE64 } from './pose-man-run-glb'
+import { POSE_MAN_KICK_GLB_BASE64 } from './pose-man-kick-glb'
+import { POSE_MAN_LOW_KICK_GLB_BASE64 } from './pose-man-low-kick-glb'
+import { POSE_MAN_PASS_GLB_BASE64 } from './pose-man-pass-glb'
+import { POSE_MAN_RECEIVE_GLB_BASE64 } from './pose-man-receive-glb'
+import { POSE_MAN_DRIBBLING_GLB_BASE64 } from './pose-man-dribbling-glb'
+import { POSE_MAN_HEADER_GLB_BASE64 } from './pose-man-header-glb'
+import { POSE_MAN_JUMPING_HEADER_GLB_BASE64 } from './pose-man-jumping-header-glb'
+import { POSE_MAN_THROW_IN_GLB_BASE64 } from './pose-man-throw-in-glb'
+import { POSE_MAN_SCISSOR_GLB_BASE64 } from './pose-man-scissor-glb'
+import { POSE_WOMAN_IDLE_GLB_BASE64 } from './pose-woman-idle-glb'
+import { POSE_WOMAN_JOG_GLB_BASE64 } from './pose-woman-jog-glb'
+import { POSE_WOMAN_RUN_GLB_BASE64 } from './pose-woman-run-glb'
+import { POSE_WOMAN_KICK_GLB_BASE64 } from './pose-woman-kick-glb'
+import { POSE_WOMAN_LOW_KICK_GLB_BASE64 } from './pose-woman-low-kick-glb'
+import { POSE_WOMAN_PASS_GLB_BASE64 } from './pose-woman-pass-glb'
+import { POSE_WOMAN_RECEIVE_GLB_BASE64 } from './pose-woman-receive-glb'
+import { POSE_WOMAN_DRIBBLING_GLB_BASE64 } from './pose-woman-dribbling-glb'
+import { POSE_WOMAN_HEADER_GLB_BASE64 } from './pose-woman-header-glb'
+import { POSE_WOMAN_JUMPING_HEADER_GLB_BASE64 } from './pose-woman-jumping-header-glb'
+import { POSE_WOMAN_THROW_IN_GLB_BASE64 } from './pose-woman-throw-in-glb'
+import { POSE_WOMAN_SCISSOR_GLB_BASE64 } from './pose-woman-scissor-glb'
 // The inflatable mannequin's "fake defender" drawing — a single black line-art
 // path, printed onto the front of the (tintable) mannequin body as a decal.
 import mannequinDecalRaw from '../assets/materials3d/mannequin_decal.svg?raw'
@@ -45,6 +71,10 @@ import playerWomanCTex from '../assets/players3d/player_woman_c.png?inline'
 // The "PLAYER 10" prints (white, alpha elsewhere), extracted from the pack's
 // hi-res atlas — drawn back on top after the kit blocks are recolored.
 import playerKitPrint from '../assets/players3d/kit_print.png?inline'
+// The DEFAULT kit for pose players with no custom colors (assets/players3d/
+// texture_neutral.png, downscaled) — a neutral grey strip the kit editor paints over.
+import playerNeutralTex from '../assets/players3d/player_neutral.png?inline'
+import tokenOverlayUrl from '../assets/token_overlay_gray.png?inline'
 
 // GLB-backed objects: embedded model bytes + toon colour. The models are authored
 // at real metric scale with their base on the ground (y=0), so they render as-is
@@ -58,7 +88,7 @@ const GLB_OBJECTS: Record<string, { data: string; color: number }> = {
   hurdle_high: { data: HURDLE_HIGH_GLB_BASE64, color: 0xf2c200 },
   speed_ladder: { data: SPEED_LADDER_GLB_BASE64, color: 0xf2c200 },
   mannequin: { data: MANNEQUIN_GLB_BASE64, color: 0xe7eaed }, // off-white inflatable; recolorable
-  wall_mannequin: { data: WALL_MANNEQUIN_GLB_BASE64, color: 0x9aa3ab },
+  wall_mannequin: { data: WALL_MANNEQUIN_GLB_BASE64, color: 0xffe500 },
   balance_dome: { data: BALANCE_DOME_GLB_BASE64, color: 0x2aa8a8 },
   agility_pole: { data: AGILITY_POLE_GLB_BASE64, color: 0xdc3838 }, // slalom pole; recolorable
 }
@@ -122,6 +152,32 @@ const PLAYER_GLBS: Record<string, { data: string; texture: string }> = {
   player_woman_a: { data: PLAYER_WOMAN_A_GLB_BASE64, texture: playerWomanATex },
   player_woman_b: { data: PLAYER_WOMAN_B_GLB_BASE64, texture: playerWomanBTex },
   player_woman_c: { data: PLAYER_WOMAN_C_GLB_BASE64, texture: playerWomanCTex },
+  // Static pose variants (Mixamo clip frames baked on the B characters — the
+  // drawer's Man/Woman; see specs/positions.md for the clip/frame table).
+  pose_man_idle: { data: POSE_MAN_IDLE_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_jog: { data: POSE_MAN_JOG_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_run: { data: POSE_MAN_RUN_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_kick: { data: POSE_MAN_KICK_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_low_kick: { data: POSE_MAN_LOW_KICK_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_pass: { data: POSE_MAN_PASS_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_receive: { data: POSE_MAN_RECEIVE_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_dribbling: { data: POSE_MAN_DRIBBLING_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_header: { data: POSE_MAN_HEADER_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_jumping_header: { data: POSE_MAN_JUMPING_HEADER_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_throw_in: { data: POSE_MAN_THROW_IN_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_scissor: { data: POSE_MAN_SCISSOR_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_idle: { data: POSE_WOMAN_IDLE_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_jog: { data: POSE_WOMAN_JOG_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_run: { data: POSE_WOMAN_RUN_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_kick: { data: POSE_WOMAN_KICK_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_low_kick: { data: POSE_WOMAN_LOW_KICK_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_pass: { data: POSE_WOMAN_PASS_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_receive: { data: POSE_WOMAN_RECEIVE_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_dribbling: { data: POSE_WOMAN_DRIBBLING_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_header: { data: POSE_WOMAN_HEADER_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_jumping_header: { data: POSE_WOMAN_JUMPING_HEADER_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_throw_in: { data: POSE_WOMAN_THROW_IN_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_scissor: { data: POSE_WOMAN_SCISSOR_GLB_BASE64, texture: playerNeutralTex },
 }
 
 // Procedural goals. Built at their real metric size (feet → metres), so they're
@@ -135,7 +191,7 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'flag_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small', 'player_man_a', 'player_man_b', 'player_man_c', 'player_woman_a', 'player_woman_b', 'player_woman_c'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'flag_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small', 'player_man_a', 'player_man_b', 'player_man_c', 'player_woman_a', 'player_woman_b', 'player_woman_c', 'pose_man_idle', 'pose_man_jog', 'pose_man_run', 'pose_man_kick', 'pose_man_low_kick', 'pose_man_pass', 'pose_man_receive', 'pose_man_dribbling', 'pose_man_header', 'pose_man_jumping_header', 'pose_man_throw_in', 'pose_man_scissor', 'pose_woman_idle', 'pose_woman_jog', 'pose_woman_run', 'pose_woman_kick', 'pose_woman_low_kick', 'pose_woman_pass', 'pose_woman_receive', 'pose_woman_dribbling', 'pose_woman_header', 'pose_woman_jumping_header', 'pose_woman_throw_in', 'pose_woman_scissor'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)
@@ -675,6 +731,152 @@ export function playerKitTexture(objectId: string, colors?: Record<string, strin
   return tex
 }
 
+/* ---- 3D tokens ----------------------------------------------------------------
+ * The profiled token disc (assets/token_profile.svg revolved in Blender, unit
+ * diameter, base at y=0). Its FACE carries a canvas texture with the token's
+ * fill style (solid / stripes / checker / plaid) and the number, planar-mapped
+ * from above so it also wraps the rim. Textures are cached per look. */
+
+/** The disc-face look: the 2D token's badge style, painted on the 3D face. */
+export interface TokenFaceStyle {
+  tokenFill: TokenFill
+  color1: string
+  color2: string
+  text: string
+  textColor: string
+}
+export function tokenFaceKey(s: TokenFaceStyle): string {
+  return [s.tokenFill, s.color1, s.color2, s.text, s.textColor].join('|')
+}
+
+// The shading overlay stamped on every token face (a pre-rendered disc with
+// soft top light + dark rim), composited in 'hard-light' over the drawn style —
+// it replaces the old glossy Phong material with baked, style-tinted shading.
+// Decoded lazily; cached faces are redrawn (and a re-render notified) on load.
+let tokenOverlayImg: HTMLImageElement | null = null
+let tokenOverlayReady = false
+function tokenOverlay(): HTMLImageElement | null {
+  if (!tokenOverlayImg) {
+    tokenOverlayImg = new Image()
+    tokenOverlayImg.onload = () => {
+      tokenOverlayReady = true
+      for (const [key, e] of tokenFaceTextures) {
+        drawTokenFace(e.canvas, faceStyleFromKey(key))
+        e.tex.needsUpdate = true
+      }
+      notifyAssetReady()
+    }
+    tokenOverlayImg.src = tokenOverlayUrl
+  }
+  return tokenOverlayReady ? tokenOverlayImg : null
+}
+function faceStyleFromKey(key: string): TokenFaceStyle {
+  const [tokenFill, color1, color2, text, textColor] = key.split('|')
+  return { tokenFill: tokenFill as TokenFill, color1, color2, text, textColor }
+}
+
+const tokenFaceTextures = new Map<string, { tex: THREE.CanvasTexture; canvas: HTMLCanvasElement }>()
+function tokenFaceTexture(s: TokenFaceStyle): THREE.CanvasTexture {
+  const key = tokenFaceKey(s)
+  const cached = tokenFaceTextures.get(key)
+  if (cached) return cached.tex
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = 512
+  drawTokenFace(canvas, s)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
+  tokenFaceTextures.set(key, { tex, canvas })
+  return tex
+}
+
+function drawTokenFace(canvas: HTMLCanvasElement, s: TokenFaceStyle): void {
+  const SIZE = canvas.width
+  const k = SIZE / TOKEN_VIEW // canvas px per token-view unit (badge space is 100)
+  const g = canvas.getContext('2d')!
+  g.globalCompositeOperation = 'source-over'
+  g.fillStyle = s.color1
+  g.fillRect(0, 0, SIZE, SIZE)
+  g.fillStyle = s.color2
+  const P = TOKEN_STRIPE_PERIOD * k
+  const C = TOKEN_CHECKER_SIZE * k
+  const f = s.tokenFill
+  if (f === 'vstripes' || f === 'plaid') for (let x = 0; x < SIZE; x += P) g.fillRect(x, 0, P / 2, SIZE)
+  if (f === 'hstripes' || f === 'plaid') for (let y = 0; y < SIZE; y += P) g.fillRect(0, y, SIZE, P / 2)
+  if (f === 'checker') {
+    for (let y = 0, j = 0; y < SIZE; y += C, j++)
+      for (let x = 0, i = 0; x < SIZE; x += C, i++) if ((i + j) % 2 === 0) g.fillRect(x, y, C, C)
+  }
+  if (f === 'vstripe') g.fillRect(SIZE / 2 - (TOKEN_SINGLE_STRIPE * k) / 2, 0, TOKEN_SINGLE_STRIPE * k, SIZE)
+  if (f === 'hstripe') g.fillRect(0, SIZE / 2 - (TOKEN_SINGLE_STRIPE * k) / 2, SIZE, TOKEN_SINGLE_STRIPE * k)
+  if (s.text) {
+    const t = TOKEN_GEOMETRY.token.text
+    g.fillStyle = s.textColor
+    g.font = `${TOKEN_FONT_WEIGHT} ${t.size * k}px ${TOKEN_FONT}`
+    g.textAlign = 'center'
+    g.textBaseline = 'middle'
+    g.fillText(s.text, t.x * k, t.y * k)
+  }
+  // Stamp the shading overlay over the drawn style: hard-light keeps the style's
+  // colors where the overlay is mid-grey and bakes in its highlight/dark rim.
+  const overlay = tokenOverlay()
+  if (overlay) {
+    g.globalCompositeOperation = 'hard-light'
+    g.drawImage(overlay, 0, 0, SIZE, SIZE)
+    g.globalCompositeOperation = 'source-over'
+  }
+}
+
+let tokenDiscGeom: THREE.BufferGeometry | null = null
+function tokenDiscGeometry(): THREE.BufferGeometry {
+  if (!tokenDiscGeom) {
+    const geom = parseGlbGeometry(base64ToArrayBuffer(TOKEN_DISC_GLB_BASE64))
+    // Planar UVs from above (unit disc: x/z in [-0.5, 0.5]); the rim inherits the
+    // face's edge texels, so stripes visually continue down the side.
+    const pos = geom.getAttribute('position')
+    const uv = new Float32Array(pos.count * 2)
+    for (let i = 0; i < pos.count; i++) {
+      uv[i * 2] = pos.getX(i) + 0.5
+      uv[i * 2 + 1] = 0.5 - pos.getZ(i)
+    }
+    geom.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+    geom.computeBoundingBox()
+    tokenDiscGeom = geom
+  }
+  return tokenDiscGeom.clone()
+}
+
+/** A unit-diameter 3D token disc with the given face style (toon + ink outline).
+ *  The layer scales it by the token's real size and re-orients it to the camera. */
+export function buildTokenDisc(style: TokenFaceStyle): THREE.Mesh {
+  const geom = tokenDiscGeometry()
+  const s = geom.boundingBox!.getSize(new THREE.Vector3())
+  const median = [s.x, s.y, s.z].sort((a, b) => a - b)[1]
+  const outlineOffset = OUTLINE_FRACTION * (median || 1)
+  // Matte material — the puck's shading (soft top light, dark rim) is BAKED into
+  // the face texture via the hard-light overlay, so no specular term is needed.
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: tokenFaceTexture(style) })
+  const mesh = new THREE.Mesh(geom, mat)
+  mesh.castShadow = true
+  // No ink outline: the glossy puck reads cleaner without the toon shell.
+  mesh.userData.outlineOffset = outlineOffset
+  mesh.userData.originAtGround = true
+  mesh.userData.faceKey = tokenFaceKey(style)
+  // Raycastable: the disc IS the click target (the SVG badge is hidden and inert
+  // while tokens3d is on) — Object3DLayer.pick resolves it to the element id.
+  return mesh
+}
+
+/** Swap the disc's face texture when the token's style changes (cached looks). */
+export function setTokenDiscFace(mesh: THREE.Mesh, style: TokenFaceStyle): void {
+  const key = tokenFaceKey(style)
+  if (mesh.userData.faceKey === key) return
+  mesh.userData.faceKey = key
+  const m = mesh.material as THREE.MeshLambertMaterial
+  m.map = tokenFaceTexture(style)
+  m.needsUpdate = true
+}
+
 /** Build the renderable for a 3D object id. GLB/primitive kinds are a single
  *  real-size Mesh (base on the ground); goals are a real-size Group. `userData
  *  .outlineOffset` is the ink thickness in world metres, so the layer can lift
@@ -701,6 +903,10 @@ export function buildObject3D(objectId: string): THREE.Object3D {
     mesh.add(toonOutline(geom, outlineOffset)) // silhouette ink only — crease strokes
     // would ink every facet seam of the organic low-poly body (noise, not style)
     mesh.userData.outlineOffset = outlineOffset
+    // Pose GLBs are baked with their real height: grounded poses touch y=0 (with
+    // ink clearance) and airborne ones (scissor kick) FLOAT — keep the authored
+    // height instead of re-resting the bounding box on the ground.
+    if (objectId.startsWith('pose_')) mesh.userData.originAtGround = true
     return mesh
   }
   const glb = GLB_OBJECTS[objectId]

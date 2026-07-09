@@ -125,22 +125,20 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     setListOpen(false)
   }
 
-  // 3D players: the palette is a set of POSES for one of two characters — a
-  // Man/Woman toggle swaps the whole grid (pose ids are `pose_<gender>_<pose>`).
-  const isPlayers3d = catId === 'players3d'
-  const [players3dGender, setPlayers3dGender] = useState<'man' | 'woman'>('man')
+  // 3D-player pose categories (Players 3D (Men)/(Women), later goalkeepers):
+  // the pose thumbnails show 2-up, 1.5× bigger than the regular 3-up grid.
+  const isPlayers3d = !!catId?.startsWith('players3d')
 
   // Facing buttons (arrow-ordered) and action sections. Every action shows as a
   // titled section; only the facing filter (if any) narrows the figures.
   const actions = cat?.facets?.action ?? null
   const facings = cat?.facets?.facing ? [...cat.facets.facing].sort((a, b) => FACING_ORDER.indexOf(a.id) - FACING_ORDER.indexOf(b.id)) : null
   const inFacing = (f: CatalogFigure) => !facings || !facing || (f.facing ?? null) === facing
-  const inGender = (f: CatalogFigure) => !isPlayers3d || !!f.object3d?.startsWith(`pose_${players3dGender}_`)
   const sections = actions
     ? actions
         .map((a) => ({ id: a.id, label: a.label, separatorBefore: a.separatorBefore, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && (f.actions ?? []).includes(a.id)) }))
         .filter((sec) => sec.figures.length)
-    : [{ id: 'all', label: '', separatorBefore: false, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && inGender(f)) }]
+    : [{ id: 'all', label: '', separatorBefore: false, figures: (cat?.figures ?? []).filter(inFacing) }]
 
   function jumpTo(id: string) {
     gridRef.current?.querySelector(`[data-section="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -553,22 +551,6 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
             /* Selected category's palette: facing (arrows), then a thumbnail
                grid split into a titled section per action. */
             <div className="flex flex-1 flex-col overflow-hidden">
-              {isPlayers3d && (
-                /* Man/Woman toggle: swaps the whole pose grid between the two characters. */
-                <div className="flex items-center gap-1 border-b border-border p-2">
-                  {(['man', 'woman'] as const).map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      aria-pressed={players3dGender === g}
-                      onClick={() => setPlayers3dGender(g)}
-                      className={cn('flex h-8 flex-1 items-center justify-center rounded-md border border-border text-sm hover:bg-accent', players3dGender === g && 'bg-primary/15 font-medium')}
-                    >
-                      {g === 'man' ? 'Man' : 'Woman'}
-                    </button>
-                  ))}
-                </div>
-              )}
               {facings && (
                 <div className="flex items-center gap-1 border-b border-border p-2">
                   {facings.map((f) => {

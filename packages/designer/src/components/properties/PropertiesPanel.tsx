@@ -594,6 +594,8 @@ function TokenSettingsButton({ side, small, translucent }: { side: 'right' | 'to
 
 function TokenSettingsWidget() {
   const p = usePropertyEditing()
+  const tokens3d = useEditorStore((s) => s.doc.background.tokens3d)
+  const setBackground = useEditorStore((s) => s.setBackground)
   const shape = p.values.tokenShape ?? 'token'
   const c1 = p.values.color1 ?? '#ebebeb'
   const c2 = p.values.color2 ?? '#1e1e1e'
@@ -673,6 +675,12 @@ function TokenSettingsWidget() {
       <Field label={`Token size (${Math.round(p.values.tokenSize ?? 5)} m)`}>
         <WaveSlider min={2} max={10} value={Math.round(p.values.tokenSize ?? 5)} onChange={p.setTokenSize} />
       </Field>
+      {/* Render disc tokens as real 3D pucks (background.tokens3d) — a board-wide
+          style, so it lives here with the other global token settings. */}
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">3D tokens</span>
+        <Switch checked={tokens3d} onCheckedChange={(v) => setBackground({ tokens3d: v })} />
+      </div>
     </div>
   )
 }

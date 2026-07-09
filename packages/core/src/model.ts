@@ -72,6 +72,13 @@ export interface BoardBackground {
   objectScale: number
   /** Whether the two 3D goals at the ends of the pitch are shown. */
   showGoals: boolean
+  /** Render disc tokens as real 3D pucks on the pitch (the profiled token disc)
+   *  instead of flat SVG badges. Labels/interaction stay 2D. */
+  tokens3d: boolean
+  /** An infinite ground plane under the 3D field (world-space, so grazing views
+   *  get a real horizon). CSS color; 'transparent' = off (the flat 2D background
+   *  image/color shows instead, as before). */
+  surroundColor: string
   /** Orientation of the mown shading bands (or none). */
   bands: FieldBands
   /** YouCoach logo placement over the background, or null for none. */
@@ -111,6 +118,8 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   figureScale: 1,
   objectScale: 4, // materials are real-size (a cone is a dot on a full pitch); 4× makes them legible by default
   showGoals: true,
+  tokens3d: false,
+  surroundColor: 'transparent',
   bands: 'vertical',
   logo: 'center',
 }
@@ -171,6 +180,8 @@ function parseBackground(raw: unknown): BoardBackground {
     figureScale: num(o.figureScale, DEFAULT_BACKGROUND.figureScale),
     objectScale: num(o.objectScale, DEFAULT_BACKGROUND.objectScale),
     showGoals: o.showGoals !== false,
+    tokens3d: o.tokens3d === true,
+    surroundColor: typeof o.surroundColor === 'string' ? o.surroundColor : DEFAULT_BACKGROUND.surroundColor,
     bands: o.bands === 'horizontal' || o.bands === 'none' ? o.bands : DEFAULT_BACKGROUND.bands,
     // Absent → default (center); explicit null → no logo; valid → that position.
     logo: LOGO_POSITIONS.includes(o.logo as LogoPosition) ? (o.logo as LogoPosition) : o.logo === null ? null : DEFAULT_BACKGROUND.logo,

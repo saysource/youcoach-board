@@ -93,9 +93,28 @@ const BAND_Y = 0.05
 const LINE_Y = 0.15
 const GOAL_Y = 0.18 // lift the goals just above the lines so posts don't collide
 
-// One shared sun so the field and the arrow scene cast agreeing shadows.
+// One shared sun so the field and the object/arrow scenes cast agreeing shadows.
 export const SUN_POSITION = new THREE.Vector3(120, 165, 70)
 export const SUN_TARGET = new THREE.Vector3(HALF_L, 0, HALF_W)
+
+/** The four stadium pylons, ~10 m outside each corner at 65 m, aimed a bit
+ *  inward. Pure ILLUMINATION (no shadows — the sun casts those): their physical
+ *  falloff grades the pitch/surround brightness and puts glancing highlights on
+ *  glossy surfaces (token pucks, the reflective surround plane). */
+export const FLOODLIGHTS: { pos: [number, number, number]; target: [number, number, number] }[] = (
+  [[0, 0], [105, 0], [0, 68], [105, 68]] as const
+).map(([cx, cz]) => ({
+  pos: [cx + (cx < HALF_L ? -10 : 10), 65, cz + (cz < HALF_W ? -10 : 10)],
+  target: [cx + (HALF_L - cx) * 0.45, 0, cz + (HALF_W - cz) * 0.45],
+}))
+
+/** A shadowless stadium floodlight (physical falloff, decay 2). */
+export function makeFloodlight(f: { pos: [number, number, number]; target: [number, number, number] }): THREE.SpotLight {
+  const spot = new THREE.SpotLight(0xffffff, 5000, 400, Math.PI / 4, 0.4, 2)
+  spot.position.set(...f.pos)
+  spot.target.position.set(...f.target)
+  return spot
+}
 
 /** Line width for a given camera→target distance: roughly constant on-screen
  *  thickness, so lines thin down as you zoom in (clamped). */
@@ -278,11 +297,32 @@ function makeFlag(x: number, z: number): THREE.Group {
  *  field types share the world frame (objects/arrows/cameras). The ground is
  *  transparent; only the white lines + shading bands are drawn, plus goals + flags.
  *  Flags are only meaningful on the full soccer pitch. */
-export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation; fieldType?: FieldType; layout?: TrainingLayout } = {}): THREE.Group {
+export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation; fieldType?: FieldType; layout?: TrainingLayout; surround?: string } = {}): THREE.Group {
   const fieldType = opts.fieldType ?? 'soccer11'
   const layout = opts.layout ?? 'plain'
   const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
   const group = new THREE.Group()
+
+  // Optional "infinite" colored ground under everything: a huge flat plane just
+  // below y=0, so grazing/perspective views get a real horizon instead of the
+  // flat 2D board background. Hidden when surround is unset/'transparent' —
+  // NOTE it is opaque, so when visible it covers the 2D background image/color
+  // everywhere the plane projects (including inside the pitch).
+  const surroundOn = !!opts.surround && opts.surround !== 'transparent'
+  // Lit (not Basic) so the corner floodlights' falloff grades the plane away
+  // from the pitch; a mild Phong specular gives the surface a slight sheen
+  // under the pylons' glancing light.
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(4000, 4000),
+    new THREE.MeshPhongMaterial({ color: surroundOn ? opts.surround : '#ffffff', specular: 0x2f2f2f, shininess: 18 }),
+  )
+  ground.name = 'field-ground'
+  ground.rotation.x = -Math.PI / 2
+  // Deep enough below the lines/bands that far-away, grazing views don't
+  // z-fight (depth precision shrinks with distance); still visually "at" y=0.
+  ground.position.y = -0.3
+  ground.visible = surroundOn
+  group.add(ground)
 
   // Transparent ground that still catches the goals' soft shadows.
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.6, W * 1.8), new THREE.ShadowMaterial({ opacity: 0.18 }))

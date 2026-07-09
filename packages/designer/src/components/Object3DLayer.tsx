@@ -4,12 +4,12 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement } from '@youcoach-board/core'
-import { makeArrow3DCamera } from '../lib/arrow3d'
+import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement, type Arrow3DElement } from '@youcoach-board/core'
+import { createArrowGeometry, makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
-import { SUN_POSITION, SUN_TARGET, buildGoalsOverlay } from '../lib/field3d'
+import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, buildGoalsOverlay } from '../lib/field3d'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
-import { buildObject3D, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots } from '../lib/objects3d'
+import { buildObject3D, buildTokenDisc, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots, setTokenDiscFace, type TokenFaceStyle } from '../lib/objects3d'
 
 // A 3D player is near real human height, so it reads well at a modest multiplier;
 // beyond this the materials scale would make players cartoonishly large (esp. on
@@ -23,8 +23,26 @@ export interface Object3DLayerHandle {
   pick: (boardX: number, boardY: number) => string | null
 }
 
+/** A token rendered as a 3D disc (background.tokens3d): ground spot (metres),
+ *  real diameter, and the badge style painted on the face. */
+export interface Token3D {
+  id: string
+  x: number
+  z: number
+  sizeM: number
+  /** The element's opacity (transform.opacity), applied to the disc material. */
+  opacity: number
+  style: TokenFaceStyle
+}
+
 interface Props {
   elements: Object3DElement[]
+  /** Disc tokens to render as 3D pucks ([] unless background.tokens3d). */
+  tokens?: Token3D[]
+  /** 3D arrows, rendered IN THIS SCENE (real-camera mode) so they share the depth
+   *  buffer with objects/tokens — an arrow can pass over a token or behind a
+   *  player. [] in the legacy homography/fixed modes (Arrow3DLayer handles those). */
+  arrows?: Arrow3DElement[]
   selectedIds: string[]
   /** Ids currently under the eraser (queued for deletion) — rendered at half
    *  opacity as a "will be erased" cue. */
@@ -50,6 +68,8 @@ interface Ctx {
   fixedCam: THREE.PerspectiveCamera
   calibCam: THREE.PerspectiveCamera
   meshes: Map<string, THREE.Object3D>
+  tokenMeshes: Map<string, THREE.Mesh>
+  arrowMeshes: Map<string, THREE.Mesh>
   composer: EffectComposer
   renderPass: RenderPass
   outlinePass: OutlinePass
@@ -58,6 +78,45 @@ interface Ctx {
 }
 
 const SELECT_COLOR = 0x2a6cff
+
+/* ---- 3D arrows (ported from Arrow3DLayer for the shared-scene path) --------- */
+
+// Track the geometry inputs so we only rebuild the (expensive) arrow mesh when a
+// shape field actually changes — moves/rotations/colour just update transforms.
+interface ArrowMeshData {
+  splineWidth: number
+  splineHeight: number
+  splineLength: number
+  stickWidth: number
+  tipWidth: number
+  thickness: number
+  tipLength: number
+}
+
+function arrowShapeChanged(d: ArrowMeshData, e: Arrow3DElement): boolean {
+  return (
+    d.splineWidth !== e.splineWidth ||
+    d.splineHeight !== e.splineHeight ||
+    d.splineLength !== e.splineLength ||
+    d.stickWidth !== e.stickWidth ||
+    d.tipWidth !== e.tipWidth ||
+    d.thickness !== e.thickness ||
+    d.tipLength !== e.tipLength
+  )
+}
+
+function arrowMeshData(e: Arrow3DElement): ArrowMeshData {
+  return { splineWidth: e.splineWidth, splineHeight: e.splineHeight, splineLength: e.splineLength, stickWidth: e.stickWidth, tipWidth: e.tipWidth, thickness: e.thickness, tipLength: e.tipLength }
+}
+
+// Accept #rgb / #rrggbb (ignore any alpha channel — opacity is separate).
+function arrowHexColor(fill: string): number {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(fill.trim())
+  if (!m) return 0xff0000
+  let hex = m[1]
+  if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('')
+  return parseInt(hex, 16)
+}
 
 /** Dim (or restore) every material under `obj` — a per-object opacity cue. Safe:
  *  buildObject3D gives each object its own material instances (only textures are
@@ -78,7 +137,7 @@ function setObjectDim(obj: THREE.Object3D, dim: boolean) {
   })
 }
 
-export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, selectedIds, erasingIds, viewport, camera, objectScale, fieldType, layout, showGoals, svgRef, containerRef }, ref) {
+export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, tokens = [], arrows = [], selectedIds, erasingIds, viewport, camera, objectScale, fieldType, layout, showGoals, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -99,6 +158,13 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
 
     const scene = new THREE.Scene()
     scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x4a7a3a, 0.7))
+    // Four shadowless stadium pylons (illumination only — matches the field
+    // scene, and puts glancing highlights on the glossy token pucks).
+    for (const f of FLOODLIGHTS) {
+      const spot = makeFloodlight(f)
+      scene.add(spot)
+      scene.add(spot.target)
+    }
     const sun = new THREE.DirectionalLight(0xffffff, 2.6)
     sun.position.copy(SUN_POSITION)
     sun.target.position.copy(SUN_TARGET)
@@ -141,7 +207,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     composer.addPass(outlinePass)
     composer.addPass(new OutputPass())
 
-    ctxRef.current = { renderer, scene, fixedCam, calibCam, meshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '' }
+    ctxRef.current = { renderer, scene, fixedCam, calibCam, meshes: new Map(), tokenMeshes: new Map(), arrowMeshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '' }
     return ctxRef.current
   }
 
@@ -275,12 +341,95 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     ctx.goalsKey = key
   }
 
+  // Mirror `tokens` into disc meshes: face texture swaps in place; position and
+  // scale follow the token; the camera-facing rotation is applied in render().
+  function syncTokens(ctx: Ctx) {
+    const seen = new Set<string>()
+    for (const t of tokens) {
+      seen.add(t.id)
+      let mesh = ctx.tokenMeshes.get(t.id)
+      if (!mesh) {
+        mesh = buildTokenDisc(t.style)
+        ctx.scene.add(mesh)
+        ctx.tokenMeshes.set(t.id, mesh)
+      } else {
+        setTokenDiscFace(mesh, t.style)
+      }
+      mesh.position.set(t.x, 0, t.z)
+      mesh.scale.setScalar(Math.max(0.05, t.sizeM))
+      mesh.userData.id = t.id
+      // Element opacity × the eraser's half-opacity cue, applied directly (the
+      // generic setObjectDim only knows the 0.5/1 dim, not per-element opacity).
+      const op = t.opacity * (erasingIds?.has(t.id) ? 0.5 : 1)
+      const mat = mesh.material as THREE.MeshLambertMaterial
+      if (mat.transparent !== op < 1) {
+        mat.transparent = op < 1
+        mat.needsUpdate = true
+      }
+      mat.opacity = op
+      mesh.visible = op > 0
+      mesh.castShadow = op > 0
+    }
+    for (const [id, mesh] of ctx.tokenMeshes) {
+      if (seen.has(id)) continue
+      ctx.scene.remove(mesh)
+      mesh.geometry.dispose()
+      const mat = mesh.material
+      ;(Array.isArray(mat) ? mat : [mat]).forEach((x) => x.dispose()) // face textures are cached, not disposed
+      ctx.tokenMeshes.delete(id)
+    }
+  }
+
+  // Mirror `arrows` into the shared scene (ported from Arrow3DLayer, real-camera
+  // mode only) so arrows depth-test against objects/tokens/goals.
+  function syncArrows(ctx: Ctx) {
+    const seen = new Set<string>()
+    for (const e of arrows) {
+      seen.add(e.id)
+      let mesh = ctx.arrowMeshes.get(e.id)
+      const color = arrowHexColor(e.fill)
+      if (!mesh) {
+        const material = new THREE.MeshPhongMaterial({ color, flatShading: true })
+        material.side = THREE.DoubleSide
+        material.transparent = true
+        mesh = new THREE.Mesh(createArrowGeometry(e.stickWidth, e.tipWidth, e.thickness, e.tipLength, e.splineWidth, e.splineHeight, e.splineLength), material)
+        mesh.castShadow = true
+        ctx.scene.add(mesh)
+        ctx.arrowMeshes.set(e.id, mesh)
+      } else if (arrowShapeChanged(mesh.userData.data as ArrowMeshData, e)) {
+        mesh.geometry.dispose()
+        mesh.geometry = createArrowGeometry(e.stickWidth, e.tipWidth, e.thickness, e.tipLength, e.splineWidth, e.splineHeight, e.splineLength)
+      }
+      // Rotate about the tail, place at (x,z); push the local origin so the tail
+      // sits at (x,z) (head at -splineWidth in local space).
+      mesh.position.set(e.x, 0, e.z)
+      mesh.rotation.set(0, e.y, 0)
+      mesh.translateZ(-e.splineWidth)
+      const mat = mesh.material as THREE.MeshPhongMaterial
+      mat.color.setHex(color)
+      const dim = erasingIds?.has(e.id) ? 0.5 : 1
+      mat.opacity = e.opacity * dim
+      mesh.castShadow = e.opacity > 0
+      mesh.visible = e.opacity > 0
+      mesh.userData = { id: e.id, data: arrowMeshData(e) }
+    }
+    for (const [id, mesh] of ctx.arrowMeshes) {
+      if (seen.has(id)) continue
+      ctx.scene.remove(mesh)
+      mesh.geometry.dispose()
+      ;(mesh.material as THREE.Material).dispose()
+      ctx.arrowMeshes.delete(id)
+    }
+  }
+
   function render() {
     const ctx = ensureCtx()
     const canvas = canvasRef.current
     const rect = boardRect()
     if (!ctx || !canvas || !rect || rect.width < 1) return
     syncMeshes(ctx)
+    syncTokens(ctx)
+    syncArrows(ctx)
     syncGoals(ctx)
     canvas.style.left = `${rect.left}px`
     canvas.style.top = `${rect.top}px`
@@ -298,10 +447,18 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       ctx.fixedCam.updateProjectionMatrix()
       activeCam = ctx.fixedCam
     }
+    // Face the token discs' texture toward the camera (number upright on screen):
+    // yaw from the camera's ground-projected view direction.
+    if (ctx.tokenMeshes.size) {
+      const dir = new THREE.Vector3()
+      activeCam.getWorldDirection(dir)
+      const yaw = Math.atan2(dir.x, dir.z) + Math.PI // texture-up toward the top of the screen
+      for (const mesh of ctx.tokenMeshes.values()) mesh.rotation.y = yaw
+    }
     // Render through the composer so OutlinePass highlights the selection.
     ctx.renderPass.camera = activeCam
     ctx.outlinePass.renderCamera = activeCam
-    ctx.outlinePass.selectedObjects = selectedIds.map((id) => ctx.meshes.get(id)).filter((o): o is THREE.Object3D => !!o)
+    ctx.outlinePass.selectedObjects = selectedIds.map((id) => ctx.meshes.get(id) ?? ctx.tokenMeshes.get(id)).filter((o): o is THREE.Object3D => !!o)
     ctx.composer.render()
   }
 
@@ -313,7 +470,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, selectedIds, erasingIds, viewport, camera, objectScale, fieldType, layout, showGoals])
+  }, [elements, tokens, arrows, selectedIds, erasingIds, viewport, camera, objectScale, fieldType, layout, showGoals])
 
   useEffect(() => {
     const container = containerRef.current
@@ -340,8 +497,9 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       const ray = new THREE.Raycaster()
       ray.setFromCamera(ndc, cam)
       // Recursive: goals are Groups, so hits land on child parts (posts, net…).
-      // Walk up to the root that carries the element id.
-      const hits = ray.intersectObjects([...ctx.meshes.values()], true)
+      // Walk up to the root that carries the element id. Token discs and 3D
+      // arrows are picked here too — 3D-object-based selection for all of them.
+      const hits = ray.intersectObjects([...ctx.meshes.values(), ...ctx.tokenMeshes.values(), ...ctx.arrowMeshes.values()], true)
       for (const h of hits) {
         let o: THREE.Object3D | null = h.object
         while (o && !(o.userData as { id?: string }).id) o = o.parent

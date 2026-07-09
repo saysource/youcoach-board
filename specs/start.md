@@ -1156,3 +1156,106 @@ camera, staying smooth through the warp. **Tokens** were already covered by the 
 (single bottom-center anchor + ground-ppm scale), same as figures. `draw` (freehand) remains out of
 scope.
 
+
+- Add the ability to Lock objects (i.e. a lock switch in the item properties)
+- The user should be able, in the background properties to turn goals visibility on or off.
+- Associate the M key to the 3D materials.
+
+## Object properties
+
+When a 3D element is selected, we may want to set its color.
+Here are the properties of a 3D object:
+
+- Color (use the same widget for the stroke, without opacity)
+- Settings:
+  - Use global size (swithc on/off)
+  - Size (slider): it allows to set a custom scale for the object starting from the global scale; up to you how to represent this number, which at the end may be a multiplier. We want to be able to reach a size that is 5 times smaller than the global size, and up to 10 times bigger, but ATTENTION, the minimum size of an object is always the real size, no reason to create an object smaller than that. The label on the slider may simply indicate Small/Big. The slider should start at the middle, which is the default global size.
+
+More about the size: when the user open the application, we present the full field. If it add a material, that material would be barely visible: a cone in a full field is just a dot. While realistic, this confuses the casual user, especially users used to youcoach app 1. For this reason, and for clarity of the drawing where realistic measurements are useful only for tactics and player positions, we may want to user adjust the objects the why they see it more appropriate.
+Also, for this reason I propose to keep 4x as default global size.
+
+- Elements supporting colouring:
+  - cone
+  - high_cone
+  - cone_hurdle, hurdle, hurdle_low, hurdle_high
+  - ladder
+  - mannequin
+  - wall mannequin
+  - balance_drome
+
+
+## Background improvements
+
+Till now we focused on soccer 11, and by default we show a soccer 11 field and in the drawer we show a set of soccer 11 zones, which are essentially named camera poses.
+
+We want to introduce now the ability for the user to pick a different type of field.
+The options are:
+
+- Foorball/Soccer 11 field
+- Training Area: this is a 40m width x 30m height area
+- Futsal
+
+At the top of the drower, similarly to when we select the figures, we provide a dropdown to select the type of field. Each type of field will have its own set of zones.
+We also want to keep the categories dropdown like for players and materials, in order to divide the different poses in categories. For soccer 11 this will provide two categories: Top View, Perspective
+
+The 'zone' right now is just a named camera pose. We want to extend this object with extra options.
+
+ and its background options, which may be inherited by the zone selection.
+In example, for the training area we may want some presets with the goals, without the goals, with some internal lines, etc...
+
+### Background bands:
+
+Right now we show vertical bands on the field. We may want to option to show horizontal bands as alternative.
+
+### Advanced new field/background options:
+
+- Show hide goals
+- Bands: vertical (default) / horizontal (only for soccer 11 and training area) / none
+
+
+
+## Field Zones Tool
+
+Based on the new pose model, in the field zones tool we should add:
+- Field type
+- Goals on/off
+- 
+
+
+- Make eraser tool work on 3D objects
+
+- 2D shapes: rectangle, oval, polylines: when we draw them, we already calculate the coordinates of each point in the 3D space, but when we move it, we are still applying a 2D logic. We want instead apply a 3D logic to movements, in practice when we move a shape, we are virtually moving a rectangle represented by the projected shape bounding box, which eventually will distort our 2D shape; a good example is the rectangle: the user creates a rectangle in the top view, so it is really a rectangle, then changes perspective, and clearly the rectangle changes its shape, but if it drags it, the shape no longer makes sense in the space, but, if the rectangle would be a 3D object, it would deform appropriately, and when back to top, it would also preserve its real rectangular shape.
+This logic should also apply to the free drawing tool (the pen). We always imagine to paint on a 3D  surface.
+This logic already applies to the position of the tokens, which is simpler being represented by just a point on the 3D surface.
+
+-------
+
+
+
+
+- 3D objects are not moving when using arrow keys, they should;
+- Default token readius should be 2.5m, this requirement overrides any previous scale logic implemented for tokens;
+- the eraser does not detect 3D elements, it should;
+
+
+## Text elements
+
+Text elements currently are not affected by the 3D environment. This is good when used as titles or explanations. We want to introduce 3D text, in order to write directly on the field 3D surface, like we do with tape measure lines today.
+The 3D text sticks to the 3D surface. The user specify the text orientation (0, 90, 180, 270 degrees), based on the 3D X axis, no need for auto-rotation like measures.
+All the propertis of the regular text applies. 
+
+I'm going to sleep. Implement the requested fixes an text element on a best effort, I will not able to respond to question, so consider accepted any reccommanded answer.
+
+----
+
+
+
+Tokens should not have the possibility to be rotated, and we want to remove the preference to enable/disable synchronization of token sizes, token size is always synchronized across the board, and their size is always calculated based on the 3D perspective, like if they would be circular objects always facing the camera (this should be what we already have Today).
+We also want to replace their selection figure, which should be an outline like the one we have for 3D objects, with no handles.
+The size/scale of the token will be a global property shown in the token properties panel (a slider from Small to Big), the size is mapped from 2m up to 10m. Remember that the size is shared across all the tokens in the board, that's why I said "global property". 
+
+
+
+- In the properties for 3D object, and tokens we may want to add a new icon "world", which allow to set the the globally synchronized "Size" property. This replace:
+ - sync token size (this will be no longer an option, all token will be always of the same size)
+ - 

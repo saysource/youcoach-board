@@ -14,6 +14,7 @@ import {
   TOKEN_FONT_WEIGHT,
   TOKEN_LABEL_PX,
   TOKEN_LABEL_GAP_PX,
+  TOKEN_LABEL_PLACEHOLDER,
   TEXT_FONT,
   TEXT_FONT_WEIGHT,
   TEXT_FONT_WEIGHT_BOLD,
@@ -69,7 +70,7 @@ import { FigureView } from './FigureView'
 import { BackgroundView } from './BackgroundView'
 import { computeSnap, snapResize, type SnapResult, type SnapElement, type SnapMark, type SnapLine } from '../lib/snapping'
 import { Arrow3DLayer, type Arrow3DLayerHandle } from './Arrow3DLayer'
-import { Object3DLayer, type Object3DLayerHandle } from './Object3DLayer'
+import { Object3DLayer, type Object3DLayerHandle, type Token3D } from './Object3DLayer'
 import { FieldHomographyLayer } from './FieldHomographyLayer'
 import { FieldCameraLayer } from './FieldCameraLayer'
 import { FieldSceneLayer } from './FieldSceneLayer'
@@ -83,7 +84,7 @@ import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
 import { DEFAULT_ZONE } from '../lib/field-zones'
-import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform } from '../lib/field-anchor'
+import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -695,6 +696,34 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Field-axis alignment guides shown while dragging 3D object(s).
   const [object3dSnapGuides, setObject3dSnapGuides] = useState<SnapLine[]>([])
   const object3dElements = doc.elements.filter((e): e is Object3DElement => e.type === 'object3d')
+  // 3D tokens (background.tokens3d): disc-shaped tokens rendered as real pucks by
+  // Object3DLayer. Ground/size come from the pin anchors when present, else are
+  // projected through the current camera / sized by the reference ppm. Jersey
+  // tokens keep their 2D badge (their silhouette has no 3D counterpart).
+  const tokens3d = doc.background.tokens3d
+  const token3dList: Token3D[] = !tokens3d
+    ? []
+    : doc.elements.flatMap((el) => {
+        const live = liveElement(el)
+        if (live.type !== 'token' || live.shape !== 'token') return []
+        // Anchor the disc at the badge's CENTER (what the user reads as "the
+        // position"), not at the bottom-center ground pin — the pin is the
+        // standing anchor, half a badge below the circle's center (2.5 m off
+        // for a default 5 m token in top-down).
+        const c = centerBoard(live)
+        const g = arrow3dGround({ x: c.x, y: c.y })
+        if (!g) return []
+        const ground: [number, number] = [g.x, g.z]
+        const sizeM = live.sizeM ?? (live.width * live.transform.scale) / referencePPM()
+        return [{
+          id: el.id,
+          x: ground[0],
+          z: ground[1],
+          sizeM,
+          opacity: live.transform.opacity,
+          style: { tokenFill: live.tokenFill, color1: live.color1, color2: live.color2, text: live.text, textColor: live.textColor },
+        }]
+      })
 
   function editObject3D(g: NonNullable<typeof object3dGesture>, patch: Partial<Object3DElement>) {
     const before: Partial<Object3DElement> = {}
@@ -1520,17 +1549,20 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       setDraft({ type, start: p, current: p, endTip: toolEndTip(activeTool), curve: toolIsCurved(activeTool), zigzag: toolIsZigzag(activeTool), double: toolIsDouble(activeTool), tape: toolIsTape(activeTool), snap: e.shiftKey })
       containerRef.current?.setPointerCapture(e.pointerId)
     } else {
-      // A 3D arrow under the cursor selects (and starts a body-move) — it isn't an
-      // SVG element, so it can't be hit by the normal element handlers.
-      const hitId = arrow3dLayerRef.current?.pick(p.x, p.y)
-      if (hitId) {
-        const el = doc.elements.find((x) => x.id === hitId)
+      // A 3D thing under the cursor (arrow / object / token disc) — not SVG, so it
+      // can't be hit by the normal element handlers. In real-camera mode arrows
+      // live in the object layer's scene (shared depth buffer); the arrow layer
+      // only answers in the legacy homography/fixed modes.
+      const objId = arrow3dLayerRef.current?.pick(p.x, p.y) ?? object3dLayerRef.current?.pick(p.x, p.y)
+      if (objId) {
+        const el = doc.elements.find((x) => x.id === objId)
+        // A 3D arrow selects and starts a body-move.
         if (el?.type === 'arrow3d') {
-          setSelection(e.shiftKey ? [...new Set([...selectedIds, hitId])] : [hitId])
+          setSelection(e.shiftKey ? [...new Set([...selectedIds, objId])] : [objId])
           const ground = arrow3dGround(p)
           if (ground) {
             beginTransaction()
-            setArrow3dGesture({ id: hitId, kind: 'body', orig: el, grabGround: ground })
+            setArrow3dGesture({ id: objId, kind: 'body', orig: el, grabGround: ground })
           }
           try {
             containerRef.current?.setPointerCapture(e.pointerId)
@@ -1539,11 +1571,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           }
           return
         }
-      }
-      // A 3D object under the cursor selects (and starts a move on the ground).
-      const objId = object3dLayerRef.current?.pick(p.x, p.y)
-      if (objId) {
-        const el = doc.elements.find((x) => x.id === objId)
+        // A 3D object selects (and starts a move on the ground).
         if (el?.type === 'object3d') {
           // Shift toggles selection membership without starting a drag.
           if (e.shiftKey) {
@@ -1573,6 +1601,19 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           } catch {
             /* best-effort */
           }
+          return
+        }
+        // A 3D token disc under the cursor (tokens3d): select it and drag via the
+        // normal 2D move machinery — the token stays a 2D element; the disc just
+        // follows its derived ground point.
+        if (el?.type === 'token') {
+          if (e.shiftKey) {
+            setSelection(selectedIds.includes(objId) ? selectedIds.filter((i) => i !== objId) : [...selectedIds, objId])
+            return
+          }
+          const sel = selectedIds.includes(objId) ? selectedIds : [objId]
+          setSelection(sel)
+          if (!el.locked) startMove(sel, p, e.pointerId)
           return
         }
       }
@@ -2286,7 +2327,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     >
       {/* Real 3D field: the board background (image/solid) + the pitch scene, both
           confined to the board rect and BELOW the 2D SVG (negative z). */}
-      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} renderTick={editing3d} />}
+      {field3d && <FieldSceneLayer camera={field3d} viewport={viewport} image={doc.background.image} color={doc.background.color} svgRef={svgRef} containerRef={containerRef} showGoals={doc.background.showGoals} bands={doc.background.bands} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} surround={doc.background.surroundColor} renderTick={editing3d} />}
       <BoardCanvas
         doc={doc}
         svgRef={svgRef}
@@ -2324,7 +2365,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 straight lines (2-point polylines), grabbed by their own stroke. */}
             {!creating &&
               liveSelected2D.map((el) =>
-                el.type === 'polyline' && el.points.length === 2 ? null : (
+                el.type === 'polyline' && el.points.length === 2 ? null : (tokens3d && el.type === 'token' && el.shape === 'token') ? null : (
                   <polygon
                     key={`hit-${el.id}`}
                     points={isText3dHit(el) ? text3dHitPoints(el) : framePoints(el)}
@@ -2341,8 +2382,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             {!creating && !navigating &&
               liveSelected2D
                 // A 3D text shows the projected footprint quad (Text3DFrames) instead
-                // of an axis-aligned box, so skip the normal chrome for it.
+                // of an axis-aligned box, so skip the normal chrome for it. A 3D
+                // token disc gets the WebGL OutlinePass highlight instead — the 2D
+                // ring would sit at the badge's (hidden) flat position.
                 .filter((el) => !(isText3d(el) && fieldCamCfg && !!el.ground))
+                .filter((el) => !(tokens3d && el.type === 'token' && el.shape === 'token'))
                 .map((el) => (
                   <SelectionHandles
                     key={`sel-${el.id}`}
@@ -2542,7 +2586,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 ) : render.type === 'figure' ? (
                   <FigureView element={render} />
                 ) : (
-                  <ElementView element={render} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} />
+                  <ElementView element={render} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokens3d && render.type === 'token' && render.shape === 'token'} />
                 )}
               </g>
             )
@@ -2566,10 +2610,39 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           />
         )}
       </BoardCanvas>
-      {/* 3D arrows: WebGL overlay (pointer-transparent) + their control handles. */}
-      <Arrow3DLayer ref={arrow3dLayerRef} elements={arrow3dLayerElements} selectedIds={selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
-      {/* 3D objects ("3D materials"): WebGL overlay (pointer-transparent). */}
-      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} selectedIds={navigating ? [] : selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} />
+      {/* 3D arrows: in real-camera mode they render inside the Object3DLayer scene
+          (one depth buffer with objects/tokens/goals, so occlusion is correct);
+          this layer only draws them in the legacy homography/fixed modes. */}
+      <Arrow3DLayer ref={arrow3dLayerRef} elements={fieldCamCfg ? [] : arrow3dLayerElements} selectedIds={selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
+      {/* 3D objects ("3D materials") + tokens + arrows: WebGL overlay (pointer-transparent). */}
+      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} tokens={token3dList} arrows={fieldCamCfg ? arrow3dLayerElements : []} selectedIds={navigating ? [] : selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} />
+      {/* 3D-token captions: the WebGL canvas sits above the SVG, so the discs would
+          occlude their own labels — re-render them here, above the canvas, anchored
+          just below each disc's camera-facing edge. Fixed on-screen size like the
+          2D token captions; pointer-transparent (the SVG hit-box owns interaction). */}
+      {token3dList.length > 0 && (
+        <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
+          {token3dList.map((t) => {
+            const el = doc.elements.find((e) => e.id === t.id)
+            if (!el || el.type !== 'token' || !el.showLabel) return null
+            if (editing && editing.id === t.id && editing.field === 'label') return null
+            const cp = arrow3dCam.position
+            let dx = cp.x - t.x
+            let dz = cp.z - t.z
+            const len = Math.hypot(dx, dz) || 1
+            dx /= len
+            dz /= len
+            const b = object3dToBoard(t.x + dx * (t.sizeM / 2), 0, t.z + dz * (t.sizeM / 2))
+            const font = TOKEN_LABEL_PX / (scale || 1)
+            const gap = TOKEN_LABEL_GAP_PX / (scale || 1)
+            return (
+              <text key={t.id} x={b.x} y={b.y + gap + font / 2} textAnchor="middle" dominantBaseline="central" fontSize={font} fontWeight={TOKEN_FONT_WEIGHT} fill="#000000" style={{ fontFamily: TOKEN_FONT }}>
+                {el.label || TOKEN_LABEL_PLACEHOLDER}
+              </text>
+            )
+          })}
+        </svg>
+      )}
       {/* 3D text: HTML overlay carrying a perspective matrix3d (pointer-transparent;
           the SVG hit-box drives selection/move). Skips the text being inline-edited. */}
       {fieldCamCfg && (

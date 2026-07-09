@@ -5,11 +5,17 @@ import { Slider } from '../ui/slider'
 import { Switch } from '../ui/switch'
 import { Segmented } from './PropertyControls'
 import { ColorPickerWidget } from './ColorPickerWidget'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { CHECKER_IMAGE } from '../../lib/checker'
 import { LogoTopLeftIcon, LogoTopRightIcon, LogoCenterIcon, LogoBottomLeftIcon, LogoBottomRightIcon } from '../icons'
 import defaultFieldImage from '../../assets/field0.jpg'
 
 // Background swatch presets (first = restore the default field image).
 const BG_COLORS = ['transparent', '#2f8a3e', '#3b7a57', '#5b8c3a', '#d1d1d1', '#9f9f9f', '#a6c58b', '#3389e0', '#ffffff']
+
+// Surround (infinite 3D ground) presets — first = off (no plane, 2D background
+// shows as before). Greens near the pitch grass, plus stadium greys/dark.
+const SURROUND_COLORS = ['transparent', '#2f8a3e', '#256e31', '#3b7a57', '#5b8c3a', '#8a8a8a', '#4a4a4a', '#22301f', '#d1d1d1']
 
 const BANDS_OPTIONS: { value: FieldBands; label: string; render: React.ReactNode }[] = [
   {
@@ -109,6 +115,28 @@ export function BackgroundSettings() {
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium text-muted-foreground">Goals</span>
         <Switch checked={bg.showGoals} onCheckedChange={(v) => setBackground({ showGoals: v })} />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">Surround</span>
+        {/* Infinite 3D ground plane under the field; transparent swatch = off. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" aria-label="Surround color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+              <span className="block size-full" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' }}>
+                <span className="block size-full" style={bg.surroundColor === 'transparent' ? undefined : { background: bg.surroundColor }} />
+              </span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="left" align="start" className="w-60 p-3">
+            <ColorPickerWidget
+              value={bg.surroundColor}
+              onChange={(c) => setBackground({ surroundColor: c === '' ? 'transparent' : c })}
+              presets={SURROUND_COLORS}
+              showOpacity={false}
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="grid gap-1.5">

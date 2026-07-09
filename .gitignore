@@ -8,3 +8,6 @@ yarn-error.log
 # Local agent settings (per-developer)
 .claude/settings.local.json
 *.blend1
+
+# Affinity Designer source files (large binaries — kept local, out of git)
+*.afdesign

@@ -53,7 +53,8 @@
    "id": "players3d",
    "name": "Players 3D",
    "categories": [
-    "players3d"
+    "players3d_men",
+    "players3d_women"
    ]
   },
   {
@@ -17543,12 +17544,6 @@
      "h": 100
     },
     {
-     "object3d": "cube",
-     "thumb": "materials3d/cube",
-     "w": 100,
-     "h": 100
-    },
-    {
      "object3d": "cone",
      "thumb": "materials3d/cone",
      "w": 100,
@@ -17652,45 +17647,183 @@
     }
    ]
   },
-  "players3d": {
-   "name": "Players 3D",
+  "players3d_men": {
+   "name": "Players 3D (Men)",
    "kind": "figure",
    "figures": [
     {
-     "object3d": "player_man_a",
-     "thumb": "materials3d/player_man_a",
+     "object3d": "pose_man_idle",
+     "thumb": "materials3d/pose_man_idle",
      "w": 100,
-     "h": 100
+     "h": 100,
+     "label": "Idle"
     },
     {
-     "object3d": "player_man_b",
-     "thumb": "materials3d/player_man_b",
+     "object3d": "pose_man_jog",
+     "thumb": "materials3d/pose_man_jog",
      "w": 100,
-     "h": 100
+     "h": 100,
+     "label": "Jog"
     },
     {
-     "object3d": "player_man_c",
-     "thumb": "materials3d/player_man_c",
+     "object3d": "pose_man_run",
+     "thumb": "materials3d/pose_man_run",
      "w": 100,
-     "h": 100
+     "h": 100,
+     "label": "Run"
     },
     {
-     "object3d": "player_woman_a",
-     "thumb": "materials3d/player_woman_a",
+     "object3d": "pose_man_kick",
+     "thumb": "materials3d/pose_man_kick",
      "w": 100,
-     "h": 100
+     "h": 100,
+     "label": "Kick"
     },
     {
-     "object3d": "player_woman_b",
-     "thumb": "materials3d/player_woman_b",
+     "object3d": "pose_man_low_kick",
+     "thumb": "materials3d/pose_man_low_kick",
      "w": 100,
-     "h": 100
+     "h": 100,
+     "label": "Low Kick"
     },
     {
-     "object3d": "player_woman_c",
-     "thumb": "materials3d/player_woman_c",
+     "object3d": "pose_man_pass",
+     "thumb": "materials3d/pose_man_pass",
      "w": 100,
-     "h": 100
+     "h": 100,
+     "label": "Pass"
+    },
+    {
+     "object3d": "pose_man_receive",
+     "thumb": "materials3d/pose_man_receive",
+     "w": 100,
+     "h": 100,
+     "label": "Receive"
+    },
+    {
+     "object3d": "pose_man_dribbling",
+     "thumb": "materials3d/pose_man_dribbling",
+     "w": 100,
+     "h": 100,
+     "label": "Dribbling"
+    },
+    {
+     "object3d": "pose_man_header",
+     "thumb": "materials3d/pose_man_header",
+     "w": 100,
+     "h": 100,
+     "label": "Header"
+    },
+    {
+     "object3d": "pose_man_jumping_header",
+     "thumb": "materials3d/pose_man_jumping_header",
+     "w": 100,
+     "h": 100,
+     "label": "Jumping Header"
+    },
+    {
+     "object3d": "pose_man_throw_in",
+     "thumb": "materials3d/pose_man_throw_in",
+     "w": 100,
+     "h": 100,
+     "label": "Throw In"
+    },
+    {
+     "object3d": "pose_man_scissor",
+     "thumb": "materials3d/pose_man_scissor",
+     "w": 100,
+     "h": 100,
+     "label": "Scissor Kick"
+    }
+   ]
+  },
+  "players3d_women": {
+   "name": "Players 3D (Women)",
+   "kind": "figure",
+   "figures": [
+    {
+     "object3d": "pose_woman_idle",
+     "thumb": "materials3d/pose_woman_idle",
+     "w": 100,
+     "h": 100,
+     "label": "Idle"
+    },
+    {
+     "object3d": "pose_woman_jog",
+     "thumb": "materials3d/pose_woman_jog",
+     "w": 100,
+     "h": 100,
+     "label": "Jog"
+    },
+    {
+     "object3d": "pose_woman_run",
+     "thumb": "materials3d/pose_woman_run",
+     "w": 100,
+     "h": 100,
+     "label": "Run"
+    },
+    {
+     "object3d": "pose_woman_kick",
+     "thumb": "materials3d/pose_woman_kick",
+     "w": 100,
+     "h": 100,
+     "label": "Kick"
+    },
+    {
+     "object3d": "pose_woman_low_kick",
+     "thumb": "materials3d/pose_woman_low_kick",
+     "w": 100,
+     "h": 100,
+     "label": "Low Kick"
+    },
+    {
+     "object3d": "pose_woman_pass",
+     "thumb": "materials3d/pose_woman_pass",
+     "w": 100,
+     "h": 100,
+     "label": "Pass"
+    },
+    {
+     "object3d": "pose_woman_receive",
+     "thumb": "materials3d/pose_woman_receive",
+     "w": 100,
+     "h": 100,
+     "label": "Receive"
+    },
+    {
+     "object3d": "pose_woman_dribbling",
+     "thumb": "materials3d/pose_woman_dribbling",
+     "w": 100,
+     "h": 100,
+     "label": "Dribbling"
+    },
+    {
+     "object3d": "pose_woman_header",
+     "thumb": "materials3d/pose_woman_header",
+     "w": 100,
+     "h": 100,
+     "label": "Header"
+    },
+    {
+     "object3d": "pose_woman_jumping_header",
+     "thumb": "materials3d/pose_woman_jumping_header",
+     "w": 100,
+     "h": 100,
+     "label": "Jumping Header"
+    },
+    {
+     "object3d": "pose_woman_throw_in",
+     "thumb": "materials3d/pose_woman_throw_in",
+     "w": 100,
+     "h": 100,
+     "label": "Throw In"
+    },
+    {
+     "object3d": "pose_woman_scissor",
+     "thumb": "materials3d/pose_woman_scissor",
+     "w": 100,
+     "h": 100,
+     "label": "Scissor Kick"
     }
    ]
   }

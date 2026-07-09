@@ -12,7 +12,7 @@ import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, 
 // `viewScale` = screen px per board unit. When provided, the token caption renders
 // at a FIXED on-screen size (TOKEN_LABEL_PX) regardless of the board's fit-scale or
 // the token's size; without it (viewer/export) the caption falls back to board units.
-export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1 }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number }) {
+export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, tokenBadgeHidden = false }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number; tokenBadgeHidden?: boolean }) {
   // 3D arrows/objects are drawn by the designer's WebGL overlay, never as SVG.
   if (element.type === 'arrow3d' || element.type === 'object3d') return null
   const { x, y, rotate, scale, opacity } = element.transform
@@ -26,7 +26,7 @@ export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabel
 
   return (
     <g transform={transform} opacity={opacity}>
-      <Shape element={element} viewScale={viewScale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} />
+      <Shape element={element} viewScale={viewScale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokenBadgeHidden} />
     </g>
   )
 }
@@ -52,7 +52,7 @@ function freehandPath(pts: Array<[number, number]>): string {
 // color over transparent gaps.
 const STRIPE = 12
 
-function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1 }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number }) {
+function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, tokenBadgeHidden = false }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number; tokenBadgeHidden?: boolean }) {
   // Unique per instance, so each element's marker/pattern/clip defs don't collide.
   const markerId = useId()
   const patternId = useId()
@@ -133,7 +133,8 @@ function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1 }: 
     const labelGap = (viewScale && viewScale > 0 ? TOKEN_LABEL_GAP_PX / viewScale : TOKEN_LABEL_GAP_PX) / labelScale
     return (
       <>
-        <g transform={t}>
+        {/* Hidden badge (tokens3d): invisible AND inert — the 3D disc owns picking. */}
+        <g transform={t} opacity={tokenBadgeHidden ? 0 : undefined} pointerEvents={tokenBadgeHidden ? 'none' : undefined}>
           <defs>
             <clipPath id={clipId}>{silhouette}</clipPath>
             {patternDef}
@@ -170,7 +171,7 @@ function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1 }: 
         </g>
         {/* Caption: outside the size-scaled group so its font stays fixed (px) and
             doesn't grow/shrink with the token; centered just below the badge. */}
-        {element.showLabel && (
+        {element.showLabel && !tokenBadgeHidden && (
           <text
             data-token-label=""
             x={element.x + element.width / 2}

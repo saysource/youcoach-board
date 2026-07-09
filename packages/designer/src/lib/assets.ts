@@ -42,6 +42,8 @@ export interface CatalogFigure {
   /** A real 3D object (three.js) rather than an SVG figure — its objectId (e.g.
    *  'ball' | 'cube'). Dropped onto the pitch as an `object3d` element. */
   object3d?: string
+  /** Human-readable name shown as the thumbnail's tooltip (e.g. a pose's action). */
+  label?: string
 }
 export interface FacetValue {
   id: string

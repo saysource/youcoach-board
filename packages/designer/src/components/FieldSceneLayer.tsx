@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_WIDTH, BOARD_HEIGHT, type FieldView, type FieldBands, type FieldType, type TrainingLayout } from '@youcoach-board/core'
-import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, FIELD_DIMS, SUN_POSITION, SUN_TARGET } from '../lib/field3d'
+import { buildFieldGroup, markingsGeometry, bandsGeometry, lineWidthForDistance, FIELD_DIMS, SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight } from '../lib/field3d'
 import { applyViewCamera } from '../lib/field-camera'
 
 // A WebGL layer rendering the real 3D pitch, viewed through the board's field
@@ -26,6 +26,9 @@ interface Props {
   fieldType?: FieldType
   /** Training area variant (lines + shaded region + goals). */
   layout?: TrainingLayout
+  /** Color of the infinite 3D ground plane under the field ('transparent' = off).
+   *  When on it covers the 2D background (image/color) — it's a real horizon. */
+  surround?: string
   /** Bump/flip to force an on-demand redraw when neither camera nor viewport
    *  changed but the layout might have (e.g. entering/leaving Edit-Background) —
    *  avoids a stale pitch until the next camera move. */
@@ -37,6 +40,7 @@ interface Ctx {
   scene: THREE.Scene
   cam: THREE.PerspectiveCamera
   group: THREE.Group
+  ground: THREE.Mesh | null
   lines: THREE.Mesh | null
   goals: THREE.Object3D | null
   bands: THREE.Mesh | null
@@ -46,7 +50,7 @@ interface Ctx {
   lineW: number
 }
 
-export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', renderTick }: Props) {
+export function FieldSceneLayer({ camera, viewport, image, color, svgRef, containerRef, showGoals = true, bands = 'vertical', fieldType = 'soccer11', layout = 'plain', surround = 'transparent', renderTick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
@@ -63,6 +67,13 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
 
     const scene = new THREE.Scene()
     scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x4a7a3a, 0.75))
+    // Four shadowless stadium pylons: their falloff grades the pitch/surround
+    // and adds glancing highlights; the sun below remains the shadow caster.
+    for (const f of FLOODLIGHTS) {
+      const spot = makeFloodlight(f)
+      scene.add(spot)
+      scene.add(spot.target)
+    }
     const sun = new THREE.DirectionalLight(0xffffff, 2.4)
     sun.position.copy(SUN_POSITION)
     sun.target.position.copy(SUN_TARGET)
@@ -78,10 +89,10 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     sun.shadow.bias = -0.0004
     scene.add(sun)
     scene.add(sun.target)
-    const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, layout: propsRef.current.layout })
+    const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, layout: propsRef.current.layout, surround: propsRef.current.surround })
     scene.add(group)
 
-    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, fieldType: propsRef.current.fieldType, layout: propsRef.current.layout, lineW: 0 }
+    ctxRef.current = { renderer, scene, cam: new THREE.PerspectiveCamera(), group, ground: (group.getObjectByName('field-ground') as THREE.Mesh) ?? null, lines: (group.getObjectByName('field-lines') as THREE.Mesh) ?? null, goals: group.getObjectByName('field-goals') ?? null, bands: (group.getObjectByName('field-bands') as THREE.Mesh) ?? null, bandsOrient: propsRef.current.bands, fieldType: propsRef.current.fieldType, layout: propsRef.current.layout, lineW: 0 }
     return ctxRef.current
   }
 
@@ -102,9 +113,9 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
   // The latest props, so render() reads current values even when invoked from the
   // ResizeObserver (whose callback is created once and would otherwise close over
   // the first render's camera — causing a stale reset when the drawer resizes it).
-  const propsRef = useRef({ camera, viewport, showGoals, image, color, bands, fieldType, layout })
+  const propsRef = useRef({ camera, viewport, showGoals, image, color, bands, fieldType, layout, surround })
   useEffect(() => {
-    propsRef.current = { camera, viewport, showGoals, image, color, bands, fieldType, layout }
+    propsRef.current = { camera, viewport, showGoals, image, color, bands, fieldType, layout, surround }
   })
 
   function render() {
@@ -123,9 +134,10 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
         const mat = (o as THREE.Mesh).material
         if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((x) => x.dispose())
       })
-      const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, layout: propsRef.current.layout })
+      const group = buildFieldGroup({ fieldType: propsRef.current.fieldType, goals: propsRef.current.showGoals, bands: propsRef.current.bands, layout: propsRef.current.layout, surround: propsRef.current.surround })
       ctx.scene.add(group)
       ctx.group = group
+      ctx.ground = (group.getObjectByName('field-ground') as THREE.Mesh) ?? null
       ctx.lines = (group.getObjectByName('field-lines') as THREE.Mesh) ?? null
       ctx.goals = group.getObjectByName('field-goals') ?? null
       ctx.bands = (group.getObjectByName('field-bands') as THREE.Mesh) ?? null
@@ -135,6 +147,13 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
       ctx.lineW = 0
     }
     if (ctx.goals) ctx.goals.visible = propsRef.current.showGoals
+    // Toggle/recolor the infinite ground plane live.
+    if (ctx.ground) {
+      const sc = propsRef.current.surround
+      const on = !!sc && sc !== 'transparent'
+      ctx.ground.visible = on
+      if (on) (ctx.ground.material as THREE.MeshPhongMaterial).color.set(sc)
+    }
     // Rebuild the shading bands when the orientation changes (cheap flat geometry).
     if (ctx.bands && propsRef.current.bands !== ctx.bandsOrient) {
       ctx.bands.geometry.dispose()
@@ -171,7 +190,7 @@ export function FieldSceneLayer({ camera, viewport, image, color, svgRef, contai
     const raf = requestAnimationFrame(render)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, viewport, renderTick, showGoals, image, color, bands, fieldType, layout])
+  }, [camera, viewport, renderTick, showGoals, image, color, bands, fieldType, layout, surround])
 
   useEffect(() => {
     const container = containerRef.current
