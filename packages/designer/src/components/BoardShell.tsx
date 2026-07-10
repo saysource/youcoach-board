@@ -233,10 +233,15 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   function navTap() {
     setNavBounce((n) => n + 1)
   }
+  // A camera-authoring overlay drives field3d from its OWN controls every frame:
+  // FieldEditOverlay (navigation / edit-background) and the admin field-zone /
+  // field-camera / homography tools. The keyboard nudge below animates field3d,
+  // which those loops overwrite each frame — the two fight and the pose tumbles,
+  // never settling. So the nudge is for NORMAL 3D mode only; the overlays navigate
+  // via their own controls (mouse orbit; FieldEditOverlay also handles the arrows).
+  const cameraOverlayActive = navigating || bgEditing || zoneEditing || cameraEditing || homographyEditing
   // Arrow keys move the 3D field camera when nothing is selected (see hotkeys):
-  // 'orbit' rotates like a mouse drag, 'pan' (Shift) slides across the ground. This
-  // path is NORMAL mode only — navigation + background-edit drive their OrbitControls
-  // through FieldEditOverlay's own handler (so its mirrored pose stays in sync).
+  // 'orbit' rotates like a mouse drag, 'pan' (Shift) slides across the ground.
   function moveCamera(mode: 'orbit' | 'pan', ux: number, uy: number) {
     const cur = store.getState().doc.background.field3d
     if (!cur) {
@@ -244,6 +249,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
       if (mode === 'pan') panViewport(ux, uy)
       return
     }
+    if (cameraOverlayActive) return
     const ref = (cur.ref ?? 'soccer11') as PitchType
     animateFieldTo(mode === 'orbit' ? orbitStep(cur, ref, ux * CAM_ROTATE_STEP, -uy * CAM_ROTATE_STEP) : panStep(cur, ref, ux, -uy))
   }
@@ -255,6 +261,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
       zoomViewport(dir)
       return
     }
+    if (cameraOverlayActive) return
     const ref = (cur.ref ?? 'soccer11') as PitchType
     animateFieldTo(dollyStep(cur, ref, dir > 0 ? 1 / CAM_ZOOM_STEP : CAM_ZOOM_STEP))
   }
