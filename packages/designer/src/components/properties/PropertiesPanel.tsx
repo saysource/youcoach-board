@@ -371,17 +371,16 @@ function Object3DControls({ side }: { side: 'right' | 'top' }) {
   )
 }
 
-// Size range as a multiplier of the global scale: down to 1/5×, up to 10×, with the
-// slider MIDPOINT = the global size (1×). Log-mapped so each half is proportional.
-const OBJ_SIZE_MIN = 0.2
+// Size range as a multiplier of real size: from ×1 (Real, never smaller) up to ×10
+// (Big). Log-mapped so the slider is proportional across the range.
+const OBJ_SIZE_MIN = 1
 const OBJ_SIZE_MAX = 10
 function objSizeToSlider(size: number): number {
   const s = Math.min(OBJ_SIZE_MAX, Math.max(OBJ_SIZE_MIN, size))
-  return s <= 1 ? ((Math.log(s) - Math.log(OBJ_SIZE_MIN)) / -Math.log(OBJ_SIZE_MIN)) * 50 : 50 + (Math.log(s) / Math.log(OBJ_SIZE_MAX)) * 50
+  return (Math.log(s / OBJ_SIZE_MIN) / Math.log(OBJ_SIZE_MAX / OBJ_SIZE_MIN)) * 100
 }
 function objSliderToSize(v: number): number {
-  const t = v / 100
-  const s = t <= 0.5 ? Math.exp(Math.log(OBJ_SIZE_MIN) * (1 - t * 2)) : Math.exp(Math.log(OBJ_SIZE_MAX) * ((t - 0.5) * 2))
+  const s = OBJ_SIZE_MIN * Math.exp((v / 100) * Math.log(OBJ_SIZE_MAX / OBJ_SIZE_MIN))
   return Math.round(s * 100) / 100
 }
 
@@ -405,20 +404,13 @@ function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
         <TooltipContent>Size</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
-        <div className="grid gap-1">
+        <div className="grid gap-1.5">
           <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-            <span>Small</span>
+            <span>Real</span>
             <span className="tabular-nums text-foreground">{Math.round(objectScale * 10) / 10}×</span>
             <span>Big</span>
           </div>
-          <div className="relative">
-            <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(objectScale))} onChange={(v) => { arm(); setBackground({ objectScale: objSliderToSize(v) }) }} />
-            {/* "Real" (×1) reference tick — sits at the slider midpoint (objSizeToSlider(1)=50). */}
-            <span aria-hidden className="pointer-events-none absolute top-1/2 h-3 w-px -translate-y-1/2 bg-muted-foreground/60" style={{ left: `${objSizeToSlider(1)}%` }} />
-          </div>
-          <div className="relative h-3 text-[10px] text-muted-foreground">
-            <span className="absolute -translate-x-1/2" style={{ left: `${objSizeToSlider(1)}%` }}>Real</span>
-          </div>
+          <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(objectScale))} onChange={(v) => { arm(); setBackground({ objectScale: objSliderToSize(v) }) }} />
         </div>
       </PopoverContent>
     </Popover>
