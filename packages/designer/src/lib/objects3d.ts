@@ -989,13 +989,15 @@ export function buildTokenDisc(style: TokenFaceStyle): THREE.Mesh {
   const s = geom.boundingBox!.getSize(new THREE.Vector3())
   const median = [s.x, s.y, s.z].sort((a, b) => a - b)[1]
   const outlineOffset = OUTLINE_FRACTION * (median || 1)
-  // Matte material — the puck's shading (soft top light, dark rim) is BAKED into
-  // the face texture via the hard-light overlay, so no specular term is needed.
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: tokenFaceTexture(style) })
+  // EXPERIMENT (toon-style 3D tokens): cel-shade the puck with our toon material +
+  // ink outline, matching the 3D players/materials. To restore the previous glossy
+  // look, swap back to `new THREE.MeshLambertMaterial({ color: 0xffffff, map: … })`
+  // and drop the `mesh.add(toonOutline(…))` below.
+  const mat = new THREE.MeshToonMaterial({ color: 0xffffff, map: tokenFaceTexture(style), gradientMap: toonGradientMap() })
   const mesh = new THREE.Mesh(geom, mat)
   mesh.castShadow = true
-  // No ink outline: the glossy puck reads cleaner without the toon shell.
   mesh.userData.outlineOffset = outlineOffset
+  mesh.add(toonOutline(geom, outlineOffset))
   mesh.userData.originAtGround = true
   mesh.userData.faceKey = tokenFaceKey(style)
   // Contact shadow: textured quad just above the grass, top-right-aligned with
