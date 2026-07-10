@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import { Sparkles } from 'lucide-react'
+import { ChevronRight, Keyboard, Sparkles, UnfoldHorizontal } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
@@ -12,6 +12,8 @@ import floatIcon from '../../assets/effects/effect_float.svg'
 import floatOutIcon from '../../assets/effects/effect_float_out.svg'
 import slideIcon from '../../assets/effects/effect_slide.svg'
 import slideOutIcon from '../../assets/effects/effect_slide_out.svg'
+import pathIcon from '../../assets/effects/effect_forming_path.svg'
+import pathOutIcon from '../../assets/effects/effect_forming_path_out.svg'
 
 // Enter/exit effects picker (specs/animation.md "Special effects"): a panel
 // like YouCoach Video Analysis' — In/Out tabs and a grid of canned animations
@@ -25,7 +27,9 @@ const ROT180: CSSProperties = { transform: 'rotate(180deg)' }
 interface EffectDef {
   id: string
   label: string
-  icon: string | null // null = the empty "None" tile
+  /** Icon: an image URL (VA's SVGs), a rendered node (lucide, for the text
+   *  effects), or null = the empty "None" tile. */
+  icon: string | React.ReactNode | null
   style?: CSSProperties
 }
 
@@ -60,23 +64,110 @@ const OUT_EFFECTS: EffectDef[] = [
   { id: 'slide_left', label: 'Slide Left', icon: slideOutIcon, style: ROT90 },
 ]
 
-/** Elements that carry enter/exit effects: everything placed via the 2D
- *  transform (object3d/arrow3d degrade to fade/pop and keep no setting). */
-const HAS_EFFECTS = (type: string) => type !== 'object3d' && type !== 'arrow3d'
+// Lines only (spec "Lines"): the line forms itself along its own path (the
+// arrow tip rides the forming end); out = the line retracts.
+const PATH_IN: EffectDef = { id: 'path', label: 'Path', icon: pathIcon }
+const PATH_OUT: EffectDef = { id: 'path', label: 'Path', icon: pathOutIcon }
+
+// Texts only — their OWN category, composed on top of the standard effect:
+// letter-spacing glide (Tracking) and progressive characters (Typewriter,
+// deliberately linear); out plays them in reverse (spread apart / delete).
+const TEXT_EFFECTS: EffectDef[] = [
+  { id: 'none', label: 'None', icon: null },
+  { id: 'tracking', label: 'Tracking', icon: <UnfoldHorizontal className="size-9 text-muted-foreground" strokeWidth={1.5} /> },
+  { id: 'typewriter', label: 'Typewriter', icon: <Keyboard className="size-9 text-muted-foreground" strokeWidth={1.5} /> },
+]
+
+// 3D arrows only — their own composed category: 'path' forms the arrow by
+// animating its completeness (splineLength) from 0 to the authored value.
+const LENGTH_EFFECTS_IN: EffectDef[] = [
+  { id: 'none', label: 'None', icon: null },
+  { id: 'path', label: 'Path', icon: pathIcon },
+]
+const LENGTH_EFFECTS_OUT: EffectDef[] = [
+  { id: 'none', label: 'None', icon: null },
+  { id: 'path', label: 'Path', icon: pathOutIcon },
+]
+
+function EffectGrid({ label, effects, current, onPick, collapsible, open, onToggle }: { label?: string; effects: EffectDef[]; current: string; onPick: (id: string) => void; collapsible?: boolean; open?: boolean; onToggle?: () => void }) {
+  const currentLabel = effects.find((fx) => fx.id === current)?.label ?? current
+  return (
+    <div>
+      {label &&
+        (collapsible ? (
+          // Collapsed section header (VA's layout): disclosure + name on the
+          // left, the CHOSEN effect on the right.
+          <button onClick={onToggle} className="flex w-full items-center gap-1 rounded-md py-1.5 pr-1 text-sm hover:bg-primary/10">
+            <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
+            <span className="flex-1 text-left font-medium text-foreground">{label}</span>
+            <span className="text-muted-foreground">{currentLabel}</span>
+          </button>
+        ) : (
+          <div className="mb-1 text-sm font-medium text-foreground">{label}</div>
+        ))}
+      {collapsible && !open ? null : (
+      <div className="grid grid-cols-3 gap-1">
+        {effects.map((fx) => (
+          <button
+            key={fx.id}
+            onClick={() => onPick(fx.id)}
+            aria-pressed={current === fx.id}
+            className={cn(
+              'flex flex-col items-center gap-0.5 rounded-md border p-1 hover:bg-primary/10',
+              current === fx.id ? 'border-primary bg-primary/15' : 'border-transparent',
+            )}
+          >
+            <span className="flex h-[75px] w-full items-center justify-center overflow-hidden rounded bg-muted">
+              {typeof fx.icon === 'string' ? <img src={fx.icon} alt="" className="size-16" style={fx.style} draggable={false} /> : fx.icon}
+            </span>
+            <span className="w-full truncate text-center text-sm leading-tight text-muted-foreground">{fx.label}</span>
+          </button>
+        ))}
+      </div>
+      )}
+    </div>
+  )
+}
 
 export function EffectsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
   const elements = useEditorStore((s) => s.doc.elements)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const updateElements = useEditorStore((s) => s.updateElements)
   const [tab, setTab] = useState<'in' | 'out'>('in')
-  const sel = elements.filter((e) => selectedIds.includes(e.id) && HAS_EFFECTS(e.type))
+  // Which section is expanded (VA-style accordion) for the sectioned layouts
+  // (closed shapes: Border/Fill; texts: Effect/Text).
+  const [openSection, setOpenSection] = useState<'first' | 'second' | null>('first')
+  const sel = elements.filter((e) => selectedIds.includes(e.id))
   if (sel.length === 0) return null
   const first = sel[0]
-  const current = tab === 'in' ? (first.effectIn ?? 'fade') : (first.effectOut ?? 'fade')
+  // The Path (line-forming) effect is offered when the whole selection is open
+  // point paths (lines/arrows/freehand) — and for closed shapes' BORDERS below.
+  const allLines = sel.every((e) => e.type === 'draw' || (e.type === 'polyline' && !e.closed))
+  // Closed shapes (rect/ellipse/closed polyline) split into Border + Fill
+  // sections, each with its own effect (specs/animation.md "Closed paths").
+  const allClosed = sel.every((e) => e.type === 'rect' || e.type === 'ellipse' || (e.type === 'polyline' && e.closed))
+  const allTexts = sel.every((e) => e.type === 'text')
+  const allArrows3d = sel.every((e) => e.type === 'arrow3d')
+  const baseEffects = tab === 'in' ? IN_EFFECTS : OUT_EFFECTS
+  const pathTile = tab === 'in' ? PATH_IN : PATH_OUT
 
-  function pick(id: string) {
-    const key = tab === 'in' ? 'effectIn' : 'effectOut'
-    updateElements(sel.map((e) => ({ id: e.id, before: { [key]: e[key] }, after: { [key]: id } })))
+  type Part = 'main' | 'fill' | 'text' | 'length'
+  const KEYS: Record<Part, [string, string]> = {
+    main: ['effectIn', 'effectOut'],
+    fill: ['fillEffectIn', 'fillEffectOut'],
+    text: ['textEffectIn', 'textEffectOut'],
+    length: ['lengthEffectIn', 'lengthEffectOut'],
+  }
+
+  function currentOf(part: Part): string {
+    const key = KEYS[part][tab === 'in' ? 0 : 1]
+    const v = (first as unknown as Record<string, string | undefined>)[key]
+    return v ?? (part === 'text' || part === 'length' ? 'none' : 'fade')
+  }
+
+  function pick(id: string, part: Part = 'main') {
+    const key = KEYS[part][tab === 'in' ? 0 : 1]
+    updateElements(sel.map((e) => ({ id: e.id, before: { [key]: (e as unknown as Record<string, string | undefined>)[key] }, after: { [key]: id } })))
   }
 
   return (
@@ -112,24 +203,28 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-1">
-          {(tab === 'in' ? IN_EFFECTS : OUT_EFFECTS).map((fx) => (
-            <button
-              key={fx.id}
-              onClick={() => pick(fx.id)}
-              aria-pressed={current === fx.id}
-              className={cn(
-                'flex flex-col items-center gap-0.5 rounded-md border p-1 hover:bg-primary/10',
-                current === fx.id ? 'border-primary bg-primary/15' : 'border-transparent',
-              )}
-            >
-              <span className="flex h-[75px] w-full items-center justify-center overflow-hidden rounded bg-muted">
-                {fx.icon && <img src={fx.icon} alt="" className="size-16" style={fx.style} draggable={false} />}
-              </span>
-              <span className="w-full truncate text-center text-sm leading-tight text-muted-foreground">{fx.label}</span>
-            </button>
-          ))}
-        </div>
+        {allClosed ? (
+          <div className="max-h-[480px] space-y-1 divide-y divide-border overflow-y-auto">
+            {/* Border first (it also offers Path — the outline forming). */}
+            <EffectGrid label="Border" effects={baseEffects.concat([pathTile])} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
+            <EffectGrid label="Fill" effects={baseEffects} current={currentOf('fill')} onPick={(id) => pick(id, 'fill')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
+          </div>
+        ) : allArrows3d ? (
+          <div className="max-h-[480px] space-y-1 divide-y divide-border overflow-y-auto">
+            {/* Standard effect + the composed ARROW LENGTH category (so the
+                opacity ramp stays opt-in via the standard effect). */}
+            <EffectGrid label="Effect" effects={baseEffects} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
+            <EffectGrid label="Arrow Length" effects={tab === 'in' ? LENGTH_EFFECTS_IN : LENGTH_EFFECTS_OUT} current={currentOf('length')} onPick={(id) => pick(id, 'length')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
+          </div>
+        ) : allTexts ? (
+          <div className="max-h-[480px] space-y-1 divide-y divide-border overflow-y-auto">
+            {/* Standard effect + the composed TEXT effect (its own category). */}
+            <EffectGrid label="Effect" effects={baseEffects} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
+            <EffectGrid label="Text" effects={TEXT_EFFECTS} current={currentOf('text')} onPick={(id) => pick(id, 'text')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
+          </div>
+        ) : (
+          <EffectGrid effects={baseEffects.concat(allLines ? [pathTile] : [])} current={currentOf('main')} onPick={(id) => pick(id, 'main')} />
+        )}
       </PopoverContent>
     </Popover>
   )

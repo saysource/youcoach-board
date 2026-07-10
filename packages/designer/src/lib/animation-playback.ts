@@ -13,7 +13,11 @@
 import { applyOperation, BOARD_HEIGHT, BOARD_WIDTH, type AnimationFrame, type BoardElement, type FieldView } from '@youcoach-board/core'
 import type { EditorStore } from '../store/editorStore'
 import { lerpPose, cancelFieldAnimation, animateFieldTo } from './field-anim'
-import { reprojectChanges, withGroundAnchors } from './field-anchor'
+import { rectToPolyline, ellipseToPolyline } from './draw'
+import type * as THREE from 'three'
+import { projectGround, reprojectChanges, withGroundAnchors } from './field-anchor'
+import { makeCalibratedCamera } from './field-camera'
+import { boardToGround } from './arrow3d'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -86,7 +90,9 @@ function faded(el: BoardElement, f: number): BoardElement {
 // ── Enter/exit effects (specs/animation.md "Special effects") ────────────────
 // VA-compatible parameters: float translates by 15% of the board, slide by
 // 75%; zoom scales from/to ~0, drop/lift from/to 4×; progress is
-// ease-out-cubic. 'fade' is the default; 'none' pops at the frame boundary.
+// ease-out-cubic. EVERY standard effect also ramps opacity (0 → the object's
+// opacity entering, back to 0 leaving). 'fade' is the default; 'none' pops at
+// the frame boundary.
 const FLOAT_DELTA = 0.15
 const SLIDE_DELTA = 0.75
 const ZOOM_SCALE = 0.01
@@ -101,23 +107,260 @@ const EFFECT_DIR: Record<string, [number, number]> = {
   slide_up: [0, 1], slide_down: [0, -1], slide_left: [1, 0], slide_right: [-1, 0],
 }
 
-/** Apply an element's enter/exit effect at transition progress p (0‥1).
- *  arrow3d supports fade only; object3d pops (no transform/opacity). */
-function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out'): BoardElement {
-  const name = (dir === 'in' ? el.effectIn : el.effectOut) ?? 'fade'
-  if (name === 'none') return el
+/** Path formation: the visible LEADING portion of a point path, cut at arc-
+ *  length fraction `frac` (0‥1). The cut point is interpolated, so an end
+ *  arrow tip rides the forming end. Trimming happens on the control points
+ *  (local coords — the transform applies afterwards); ground pins are dropped
+ *  (they must stay parallel to `points`, and the partial has fewer). */
+function trimPath(el: Extract<BoardElement, { type: 'polyline' | 'draw' }>, frac: number): BoardElement {
+  const pts = el.points
+  if (pts.length < 2 || frac >= 1) return el
+  const lens: number[] = [0]
+  for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
+  const target = frac * lens[lens.length - 1]
+  const out: Array<[number, number]> = [pts[0]]
+  for (let i = 1; i < pts.length; i++) {
+    if (lens[i] <= target) {
+      out.push(pts[i])
+      continue
+    }
+    const span = lens[i] - lens[i - 1] || 1
+    const f = (target - lens[i - 1]) / span
+    out.push([pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f])
+    break
+  }
+  const partial = { ...el, points: out } as BoardElement & { ground?: unknown }
+  delete partial.ground
+  return partial
+}
+
+/** `count` points spaced at equal arc-length fractions along the point path
+ *  (endpoints included) — the common ground for morphing two paths whose
+ *  point counts differ. */
+function resamplePoints(pts: Array<[number, number]>, count: number): Array<[number, number]> {
+  if (pts.length < 2 || count < 2) return pts.slice()
+  const lens: number[] = [0]
+  for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
+  const total = lens[lens.length - 1] || 1
+  const out: Array<[number, number]> = []
+  let seg = 1
+  for (let k = 0; k < count; k++) {
+    const target = (k / (count - 1)) * total
+    while (seg < pts.length - 1 && lens[seg] < target) seg++
+    const span = lens[seg] - lens[seg - 1] || 1
+    const f = Math.min(1, Math.max(0, (target - lens[seg - 1]) / span))
+    out.push([pts[seg - 1][0] + (pts[seg][0] - pts[seg - 1][0]) * f, pts[seg - 1][1] + (pts[seg][1] - pts[seg - 1][1]) * f])
+  }
+  return out
+}
+
+/** Best-guess morph between two point paths with DIFFERENT point counts (same
+ *  counts lerp pairwise in lerpValue): both are resampled to the larger count
+ *  at equal arc-length fractions, then interpolated pairwise. The output is
+ *  transient (playback only), so the extra points never persist. */
+function morphPoints(a: Array<[number, number]>, b: Array<[number, number]>, t: number): Array<[number, number]> {
+  const count = Math.max(a.length, b.length)
+  const ra = resamplePoints(a, count)
+  const rb = resamplePoints(b, count)
+  return ra.map((p, i) => [p[0] + (rb[i][0] - p[0]) * t, p[1] + (rb[i][1] - p[1]) * t])
+}
+
+/** Whether the path (line-forming) effect applies: open point paths only —
+ *  closed shapes keep the standard effects (border/fill split comes later). */
+function pathFormable(el: BoardElement): el is Extract<BoardElement, { type: 'polyline' | 'draw' }> {
+  return el.type === 'draw' || (el.type === 'polyline' && !el.closed)
+}
+
+/** A CLOSED shape (rect / ellipse / closed polyline): its border and fill
+ *  carry independent enter/exit effects (specs/animation.md "Closed paths"). */
+function isClosedShape(el: BoardElement): boolean {
+  return el.type === 'rect' || el.type === 'ellipse' || (el.type === 'polyline' && el.closed)
+}
+
+/** A closed shape's outline as an OPEN point path (loop reclosed by repeating
+ *  the first point), so the border can FORM along itself ('path' effect). */
+function openBorderPath(el: BoardElement): Extract<BoardElement, { type: 'polyline' }> | null {
+  const poly =
+    el.type === 'rect' ? (rectToPolyline(el) as Extract<BoardElement, { type: 'polyline' }>)
+    : el.type === 'ellipse' ? (ellipseToPolyline(el) as Extract<BoardElement, { type: 'polyline' }>)
+    : el.type === 'polyline' && el.closed ? el
+    : null
+  if (!poly || poly.points.length < 2) return null
+  return { ...poly, closed: false, points: [...poly.points, poly.points[0]], fill: 'transparent' }
+}
+
+/** Standard effects translated for a pitch-pinned 3D TEXT: fade via opacity
+ *  (the overlay honors it), zoom/drop/lift via fontSize (its on-pitch size),
+ *  float/slide by offsetting `ground` — the effect's screen offset is
+ *  unprojected onto the grass through the live camera. */
+function applyText3DEffect(el: Extract<BoardElement, { type: 'text' }>, p: number, dir: 'in' | 'out', name: string, cam?: THREE.Camera | null): BoardElement {
   const e = easeOutCubic(p)
-  const f = dir === 'in' ? e : 1 - e // visibility factor
-  if (el.type === 'arrow3d' || el.type === 'object3d') return faded(el, f)
+  const f = dir === 'in' ? e : 1 - e
   const t = el.transform
+  const fadedEl = { ...el, transform: { ...t, opacity: t.opacity * f } }
   if (name === 'zoom') {
     const scale = dir === 'in' ? ZOOM_SCALE + (1 - ZOOM_SCALE) * e : 1 - (1 - ZOOM_SCALE) * e
-    return { ...el, transform: { ...t, scale: t.scale * scale } }
+    return { ...fadedEl, fontSize: el.fontSize * scale }
+  }
+  if (name === 'drop' || name === 'lift') {
+    const scale = dir === 'in' ? DROP_SCALE - (DROP_SCALE - 1) * e : 1 + (DROP_SCALE - 1) * e
+    return { ...fadedEl, fontSize: el.fontSize * scale }
+  }
+  const d = EFFECT_DIR[name]
+  if (d && cam && el.ground) {
+    const delta = name.startsWith('slide') ? SLIDE_DELTA : FLOAT_DELTA
+    const k = (dir === 'in' ? 1 - e : e) * delta
+    const s = dir === 'in' ? 1 : -1
+    const [bx, by] = projectGround(cam, el.ground[0], el.ground[1])
+    const g = boardToGround(bx + s * d[0] * BOARD_WIDTH * k, by + s * d[1] * BOARD_HEIGHT * k, cam)
+    if (g) return { ...fadedEl, ground: [g.x, g.z] }
+  }
+  return fadedEl // 'fade' + anything unprojectable
+}
+
+/** A ground offset for the float/slide directions: the effect's screen offset
+ *  unprojected onto the grass through the live camera; null when it misses. */
+function groundOffset(gx: number, gz: number, name: string, e: number, dir: 'in' | 'out', cam?: THREE.Camera | null): { x: number; z: number } | null {
+  const d = EFFECT_DIR[name]
+  if (!d || !cam) return null
+  const delta = name.startsWith('slide') ? SLIDE_DELTA : FLOAT_DELTA
+  const k = (dir === 'in' ? 1 - e : e) * delta
+  const s = dir === 'in' ? 1 : -1
+  const [bx, by] = projectGround(cam, gx, gz)
+  return boardToGround(bx + s * d[0] * BOARD_WIDTH * k, by + s * d[1] * BOARD_HEIGHT * k, cam)
+}
+
+/** Standard effects translated for a 3D ARROW (top-level opacity, geometry in
+ *  metres): fade via opacity, zoom/drop/lift scale its geometry, float/slide
+ *  offset its tail on the pitch. Every effect ramps opacity. */
+function applyArrow3DEffect(el: Extract<BoardElement, { type: 'arrow3d' }>, p: number, dir: 'in' | 'out', name: string, cam?: THREE.Camera | null): BoardElement {
+  const e = easeOutCubic(p)
+  const f = dir === 'in' ? e : 1 - e
+  const fadedEl = { ...el, opacity: (el.opacity ?? 1) * f }
+  if (name === 'zoom' || name === 'drop' || name === 'lift') {
+    const s =
+      name === 'zoom'
+        ? dir === 'in' ? ZOOM_SCALE + (1 - ZOOM_SCALE) * e : 1 - (1 - ZOOM_SCALE) * e
+        : dir === 'in' ? DROP_SCALE - (DROP_SCALE - 1) * e : 1 + (DROP_SCALE - 1) * e
+    return { ...fadedEl, splineWidth: el.splineWidth * s, splineHeight: el.splineHeight * s, stickWidth: el.stickWidth * s, thickness: el.thickness * s, tipWidth: el.tipWidth * s, tipLength: el.tipLength * s }
+  }
+  const g = groundOffset(el.x, el.z, name, e, dir, cam)
+  if (g) return { ...fadedEl, x: g.x, z: g.z }
+  return fadedEl
+}
+
+/** Standard effects translated for a 3D OBJECT (player/material): fade via the
+ *  transient mesh opacity, zoom/drop/lift via the transient scale multiplier,
+ *  float/slide by moving it on the pitch. Every effect ramps opacity. */
+function applyObject3DEffect(el: Extract<BoardElement, { type: 'object3d' }>, p: number, dir: 'in' | 'out', name: string, cam?: THREE.Camera | null): BoardElement {
+  const e = easeOutCubic(p)
+  const f = dir === 'in' ? e : 1 - e
+  const fadedEl = { ...el, opacity: (el.opacity ?? 1) * f }
+  if (name === 'zoom' || name === 'drop' || name === 'lift') {
+    const s =
+      name === 'zoom'
+        ? dir === 'in' ? ZOOM_SCALE + (1 - ZOOM_SCALE) * e : 1 - (1 - ZOOM_SCALE) * e
+        : dir === 'in' ? DROP_SCALE - (DROP_SCALE - 1) * e : 1 + (DROP_SCALE - 1) * e
+    return { ...fadedEl, effectScale: (el.effectScale ?? 1) * s }
+  }
+  const g = groundOffset(el.x, el.z, name, e, dir, cam)
+  if (g) return { ...fadedEl, x: g.x, z: g.z }
+  return fadedEl
+}
+
+/** The ARROW LENGTH pass (its own category, composed on top of the standard
+ *  effect so the opacity ramp is opt-in): 'path' forms the arrow by animating
+ *  its completeness (splineLength) 0 → the authored value (out: back to 0). */
+function applyArrowLengthEffect(el: BoardElement, p: number, dir: 'in' | 'out'): BoardElement {
+  if (el.type !== 'arrow3d') return el
+  const name = (dir === 'in' ? el.lengthEffectIn : el.lengthEffectOut) ?? 'none'
+  if (name !== 'path') return el
+  const e = easeOutCubic(p)
+  return { ...el, splineLength: el.splineLength * (dir === 'in' ? e : 1 - e) }
+}
+
+/** The TEXT effect pass (tracking / typewriter), COMPOSED on top of whatever
+ *  standard effect already ran (its own category, like border/fill). p is the
+ *  RAW transition progress: typewriter deliberately types at a LINEAR pace;
+ *  tracking eases like the standard effects. */
+function applyTextEffect(el: BoardElement, p: number, dir: 'in' | 'out'): BoardElement {
+  if (el.type !== 'text') return el
+  const name = (dir === 'in' ? el.textEffectIn : el.textEffectOut) ?? 'none'
+  if (name === 'tracking') {
+    // Letters glide together from wide spacing (in) / spread apart (out),
+    // fading with it. Spacing scales with the font so it reads at any size.
+    const e = easeOutCubic(p)
+    const spacing = el.fontSize * 1.2 * (dir === 'in' ? 1 - e : e)
+    return { ...el, letterSpacing: spacing, transform: { ...el.transform, opacity: el.transform.opacity * (dir === 'in' ? e : 1 - e) } }
+  }
+  if (name === 'typewriter') {
+    // Characters appear (in) / delete (out) at a constant, LINEAR pace.
+    const n = Math.round(el.text.length * (dir === 'in' ? p : 1 - p))
+    return { ...el, text: el.text.slice(0, n) }
+  }
+  return el
+}
+
+/** An entering/leaving element as its rendered part(s): closed shapes with a
+ *  visible border AND fill split into a fill copy + a border copy, each with
+ *  its own effect (e.g. the border forms while the fill fades in). The split
+ *  is transient — playback output only; the copies' ids never persist. */
+function enterExitParts(el: BoardElement, p: number, dir: 'in' | 'out', cam?: THREE.Camera | null): BoardElement[] {
+  if (isClosedShape(el)) {
+    const borderFx = (dir === 'in' ? el.effectIn : el.effectOut) ?? 'fade'
+    const fillFx = (dir === 'in' ? el.fillEffectIn : el.fillEffectOut) ?? 'fade'
+    const hasFill = el.fill !== 'transparent'
+    const hasBorder = el.stroke !== 'transparent' && el.strokeWidth > 0
+    if (hasFill && hasBorder && (borderFx !== fillFx || borderFx === 'path')) {
+      return [
+        applyEffect({ ...el, id: `${el.id}__fill`, stroke: 'transparent' } as BoardElement, p, dir, fillFx),
+        applyEffect({ ...el, fill: 'transparent' } as BoardElement, p, dir, borderFx),
+      ]
+    }
+    return [applyEffect(el, p, dir, hasBorder ? borderFx : fillFx)]
+  }
+  if (el.type === 'text') return [applyTextEffect(applyEffect(el, p, dir, undefined, cam), p, dir)]
+  if (el.type === 'arrow3d') return [applyArrowLengthEffect(applyEffect(el, p, dir, undefined, cam), p, dir)]
+  return [applyEffect(el, p, dir, undefined, cam)]
+}
+
+/** Apply an element's enter/exit effect at transition progress p (0‥1).
+ *  arrow3d supports fade only; object3d pops (no transform/opacity). */
+function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out', nameOverride?: string, cam?: THREE.Camera | null): BoardElement {
+  const name = nameOverride ?? (dir === 'in' ? el.effectIn : el.effectOut) ?? 'fade'
+  if (name === 'none') return el
+  // A pitch-pinned 3D text ignores the SVG transform (the overlay renders from
+  // ground + fontSize), so its effects act on THOSE fields instead.
+  if (el.type === 'text' && el.text3d && el.ground) return applyText3DEffect(el, p, dir, name, cam)
+  // 3D arrows and 3D objects live in ground metres, not the SVG transform —
+  // their effects translate to opacity / their own geometry / ground offsets.
+  if (el.type === 'arrow3d') return applyArrow3DEffect(el, p, dir, name, cam)
+  if (el.type === 'object3d') return applyObject3DEffect(el, p, dir, name, cam)
+  const e = easeOutCubic(p)
+  const f = dir === 'in' ? e : 1 - e // visibility factor
+  if (name === 'path') {
+    // The line/border FORMS along its own path (in) or retracts (out); a fully
+    // retracted line is hidden via opacity (a zero-length stub would still
+    // paint its tip). Closed shapes form their reopened outline loop.
+    const target = pathFormable(el) ? el : openBorderPath(el)
+    if (target) {
+      const frac = dir === 'in' ? e : 1 - e
+      if (frac <= 0.005) return faded(target, 0)
+      return trimPath(target, frac)
+    }
+  }
+  const t = el.transform
+  // Tokens rendered as 3D discs size from their metric sizeM — scale it too.
+  const scaled = (scale: number): BoardElement =>
+    el.type === 'token' && el.sizeM
+      ? { ...el, sizeM: el.sizeM * scale, transform: { ...t, scale: t.scale * scale, opacity: t.opacity * f } }
+      : { ...el, transform: { ...t, scale: t.scale * scale, opacity: t.opacity * f } }
+  if (name === 'zoom') {
+    return scaled(dir === 'in' ? ZOOM_SCALE + (1 - ZOOM_SCALE) * e : 1 - (1 - ZOOM_SCALE) * e)
   }
   if (name === 'drop' || name === 'lift') {
     // Drop lands from 4× (in); Lift grows to 4× on the way out.
-    const scale = dir === 'in' ? DROP_SCALE - (DROP_SCALE - 1) * e : 1 + (DROP_SCALE - 1) * e
-    return { ...el, transform: { ...t, scale: t.scale * scale, opacity: t.opacity * f } }
+    return scaled(dir === 'in' ? DROP_SCALE - (DROP_SCALE - 1) * e : 1 + (DROP_SCALE - 1) * e)
   }
   const d = EFFECT_DIR[name]
   if (d) {
@@ -126,8 +369,7 @@ function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out'): BoardEleme
     const off = [d[0] * BOARD_WIDTH * k, d[1] * BOARD_HEIGHT * k]
     // Exits move AWAY along the same axis they'd enter from.
     const s = dir === 'in' ? 1 : -1
-    const fade = name.startsWith('float') ? f : 1 // slides stay opaque (they leave the view)
-    return { ...el, transform: { ...t, x: t.x + s * off[0], y: t.y + s * off[1], opacity: t.opacity * fade } }
+    return { ...el, transform: { ...t, x: t.x + s * off[0], y: t.y + s * off[1], opacity: t.opacity * f } }
   }
   return faded(el, f) // 'fade' + unknown names
 }
@@ -137,8 +379,12 @@ function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out'): BoardEleme
  *  they keep painting until gone). Output order follows b. An element with a
  *  movement path INTO frame b travels along that spline (arc-length pace)
  *  instead of the straight line — all other properties still interpolate. */
-function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths']): BoardElement[] {
+function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths'], liveCam?: FieldView | null): BoardElement[] {
   const byId = new Map(a.map((e) => [e.id, e]))
+  // Pitch-pinned 3D texts translate their effects into ground metres — build
+  // the (lazy) calibrated camera once per pass.
+  let cam3: THREE.Camera | null | undefined
+  const cam = () => (cam3 === undefined ? (cam3 = liveCam ? makeCalibratedCamera(liveCam) : null) : cam3)
   const out: BoardElement[] = []
   for (const eb of b) {
     const ea = byId.get(eb.id)
@@ -155,12 +401,18 @@ function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: A
       const keepGround = !mids?.length && compatibleGround(ea, eb)
       const [na, nb] = keepGround ? [ea, eb] : [stripGround(ea), stripGround(eb)]
       let el = lerpValue(na, nb, t) as BoardElement
+      // Point paths whose point COUNT changed between the frames (a vertex was
+      // added/removed): lerpValue can only snap mismatched arrays, so guess the
+      // morph instead — resample both to a common count and interpolate.
+      if ((ea.type === 'polyline' || ea.type === 'draw') && ea.type === eb.type && ea.points.length !== eb.points.length && ea.points.length >= 2 && eb.points.length >= 2) {
+        el = { ...el, points: morphPoints(ea.points, eb.points, t) } as BoardElement
+      }
       if (mids?.length) el = alongPath(ea, eb, el, mids, t)
       out.push(el)
-    } else out.push(applyEffect(eb, t, 'in'))
+    } else out.push(...enterExitParts(eb, t, 'in', cam()))
   }
   const bIds = new Set(b.map((e) => e.id))
-  for (const ea of a) if (!bIds.has(ea.id)) out.push(applyEffect(ea, t, 'out'))
+  for (const ea of a) if (!bIds.has(ea.id)) out.push(...enterExitParts(ea, t, 'out', cam()))
   return out
 }
 
@@ -274,7 +526,7 @@ export function startPlayback(store: EditorStore): void {
     const t = Math.min(1, ((now - segStart) * Math.min(2, Math.max(0.25, anim.speed))) / TRANSITION_MS)
     const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
     const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
-    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths), pose, seg + t)
+    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera), pose, seg + t)
     if (t >= 1) {
       if (seg + 1 >= fr.length - 1) {
         // Reached the last frame. Loop wraps (hard cut back to frame 1);

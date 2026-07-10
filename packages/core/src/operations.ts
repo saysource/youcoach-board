@@ -23,6 +23,12 @@ export interface ElementPatch {
   // Enter/exit canned animations (specs/animation.md "Special effects").
   effectIn?: string
   effectOut?: string
+  fillEffectIn?: string
+  fillEffectOut?: string
+  textEffectIn?: string
+  textEffectOut?: string
+  lengthEffectIn?: string
+  lengthEffectOut?: string
   transform?: ElementTransform
   stroke?: string
   strokeWidth?: number

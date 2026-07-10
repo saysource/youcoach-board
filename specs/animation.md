@@ -109,7 +109,35 @@ For the fill, standard effects apply. For the border, the lines effect apply (wh
 
 
 
-
 ## Phase 3: effects
 
 Implement the standard effects and the effects panel for in/out animations.
+
+
+## Text Effects
+
+- All the standard one
+- Add a text specific category to the effects with:
+ - None
+ - Typewriter
+
+
+
+Implement standard effects to the rest of the elements:
+- arrow 3D
+- tokens
+- figures
+- objects 3D (players and materials)
+
+## Arrow 3D
+
+Assume
+- arrow completeness
+- thickness
+- stick width
+- tip width
+- tip length
+as object properties.
+Add the standard effects, plus the category Arrow Length which should have an effect like the path for lines, but separated, so we can decide to add or not opacity effect as base effect.
+The path effect on arrow 3D simply animate the completeness property from 0 to the value set by the user.
+

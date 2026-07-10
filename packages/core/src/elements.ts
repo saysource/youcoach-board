@@ -55,6 +55,20 @@ interface BaseElement {
   effectIn?: string
   /** Canned animation for LEAVING the scene ('fade' when absent, 'none' off). */
   effectOut?: string
+  /** Closed shapes only: the FILL's own enter/exit animations — the base
+   *  effectIn/effectOut then drive the BORDER (which also supports 'path',
+   *  the outline forming along itself). 'fade' when absent. */
+  fillEffectIn?: string
+  fillEffectOut?: string
+  /** Texts only: a TEXT effect (tracking / typewriter) COMPOSED on top of the
+   *  standard effectIn/effectOut. 'none' when absent. */
+  textEffectIn?: string
+  textEffectOut?: string
+  /** 3D arrows only: the ARROW LENGTH effect ('path' = the completeness —
+   *  splineLength — forms 0 → its value), COMPOSED on top of the standard
+   *  effect so the opacity ramp is opt-in. 'none' when absent. */
+  lengthEffectIn?: string
+  lengthEffectOut?: string
   transform: ElementTransform
   /** Stroke color (CSS color). */
   stroke: string
@@ -241,6 +255,9 @@ export interface TextElement extends BaseElement {
   bold: boolean
   /** Curated font id (see fonts.ts BOARD_FONTS); absent = the default font. */
   fontFamily?: string
+  /** TRANSIENT render hint (playback only, never persisted): extra spacing
+   *  between letters in board units — drives the "Tracking" text effect. */
+  letterSpacing?: number
   /** Render italic (synthesized obliquing where a face has no italic file). */
   italic?: boolean
   /** When true, the text is written onto the 3D field surface (lying flat, leaning
@@ -311,6 +328,10 @@ export interface Object3DElement extends BaseElement {
   /** Recolor slots (3D players: skin/hair/kit), the same slot names as figure
    *  players (yc-skin, yc-hair, yc-color-1 …). Absent → the authored look. */
   colors?: Record<string, string>
+  /** TRANSIENT render hints (playback enter/exit effects only, never
+   *  persisted): mesh opacity (0‥1) and an extra scale multiplier. */
+  opacity?: number
+  effectScale?: number
 }
 
 export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement | Object3DElement
@@ -893,6 +914,12 @@ export function parseElement(raw: unknown): BoardElement | null {
     locked: o.locked === true,
     ...(typeof o.effectIn === 'string' ? { effectIn: o.effectIn } : {}),
     ...(typeof o.effectOut === 'string' ? { effectOut: o.effectOut } : {}),
+    ...(typeof o.fillEffectIn === 'string' ? { fillEffectIn: o.fillEffectIn } : {}),
+    ...(typeof o.fillEffectOut === 'string' ? { fillEffectOut: o.fillEffectOut } : {}),
+    ...(typeof o.textEffectIn === 'string' ? { textEffectIn: o.textEffectIn } : {}),
+    ...(typeof o.textEffectOut === 'string' ? { textEffectOut: o.textEffectOut } : {}),
+    ...(typeof o.lengthEffectIn === 'string' ? { lengthEffectIn: o.lengthEffectIn } : {}),
+    ...(typeof o.lengthEffectOut === 'string' ? { lengthEffectOut: o.lengthEffectOut } : {}),
     transform: parseTransform(o.transform),
     stroke: str(o.stroke, '#000000'),
     strokeWidth: num(o.strokeWidth) ?? 3,

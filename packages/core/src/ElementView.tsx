@@ -209,6 +209,7 @@ function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, to
         <text
           textAnchor={anchor}
           fontSize={fontSize}
+          letterSpacing={element.letterSpacing || undefined}
           fontWeight={element.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT}
           fontStyle={element.italic ? 'italic' : undefined}
           fill={element.textColor}

@@ -315,12 +315,80 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
     // Push an operation: apply it, drop any redo branch, advance the pointer.
     // `post` lets a caller fold extra NON-undoable doc rewrites (e.g. other
     // frames' camera reprojection) into the same atomic set.
+    // Element presence propagates FORWARD through the animation frames: adding
+    // an element on frame k means "it enters the scene here" (copied into every
+    // following frame), deleting on frame k means "it leaves here" (removed
+    // from k onward). Applied on push AND undo/redo, so undoing an add also
+    // clears the propagated copies (no orphans). Property edits stay per-frame.
+    function propagatePresence(prevElements: BoardElement[], doc: BoardDoc): BoardDoc {
+      const a = doc.animation
+      if (a.frames.length < 2 || a.current >= a.frames.length - 1) return doc
+      const beforeIds = new Set(prevElements.map((e) => e.id))
+      const nowIds = new Set(doc.elements.map(e => e.id))
+      const added = doc.elements.filter((e) => !beforeIds.has(e.id))
+      const removed = prevElements.filter((e) => !nowIds.has(e.id)).map((e) => e.id)
+      if (added.length === 0 && removed.length === 0) return doc
+      const removedSet = new Set(removed)
+      const frames = a.frames.map((f, i) => {
+        if (i <= a.current) return f
+        let els = removedSet.size ? f.elements.filter((e) => !removedSet.has(e.id)) : f.elements
+        const have = new Set(els.map((e) => e.id))
+        const toAdd = added.filter((e) => !have.has(e.id))
+        if (toAdd.length) els = [...els, ...toAdd.map((e) => structuredClone(e))]
+        return els === f.elements ? f : { ...f, elements: els }
+      })
+      return { ...doc, animation: { ...a, frames } }
+    }
+
+    // OBJECT-level element settings, not per-frame: a change made while editing
+    // any frame must reach every frame's copy. Enter/exit effects (the out
+    // effect plays from the element's LAST frame, the in effect from its first)
+    // and the stroke line style (solid/dashed/dotted), a text's On-field (3D)
+    // placement, and a 3D arrow's shape identity (completeness + thickness +
+    // stick/tip geometry) — part of what the object IS, unlike the
+    // interpolable geometry/colors which animate per frame.
+    // Mirrored on undo/redo like propagatePresence.
+    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'strokeStyle', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
+    function propagateEffects(prevElements: BoardElement[], doc: BoardDoc): BoardDoc {
+      const a = doc.animation
+      if (a.frames.length < 2) return doc
+      const prevById = new Map(prevElements.map((e) => [e.id, e]))
+      const changed: Array<{ id: string; patch: Record<string, unknown> }> = []
+      for (const e of doc.elements) {
+        const p = prevById.get(e.id)
+        if (!p) continue
+        // Loose access: some keys exist only on specific element types (text3d).
+        const ev = e as unknown as Record<string, unknown>
+        const pv = p as unknown as Record<string, unknown>
+        const patch: Record<string, unknown> = {}
+        for (const k of OBJECT_KEYS) if (ev[k] !== pv[k]) patch[k] = ev[k]
+        if (Object.keys(patch).length) changed.push({ id: e.id, patch })
+      }
+      if (changed.length === 0) return doc
+      const frames = a.frames.map((f, i) => {
+        if (i === a.current) return f
+        let els = f.elements
+        let touched = false
+        for (const { id, patch } of changed) {
+          const idx = els.findIndex((e) => e.id === id)
+          if (idx < 0) continue
+          if (!touched) {
+            els = els.slice()
+            touched = true
+          }
+          els[idx] = { ...els[idx], ...patch } as BoardElement
+        }
+        return touched ? { ...f, elements: els } : f
+      })
+      return { ...doc, animation: { ...a, frames } }
+    }
+
     function push(op: Operation, post?: (d: BoardDoc) => BoardDoc) {
       if (get().playing) return // playback owns the doc; no edits land
       const { doc, stack, pointer } = get()
       let nextDoc = applyOperation(doc, op)
       if (post) nextDoc = post(nextDoc)
-      nextDoc = syncFrames(nextDoc)
+      nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, syncFrames(nextDoc)))
       const nextStack = stack.slice(0, pointer + 1)
       nextStack.push(op)
       set({ doc: nextDoc, stack: nextStack, pointer: pointer + 1 })
@@ -944,7 +1012,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       undo: () => {
         const { stack, pointer, doc, selectedIds } = get()
         if (pointer < 0) return
-        const nextDoc = syncFrames(applyOperation(doc, invertOperation(stack[pointer])))
+        const nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, syncFrames(applyOperation(doc, invertOperation(stack[pointer])))))
         // Keep the selection across undo, but drop ids of elements the undo
         // removed (e.g. undoing a create) — so only delete-like undos clear it.
         set({ doc: nextDoc, pointer: pointer - 1, selectedIds: keepExisting(selectedIds, nextDoc) })
@@ -954,7 +1022,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       redo: () => {
         const { stack, pointer, doc, selectedIds } = get()
         if (pointer >= stack.length - 1) return
-        const nextDoc = syncFrames(applyOperation(doc, stack[pointer + 1]))
+        const nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, syncFrames(applyOperation(doc, stack[pointer + 1]))))
         set({ doc: nextDoc, pointer: pointer + 1, selectedIds: keepExisting(selectedIds, nextDoc) })
         onChange?.(nextDoc)
       },

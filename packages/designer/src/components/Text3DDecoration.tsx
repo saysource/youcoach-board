@@ -82,6 +82,7 @@ function Text3DHtmlItem({ el, cam, boardToPx }: { el: TextElement; cam: THREE.Ca
         fontFamily: textFontStack(el.fontFamily),
         fontStyle: el.italic ? 'italic' : undefined,
         fontSize: el.fontSize,
+        letterSpacing: el.letterSpacing || undefined,
         fontWeight: el.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT,
         lineHeight: TEXT_LINE_HEIGHT,
         color: el.textColor,

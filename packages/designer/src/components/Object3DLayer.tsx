@@ -123,19 +123,20 @@ function arrowHexColor(fill: string): number {
   return parseInt(hex, 16)
 }
 
-/** Dim (or restore) every material under `obj` — a per-object opacity cue. Safe:
- *  buildObject3D gives each object its own material instances (only textures are
- *  shared), so this never bleeds onto other objects. */
-function setObjectDim(obj: THREE.Object3D, dim: boolean) {
+/** Set every material under `obj` to `opacity` — the per-object erase-dim cue
+ *  and the playback enter/exit fade. Safe: buildObject3D gives each object its
+ *  own material instances (only textures are shared), so this never bleeds
+ *  onto other objects. */
+function setObjectDim(obj: THREE.Object3D, opacity: number) {
   obj.traverse((o) => {
     const mat = (o as THREE.Mesh).material
     if (!mat) return
     const arr = Array.isArray(mat) ? mat : [mat]
     for (const m of arr) {
-      const opacity = dim ? 0.5 : 1
-      if (m.opacity !== opacity || m.transparent !== dim) {
+      const transparent = opacity < 1
+      if (m.opacity !== opacity || m.transparent !== transparent) {
         m.opacity = opacity
-        m.transparent = dim
+        m.transparent = transparent
         m.needsUpdate = true
       }
     }
@@ -278,12 +279,14 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       // players scale with the same materials multiplier as cones/hurdles/etc., so
       // players and materials stay the same relative size (aligned defaults).
       const mult = objectScale
-      const scale = isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(minScale, rel * mult)
+      // Playback enter/exit effects: transient extra scale + opacity hints.
+      const scale = (isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(minScale, rel * mult)) * Math.max(0.001, e.effectScale ?? 1)
       obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
       obj.position.set(e.x, -baseMinY * scale, e.z)
       obj.rotation.set(0, e.rotation, 0)
-      setObjectDim(obj, !!erasingIds?.has(e.id))
+      setObjectDim(obj, (e.opacity ?? 1) * (erasingIds?.has(e.id) ? 0.5 : 1))
+      obj.visible = (e.opacity ?? 1) > 0
       obj.userData.id = e.id
       obj.userData.objectId = e.objectId
       // Live tint for colorable materials: recolor the body toon material only
