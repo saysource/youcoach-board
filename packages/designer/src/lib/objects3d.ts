@@ -116,7 +116,7 @@ import playerKitPrint from '../assets/players3d/kit_print.png?inline'
 // The DEFAULT kit for pose players with no custom colors (assets/players3d/
 // texture_neutral.png, downscaled) — a neutral grey strip the kit editor paints over.
 import playerNeutralTex from '../assets/players3d/player_neutral.png?inline'
-import tokenOverlayUrl from '../assets/token_overlay_gray.png?inline'
+import tokenOverlayUrl from '../assets/token_overlay_gray2.png?inline'
 import tokenShadowUrl from '../assets/token_overlay_shadow.png?inline'
 
 // GLB-backed objects: embedded model bytes + toon colour. The models are authored
