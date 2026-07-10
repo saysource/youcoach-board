@@ -117,6 +117,16 @@
     box-sizing: border-box;
   }
 
+  /* Touch (iOS): board figures embed raster <image> data, so touching one pops
+   * Safari's image "Save/Copy/Share" callout and begins a native image-drag —
+   * both hijack the finger before an element drag can start. Disable them across
+   * the board surface. (touch-action:none is set on the board SVG itself.) */
+  .ycb-root [data-board-surface],
+  .ycb-root [data-board-surface] * {
+    -webkit-touch-callout: none;
+    -webkit-user-drag: none;
+  }
+
   .ycb-root {
     color: var(--foreground);
     font-family: 'Inter Variable', system-ui, sans-serif;
