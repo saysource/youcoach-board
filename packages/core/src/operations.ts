@@ -20,6 +20,9 @@ import type { ArrowTip, BoardElement, ElementTransform, TextAlign, TokenFill } f
  *  plain shallow merge — no deep-merge ambiguity. `id`/`type` are immutable. */
 export interface ElementPatch {
   locked?: boolean
+  // Enter/exit canned animations (specs/animation.md "Special effects").
+  effectIn?: string
+  effectOut?: string
   transform?: ElementTransform
   stroke?: string
   strokeWidth?: number

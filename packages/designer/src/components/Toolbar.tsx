@@ -127,7 +127,7 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
     onOpenChange: (o: boolean) => setOpenMenu((prev) => (o ? name : prev === name ? null : prev)),
   })
   return (
-    <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+    <div className="pointer-events-auto select-none flex items-center gap-1 rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
       <ToolButton label={locked ? 'Unlock' : 'Keep selected tool active'} active={locked} onClick={onToggleLock}>
         <Lock />
       </ToolButton>

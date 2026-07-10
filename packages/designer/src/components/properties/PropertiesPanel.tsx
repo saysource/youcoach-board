@@ -55,6 +55,7 @@ import { ClosePathIcon, LineStylePlainIcon, LineStyleCurvedIcon, LineStyleZigzag
 import { PropertyControls, Segmented } from './PropertyControls'
 import { ColorPickerWidget } from './ColorPickerWidget'
 import { usePropertyEditing, type TokenVisualStyle } from './usePropertyEditing'
+import { EffectsButton } from './EffectsButton'
 import { PlayerSettingsButton } from './PlayerSettings'
 import { SubjectHeader } from './SubjectHeader'
 import { BackgroundSettings, SurfaceColorPicker, ObjectTokenSettings } from './BackgroundSettings'
@@ -193,6 +194,7 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
         {p.count > 0 && (
           <>
             <span className="my-0.5 h-px w-6 bg-border" />
+            <EffectsButton side="right" />
             <LockButton />
             <ActionsMenu side="right" />
           </>

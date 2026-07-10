@@ -12,7 +12,7 @@ interface UndoRedoBarProps {
 // Bottom-left undo/redo control, driven by the editor's command stack.
 export function UndoRedoBar({ canUndo, canRedo, onUndo, onRedo }: UndoRedoBarProps) {
   return (
-    <div className="pointer-events-auto flex items-center rounded-lg border border-border bg-card shadow-md">
+    <div className="pointer-events-auto select-none flex items-center rounded-lg border border-border bg-card shadow-md">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button size="icon-sm" aria-label="Undo" disabled={!canUndo} onClick={onUndo}>

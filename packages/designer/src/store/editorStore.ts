@@ -502,7 +502,18 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       resetCanvas: () => {
         const { doc } = get()
-        if (doc.elements.length === 0) return
+        const a = doc.animation
+        if (doc.elements.length === 0 && a.frames.length === 0) return
+        if (a.frames.length > 0) {
+          // Animation authored: resetting wipes the elements AND the whole
+          // frame strip. A frame-STRUCTURE op — clears the history like the
+          // other frame ops (an undo could resurrect orphaned frames).
+          get().commitTransaction()
+          const nextDoc = { ...doc, elements: [], animation: { ...a, animated: false, frames: [], current: 0 } }
+          set({ doc: nextDoc, currentFrame: 0, stack: [], pointer: -1, selectedIds: [] })
+          onChange?.(nextDoc)
+          return
+        }
         // Remove every element highest-index-first (so each index stays valid); one
         // transaction, so Undo restores the whole canvas.
         const ops: Operation[] = doc.elements

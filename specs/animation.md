@@ -58,3 +58,58 @@ Implement properties interpolation, onion view and movement paths.
 
 ## Special effects
 
+We want to add a new button in object properties to pick an animation to be used when the element enter/exit the stage.
+
+Effects are available by clicking the a new Effects button in the element properties panel, which opens a panel similar to the one we you in youcoach video analysis.
+The icons for each effect are available here: @/Users/gtoffoli/Saysource/progetti/Youcoach/GIT/youcoachvideo/client/src/assets/icons/
+
+
+Enter animations available for all the objects:
+- None
+- Fade in
+- Zoom
+- Drop
+- Float Up
+- Float Down
+- Float Left
+- Float Right
+- Slide Up
+- Slide Down
+- Slide Left
+- Slide Right
+
+Exit animations available for all the objects:
+- None
+- Fade out
+- Zoom
+- Lift
+- Float Down
+- Float Up
+- Float Right
+- Float Left
+- Slide Down
+- Slide Up
+- Slide Right
+- Slide Left
+
+
+The user should be able to enable/disable effects/canned animations for each element.
+All animations are on by default.
+
+
+
+### Lines
+
+In excess to the animations above, line also have the path option, which means the line form itself following the its path. Note that if the line ends with an arrow tip, the tip should travel along the line forming.
+
+### Closed paths
+
+Closed paths divide the effects in effect applied to the border and the effect applied to the fill.
+For the fill, standard effects apply. For the border, the lines effect apply (which is formation of the path + all the standard effects)
+
+
+
+
+## Phase 3: effects
+
+Implement the standard effects and the effects panel for in/out animations.

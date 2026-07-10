@@ -10,7 +10,7 @@
 // untouched. Stopping restores the exact pre-play state (the frame being edited
 // and the editing camera). One playback per store (WeakMap), like field-anim.
 
-import { applyOperation, type AnimationFrame, type BoardElement, type FieldView } from '@youcoach-board/core'
+import { applyOperation, BOARD_HEIGHT, BOARD_WIDTH, type AnimationFrame, type BoardElement, type FieldView } from '@youcoach-board/core'
 import type { EditorStore } from '../store/editorStore'
 import { lerpPose, cancelFieldAnimation, animateFieldTo } from './field-anim'
 import { reprojectChanges, withGroundAnchors } from './field-anchor'
@@ -75,11 +75,61 @@ function lerpValue(a: unknown, b: unknown, t: number): unknown {
 }
 
 /** An element faded to `f` × its own opacity (enter/leave transitions). The
- *  arrow3d element carries a top-level opacity; everything else fades via the
- *  transform. */
+ *  arrow3d element carries a top-level opacity; object3d has none (it pops);
+ *  everything else fades via the transform. */
 function faded(el: BoardElement, f: number): BoardElement {
   if (el.type === 'arrow3d') return { ...el, opacity: (el.opacity ?? 1) * f }
+  if (el.type === 'object3d') return el
   return { ...el, transform: { ...el.transform, opacity: el.transform.opacity * f } }
+}
+
+// ── Enter/exit effects (specs/animation.md "Special effects") ────────────────
+// VA-compatible parameters: float translates by 15% of the board, slide by
+// 75%; zoom scales from/to ~0, drop/lift from/to 4×; progress is
+// ease-out-cubic. 'fade' is the default; 'none' pops at the frame boundary.
+const FLOAT_DELTA = 0.15
+const SLIDE_DELTA = 0.75
+const ZOOM_SCALE = 0.01
+const DROP_SCALE = 4
+
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+
+/** Offset direction an effect ENTERS from (exit mirrors it): the element moves
+ *  toward its place along the named direction (float_up rises into place). */
+const EFFECT_DIR: Record<string, [number, number]> = {
+  float_up: [0, 1], float_down: [0, -1], float_left: [1, 0], float_right: [-1, 0],
+  slide_up: [0, 1], slide_down: [0, -1], slide_left: [1, 0], slide_right: [-1, 0],
+}
+
+/** Apply an element's enter/exit effect at transition progress p (0‥1).
+ *  arrow3d supports fade only; object3d pops (no transform/opacity). */
+function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out'): BoardElement {
+  const name = (dir === 'in' ? el.effectIn : el.effectOut) ?? 'fade'
+  if (name === 'none') return el
+  const e = easeOutCubic(p)
+  const f = dir === 'in' ? e : 1 - e // visibility factor
+  if (el.type === 'arrow3d' || el.type === 'object3d') return faded(el, f)
+  const t = el.transform
+  if (name === 'zoom') {
+    const scale = dir === 'in' ? ZOOM_SCALE + (1 - ZOOM_SCALE) * e : 1 - (1 - ZOOM_SCALE) * e
+    return { ...el, transform: { ...t, scale: t.scale * scale } }
+  }
+  if (name === 'drop' || name === 'lift') {
+    // Drop lands from 4× (in); Lift grows to 4× on the way out.
+    const scale = dir === 'in' ? DROP_SCALE - (DROP_SCALE - 1) * e : 1 + (DROP_SCALE - 1) * e
+    return { ...el, transform: { ...t, scale: t.scale * scale, opacity: t.opacity * f } }
+  }
+  const d = EFFECT_DIR[name]
+  if (d) {
+    const delta = name.startsWith('slide') ? SLIDE_DELTA : FLOAT_DELTA
+    const k = (dir === 'in' ? 1 - e : e) * delta
+    const off = [d[0] * BOARD_WIDTH * k, d[1] * BOARD_HEIGHT * k]
+    // Exits move AWAY along the same axis they'd enter from.
+    const s = dir === 'in' ? 1 : -1
+    const fade = name.startsWith('float') ? f : 1 // slides stay opaque (they leave the view)
+    return { ...el, transform: { ...t, x: t.x + s * off[0], y: t.y + s * off[1], opacity: t.opacity * fade } }
+  }
+  return faded(el, f) // 'fade' + unknown names
 }
 
 /** The interpolated element list for transition a→b at time t. Matched ids
@@ -107,10 +157,10 @@ function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: A
       let el = lerpValue(na, nb, t) as BoardElement
       if (mids?.length) el = alongPath(ea, eb, el, mids, t)
       out.push(el)
-    } else out.push(faded(eb, t))
+    } else out.push(applyEffect(eb, t, 'in'))
   }
   const bIds = new Set(b.map((e) => e.id))
-  for (const ea of a) if (!bIds.has(ea.id)) out.push(faded(ea, 1 - t))
+  for (const ea of a) if (!bIds.has(ea.id)) out.push(applyEffect(ea, t, 'out'))
   return out
 }
 

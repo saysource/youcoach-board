@@ -49,6 +49,12 @@ interface BaseElement {
   /** When true, the element is protected: it can be selected (to unlock) but not
    *  moved, resized, rotated, edited or deleted from the canvas. */
   locked?: boolean
+  /** Canned animation played when the element ENTERS the scene between two
+   *  animation frames ('fade' when absent — all animations on by default;
+   *  'none' disables it). See specs/animation.md "Special effects". */
+  effectIn?: string
+  /** Canned animation for LEAVING the scene ('fade' when absent, 'none' off). */
+  effectOut?: string
   transform: ElementTransform
   /** Stroke color (CSS color). */
   stroke: string
@@ -885,6 +891,8 @@ export function parseElement(raw: unknown): BoardElement | null {
   const base = {
     id,
     locked: o.locked === true,
+    ...(typeof o.effectIn === 'string' ? { effectIn: o.effectIn } : {}),
+    ...(typeof o.effectOut === 'string' ? { effectOut: o.effectOut } : {}),
     transform: parseTransform(o.transform),
     stroke: str(o.stroke, '#000000'),
     strokeWidth: num(o.strokeWidth) ?? 3,

@@ -67,6 +67,12 @@ export default defineConfig({
     // Restricting include to index.tsx left a dangling `import './BoardDesigner'`.
     dts({ rollupTypes: true, tsconfigPath: './tsconfig.json' }),
   ],
+  // Dev only: listen on all interfaces so phones/tablets on the same Wi-Fi can
+  // open the standalone tool at http://<this-machine-LAN-IP>:5173. (The `server`
+  // block is ignored by `vite build`.)
+  server: {
+    host: true,
+  },
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.tsx'),

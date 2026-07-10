@@ -198,6 +198,11 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // in the document either way — hiding the bar only hides the UI.
   const [animEditing, setAnimEditing] = useState(false)
   const playing = useEditorStore((s) => s.playing)
+  // Resetting the canvas (or loading a frameless doc) wipes the frames: close
+  // the animation bar with them, so it doesn't linger over an empty strip.
+  // Render-phase adjustment (same pattern as navBgSeen below), not an effect.
+  const frameCount = useEditorStore((s) => s.doc.animation.frames.length)
+  if (animEditing && frameCount === 0) setAnimEditing(false)
   function toggleAnimation() {
     if (animEditing) {
       stopPlayback(store)
@@ -435,6 +440,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // The root is also the Radix portal container, so menus/tooltips stay inside
   // our scoped, theme-aware subtree. Tracked in state so context updates on mount.
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
+  // Bottom-left chrome (undo/redo + nav bar), measured so the animation bar can
+  // size its frame window to the space that's actually free next to it.
+  const [bottomLeftEl, setBottomLeftEl] = useState<HTMLDivElement | null>(null)
+  const { width: bottomLeftW } = useElementSize(bottomLeftEl)
 
   // Responsive layout from the component's own size (container-query style).
   const { width, height } = useElementSize(rootEl)
@@ -544,37 +553,37 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               background-edit mode it's replaced by a single "Finish" button. */}
           <div className={cn('pointer-events-none absolute left-1/2 z-30 -translate-x-1/2', mobile ? 'bottom-3' : 'top-3')}>
             {playing ? (
-              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+              <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={() => stopPlayback(store)} className="font-medium">
                   <Square /> Stop animation
                 </Button>
               </div>
             ) : bgEditing ? (
-              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+              <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishBackground} className="font-medium">
                   <Check /> Finish editing background
                 </Button>
               </div>
             ) : navigating ? (
-              <div key={navBounce} className={cn('pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md', navBounce > 0 && 'ycb-nav-bounce')}>
+              <div key={navBounce} className={cn('pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md', navBounce > 0 && 'ycb-nav-bounce')}>
                 <Button size="sm" onClick={toggleNav} className="font-medium">
                   <Rotate3d /> Exit navigation mode
                 </Button>
               </div>
             ) : homographyEditing ? (
-              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+              <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishHomography} className="font-medium">
                   <Check /> Finish field homography
                 </Button>
               </div>
             ) : cameraEditing ? (
-              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+              <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishFieldCamera} className="font-medium">
                   <Check /> Finish field camera
                 </Button>
               </div>
             ) : zoneEditing ? (
-              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+              <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishFieldZones} className="font-medium">
                   <Check /> Finish field zones
                 </Button>
@@ -595,7 +604,10 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           </div>
 
           {/* Animation toolbar (frames strip) — bottom-center, above the mobile
-              main toolbar; hidden while any special camera mode is up. */}
+              main toolbar; hidden while any special camera mode is up. The bar
+              is centered on the ROOT, so it must clear the widest bottom
+              obstacle on BOTH sides: desktop = undo/redo+nav bar (left) vs the
+              open drawer (right); mobile = the MobileBar button clusters. */}
           <AnimatePresence>
             {animEditing && !cameraOverlayActive && (
               <div className={cn('absolute left-1/2 z-30 -translate-x-1/2', mobile ? 'bottom-14' : 'bottom-3')}>
@@ -608,7 +620,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                   exit={{ y: 90, opacity: 0 }}
                   transition={{ type: 'spring', stiffness: 380, damping: 26 }}
                 >
-                  <AnimationBar />
+                  <AnimationBar maxWidth={Math.max(260, width - 2 * (mobile ? 96 : Math.max(12 + bottomLeftW + 8, drawerOpen ? 256 + 12 : 20)))} />
                 </motion.div>
               </div>
             )}
@@ -639,7 +651,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {/* Bottom-left undo/redo + nav. Hidden in mobile mode, where the main
               toolbar occupies the bottom and undo/redo live in the property bar. */}
           {!mobile && (
-            <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
+            <div ref={setBottomLeftEl} className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
               <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
               <NavBar available={navAvailable || navigating || (bgEditing && !!savedField3d)} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} editingBg={bgEditing} onZoom3d={zoomFieldButton} pan3d={fieldPanning} onTogglePan3d={() => setFieldPan((v) => !v)} showPan3d={navigating || bgEditing} />
             </div>
