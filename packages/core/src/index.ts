@@ -10,6 +10,7 @@ export type {
   BoardDoc,
   BoardBackground,
   BoardAnimation,
+  AnimationFrame,
   LogoPosition,
   FieldBands,
   FieldType,

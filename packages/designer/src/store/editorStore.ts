@@ -3,6 +3,8 @@ import {
   type BoardDoc,
   type BoardElement,
   type BoardBackground,
+  type FieldView,
+  type AnimationFrame,
   type Operation,
   type ElementChange,
   type ElementPatch,
@@ -136,6 +138,14 @@ export interface EditorState {
   /** View transform (zoom/pan). Not part of the document. */
   viewport: Viewport
 
+  /** Animation frames: which frame `doc.elements` mirrors (0 when no frames). */
+  currentFrame: number
+  /** True while loop playback drives the doc (all editing suspended). */
+  playing: boolean
+  /** Playback position in frame units (segment + linear progress, 0‥frames−1);
+   *  null when not playing. Drives the AnimationBar's timeline indicator. */
+  playhead: number | null
+
   // Undo/redo: a flat operation stack + a pointer to the last applied operation
   // (VA's model). Everything before/at `pointer` is "done"; everything after is
   // the redo branch, truncated on the next push.
@@ -238,6 +248,24 @@ export interface EditorState {
   commitTransaction: () => void
   undo: () => void
   redo: () => void
+
+  // ── Animation frames (specs/animation.md). Frame-STRUCTURE ops (enter/switch/
+  // add/duplicate/remove) clear the undo stack — an undo could otherwise apply a
+  // frame-A edit onto frame B's elements. Element edits inside a frame stay
+  // normal undoable ops; doc.elements is the live copy of the current frame.
+  /** Ensure frames exist (frame 1 = the current elements) and switch to frame 1. */
+  enterAnimation: () => void
+  /** Switch the edited frame: store the live elements, load frame k's. */
+  setCurrentFrame: (k: number) => void
+  /** Append a new frame (a copy of the LAST frame, no camera) and switch to it. */
+  addFrame: () => void
+  /** Insert an identical copy after frame k and switch to it. */
+  duplicateFrame: (k: number) => void
+  /** Remove frame k (no-op when it's the only frame). */
+  removeFrame: (k: number) => void
+  /** Store a playback camera pose on frame k (null = keep the previous frame's).
+   *  Doesn't touch elements, so history survives. */
+  setFrameCamera: (k: number, pose: FieldView | null) => void
 }
 
 /** Keep only the selected ids whose elements still exist in `doc` (used after
@@ -268,15 +296,35 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
     // (not reactive) bookkeeping.
     let txn: { changes: Record<string, ElementChange>; bgBefore: BoardBackground | null } | null = null
 
+    // Keep the CURRENT animation frame's snapshot mirroring the live elements
+    // (O(1): a reference copy — operations produce new arrays, never mutate).
+    function syncFrames(doc: BoardDoc): BoardDoc {
+      const a = doc.animation
+      if (a.frames.length === 0) return doc
+      if (a.frames[a.current]?.elements === doc.elements) return doc
+      const frames = a.frames.slice()
+      frames[a.current] = { ...frames[a.current], elements: doc.elements }
+      return { ...doc, animation: { ...a, frames } }
+    }
+
     // Push an operation: apply it, drop any redo branch, advance the pointer.
-    function push(op: Operation) {
+    // `post` lets a caller fold extra NON-undoable doc rewrites (e.g. other
+    // frames' camera reprojection) into the same atomic set.
+    function push(op: Operation, post?: (d: BoardDoc) => BoardDoc) {
+      if (get().playing) return // playback owns the doc; no edits land
       const { doc, stack, pointer } = get()
-      const nextDoc = applyOperation(doc, op)
+      let nextDoc = applyOperation(doc, op)
+      if (post) nextDoc = post(nextDoc)
+      nextDoc = syncFrames(nextDoc)
       const nextStack = stack.slice(0, pointer + 1)
       nextStack.push(op)
       set({ doc: nextDoc, stack: nextStack, pointer: pointer + 1 })
       onChange?.(nextDoc)
     }
+
+    // Deep-copy a frame's elements for loading into the live doc (edits must
+    // never reach the stored snapshot through shared references).
+    const copyElements = (els: BoardElement[]) => els.map((e) => structuredClone(e))
 
     return {
       doc: initialDoc,
@@ -302,6 +350,9 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       styleClipboard: null,
       clipboard: [],
       viewport: { zoom: 1, panX: 0, panY: 0 },
+      currentFrame: initialDoc.animation.frames.length > 0 ? initialDoc.animation.current : 0,
+      playing: false,
+      playhead: null,
       stack: [],
       pointer: -1,
 
@@ -490,6 +541,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       },
 
       beginTransaction: () => {
+        if (get().playing) return // playback owns the doc
         // Idempotent: nested/repeated begins keep the original snapshot, so a
         // continuous control can call it on every change without resetting.
         if (!txn) txn = { changes: {}, bgBefore: null }
@@ -543,16 +595,30 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         // lib/field-anchor + specs/start.md "Elements on the 3D space".
         const before3d = doc.background.field3d
         const after3d = next.field3d
-        const reproj =
-          'field3d' in patch && before3d && after3d && JSON.stringify(before3d) !== JSON.stringify(after3d)
-            // Derive ground anchors on the fly so EVERY pinnable element remaps to the
-            // new pose — not only those already pinned via Edit-Background.
-            ? reprojectChanges(withGroundAnchors(doc.elements, before3d), before3d, after3d)
-            : []
+        const camMoved = 'field3d' in patch && !!before3d && !!after3d && JSON.stringify(before3d) !== JSON.stringify(after3d)
+        const reproj = camMoved
+          // Derive ground anchors on the fly so EVERY pinnable element remaps to the
+          // new pose — not only those already pinned via Edit-Background.
+          ? reprojectChanges(withGroundAnchors(doc.elements, before3d!), before3d!, after3d!)
+          : []
+        // Animation frames store 2D coords too: keep every OTHER frame's pinned
+        // elements relative to the live camera (the current frame is doc.elements,
+        // reprojected via `reproj`). Plain doc rewrite — never on the undo stack.
+        const reprojFrames = (d: BoardDoc): BoardDoc => {
+          const a = d.animation
+          if (!camMoved || a.frames.length < 2) return d
+          const frames = a.frames.map((f, i) => {
+            if (i === a.current) return f
+            const changes = reprojectChanges(withGroundAnchors(f.elements, before3d!), before3d!, after3d!)
+            if (changes.length === 0) return f
+            return { ...f, elements: applyOperation({ ...d, elements: f.elements }, { kind: 'update', changes }).elements }
+          })
+          return { ...d, animation: { ...a, frames } }
+        }
         if (txn) {
           // Capture the pre-transaction background once; apply live (no stack push).
           if (txn.bgBefore === null) txn.bgBefore = doc.background
-          let d = { ...doc, background: next }
+          let d = reprojFrames({ ...doc, background: next })
           if (reproj.length) {
             d = applyOperation(d, { kind: 'update', changes: reproj })
             // Accumulate like updateElements: keep each field's earliest before /
@@ -569,9 +635,9 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         }
         // No transaction: keep the background + reprojection atomic (one undo step).
         if (reproj.length) {
-          push({ kind: 'transaction', label: 'field', ops: [{ kind: 'background', before: doc.background, after: next }, { kind: 'update', changes: reproj }] })
+          push({ kind: 'transaction', label: 'field', ops: [{ kind: 'background', before: doc.background, after: next }, { kind: 'update', changes: reproj }] }, reprojFrames)
         } else {
-          push({ kind: 'background', before: doc.background, after: next })
+          push({ kind: 'background', before: doc.background, after: next }, camMoved ? reprojFrames : undefined)
         }
       },
 
@@ -853,7 +919,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       undo: () => {
         const { stack, pointer, doc, selectedIds } = get()
         if (pointer < 0) return
-        const nextDoc = applyOperation(doc, invertOperation(stack[pointer]))
+        const nextDoc = syncFrames(applyOperation(doc, invertOperation(stack[pointer])))
         // Keep the selection across undo, but drop ids of elements the undo
         // removed (e.g. undoing a create) — so only delete-like undos clear it.
         set({ doc: nextDoc, pointer: pointer - 1, selectedIds: keepExisting(selectedIds, nextDoc) })
@@ -863,8 +929,98 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       redo: () => {
         const { stack, pointer, doc, selectedIds } = get()
         if (pointer >= stack.length - 1) return
-        const nextDoc = applyOperation(doc, stack[pointer + 1])
+        const nextDoc = syncFrames(applyOperation(doc, stack[pointer + 1]))
         set({ doc: nextDoc, pointer: pointer + 1, selectedIds: keepExisting(selectedIds, nextDoc) })
+        onChange?.(nextDoc)
+      },
+
+      // ── Animation frames ────────────────────────────────────────────────────
+
+      enterAnimation: () => {
+        get().commitTransaction()
+        const { doc } = get()
+        const a = doc.animation
+        if (a.frames.length === 0) {
+          const frames: AnimationFrame[] = [{ camera: null, elements: doc.elements }]
+          const nextDoc = { ...doc, animation: { ...a, animated: true, frames, current: 0 } }
+          set({ doc: nextDoc, currentFrame: 0, stack: [], pointer: -1, selectedIds: [] })
+          onChange?.(nextDoc)
+        } else {
+          get().setCurrentFrame(0)
+        }
+      },
+
+      setCurrentFrame: (k) => {
+        get().commitTransaction()
+        const { doc } = get()
+        const a = doc.animation
+        if (k < 0 || k >= a.frames.length) return
+        const frames = a.frames.slice()
+        frames[a.current] = { ...frames[a.current], elements: doc.elements }
+        const nextDoc = { ...doc, elements: copyElements(frames[k].elements), animation: { ...a, frames, current: k } }
+        set({ doc: nextDoc, currentFrame: k, stack: [], pointer: -1, selectedIds: [] })
+        onChange?.(nextDoc)
+      },
+
+      addFrame: () => {
+        get().commitTransaction()
+        const { doc } = get()
+        const a = doc.animation
+        if (a.frames.length === 0) {
+          get().enterAnimation()
+          return
+        }
+        const frames = a.frames.slice()
+        frames[a.current] = { ...frames[a.current], elements: doc.elements }
+        // The new frame continues from the LAST one (usually where the drill goes on).
+        frames.push({ camera: null, elements: copyElements(frames[frames.length - 1].elements) })
+        const k = frames.length - 1
+        const nextDoc = { ...doc, elements: copyElements(frames[k].elements), animation: { ...a, animated: true, frames, current: k } }
+        set({ doc: nextDoc, currentFrame: k, stack: [], pointer: -1, selectedIds: [] })
+        onChange?.(nextDoc)
+      },
+
+      duplicateFrame: (k) => {
+        get().commitTransaction()
+        const { doc } = get()
+        const a = doc.animation
+        if (k < 0 || k >= a.frames.length) return
+        const frames = a.frames.slice()
+        frames[a.current] = { ...frames[a.current], elements: doc.elements }
+        const src = frames[k]
+        frames.splice(k + 1, 0, {
+          camera: src.camera ? { ...src.camera, position: [...src.camera.position] as [number, number, number], target: [...src.camera.target] as [number, number, number] } : null,
+          elements: copyElements(src.elements),
+        })
+        const nextDoc = { ...doc, elements: copyElements(frames[k + 1].elements), animation: { ...a, animated: true, frames, current: k + 1 } }
+        set({ doc: nextDoc, currentFrame: k + 1, stack: [], pointer: -1, selectedIds: [] })
+        onChange?.(nextDoc)
+      },
+
+      removeFrame: (k) => {
+        get().commitTransaction()
+        const { doc } = get()
+        const a = doc.animation
+        if (a.frames.length <= 1 || k < 0 || k >= a.frames.length) return
+        const frames = a.frames.slice()
+        frames[a.current] = { ...frames[a.current], elements: doc.elements }
+        frames.splice(k, 1)
+        // Land on the frame after the removed one (or the new last); removing a
+        // frame before the current one shifts it left by one.
+        const cur = a.current === k ? Math.min(k, frames.length - 1) : a.current > k ? a.current - 1 : a.current
+        const nextDoc = { ...doc, elements: copyElements(frames[cur].elements), animation: { ...a, frames, current: cur } }
+        set({ doc: nextDoc, currentFrame: cur, stack: [], pointer: -1, selectedIds: [] })
+        onChange?.(nextDoc)
+      },
+
+      setFrameCamera: (k, pose) => {
+        const { doc } = get()
+        const a = doc.animation
+        if (k < 0 || k >= a.frames.length) return
+        const frames = a.frames.slice()
+        frames[k] = { ...frames[k], camera: pose ? { ...pose, position: [...pose.position] as [number, number, number], target: [...pose.target] as [number, number, number] } : null }
+        const nextDoc = { ...doc, animation: { ...a, frames } }
+        set({ doc: nextDoc })
         onChange?.(nextDoc)
       },
     }

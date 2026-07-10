@@ -45,6 +45,9 @@ export interface HotkeyDeps {
   moveCamera?: (mode: 'orbit' | 'pan', ux: number, uy: number) => void
   /** Dolly the 3D field camera (+/- keys): dir +1 zooms in, −1 zooms out. */
   zoomCamera?: (dir: 1 | -1) => void
+  /** Animation playback: while playing all edit keys are ignored; ESC stops. */
+  playing?: boolean
+  stopPlayback?: () => void
 }
 
 // Whether the event originates from a text field (so we don't hijack typing).
@@ -68,6 +71,15 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
       const s = storeApi.getState()
       // ⌥ combos: on macOS `e.key` becomes a special glyph (⌥S → "ß"), so match
       // the physical key via `e.code` (layout-independent, "KeyS").
+
+      // ── Animation playback: the board is inert — only ESC (stop) works ──────
+      if (deps.playing) {
+        if (key === 'Escape') {
+          e.preventDefault()
+          deps.stopPlayback?.()
+        }
+        return
+      }
 
       // ── ESC: background mode → navigation → creation tool → clear selection ─
       if (key === 'Escape') {

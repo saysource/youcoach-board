@@ -327,6 +327,7 @@ function BoardGrid() {
 
 export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {} }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void }) {
   const doc = useEditorStore((s) => s.doc)
+  const playing = useEditorStore((s) => s.playing)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const tokenDefaults = useEditorStore((s) => s.tokenDefaults)
@@ -542,7 +543,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
-    if (backgroundMode || homographyMode || cameraMode || zoneMode || navigating) return
+    if (backgroundMode || homographyMode || cameraMode || zoneMode || navigating || playing) return
     const onWheel = (e: WheelEvent) => {
       if (!e.altKey) return
       const f3d = storeApi.getState().doc.background.field3d
@@ -589,7 +590,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backgroundMode, homographyMode, cameraMode, zoneMode, navigating])
+  }, [backgroundMode, homographyMode, cameraMode, zoneMode, navigating, playing])
 
   // Board point → ground position: metric metres under a field camera/homography.
   function arrow3dGround(p: Point): { x: number; z: number } | null {
@@ -1458,7 +1459,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function onContainerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only the LEFT button drives interactions (touch/pen primary press is 0 too).
     if (e.button !== 0) return
-    if (backgroundMode || homographyMode || cameraMode || zoneMode || navigating) return // calibration/navigation: only their own handles are active
+    if (backgroundMode || homographyMode || cameraMode || zoneMode || navigating || playing) return // calibration/navigation/playback: only their own handles are active
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
@@ -1682,7 +1683,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
 
   function onElementPointerDown(e: React.PointerEvent, el: BoardElement) {
     if (e.button !== 0) return
-    if (creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating) return // calibration/navigation: elements are inert
+    if (creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || playing) return // calibration/navigation/playback: elements are inert
     // 3D objects/arrows are painted ABOVE the SVG, so one under the cursor is visually
     // on top of this 2D element — don't grab the click here; let it bubble to the
     // container's 3D hit-test, which selects the thing you actually see on top.
@@ -2302,7 +2303,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     : null
 
   // Elements are inert (no pointer events) in the calibration/creation modes.
-  const elementsInert = creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || eraserTool || lassoTool
+  const elementsInert = creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || playing || eraserTool || lassoTool
 
   // "Export as…" (main menu): composite the live layer stack into a PNG. The
   // latest closure lives in a ref (it captures doc/camera/ctm) — refreshed in an

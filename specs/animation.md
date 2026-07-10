@@ -32,4 +32,29 @@ We should add a toggle button on the main toolbar to show/hide the animation too
 
 When the animation toolbar is activated, it switches to the first frame. 
 
+## Object properties and interpolation
+
+The most basic thing we want to animate is the object positions.
+The position between frames is interpolated. For now we use a linear interpolation, we will soon proving easing options.
+Polyline interpolation happens point by point.
+We also want interpolate the following properties:
+- colors
+- opacity
+- 3D arrow properties (length, tip size, etc...)
+- font size
+- lines offset (for line with style double line)
+- frequency and amplitude for zig-zag lines
+
+
+## Onion view and movements path
+
+On N+1 frame we show with opacity 10% the previous object position (if still in the scene), with a special element that shows the movement path. The path should be modifyable as a polyline, so that we can define the exact movement, which may not be lineas, instead the movement between two frames may happen along a spline based path. Like for polyline, we should be able to add points and move the anchors. In order to make it clear we are operating on a movement path rather than a polyline, we want to use a thick semitransparent purple line.
+
+
+## Phase 2:
+
+Implement properties interpolation, onion view and movement paths.
+
+
+## Special effects
 

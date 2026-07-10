@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import '../styles/board.css'
-import { Check, Rotate3d } from 'lucide-react'
+import { Check, Rotate3d, Square } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { Button } from './ui/button'
 import { BoardRootProvider } from '../lib/board-root'
@@ -15,6 +15,7 @@ import { isObject3DPlayer } from '../lib/objects3d'
 import { topViewForField, fieldsCategoryIdFor } from '../lib/field-zones'
 import { orbitStep, panStep, dollyStep, type PitchType } from '../lib/field-camera'
 import { animateFieldTo as tweenFieldTo, cancelFieldAnimation } from '../lib/field-anim'
+import { stopPlayback } from '../lib/animation-playback'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
 import { addBall } from '../lib/quick-add'
@@ -25,6 +26,7 @@ import { LibraryDrawer } from './LibraryDrawer'
 import { UndoRedoBar } from './UndoRedoBar'
 import { NavBar } from './NavBar'
 import { NavHints, EditHints } from './NavHints'
+import { AnimationBar } from './AnimationBar'
 import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
 import { GameSystemDialog } from './GameSystemDialog'
@@ -107,7 +109,11 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     if (!import.meta.env.DEV) return
     const w = window as unknown as { __ycbE2E?: unknown }
     w.__ycbE2E = {
-      loadDoc: (json: unknown) => store.setState({ doc: parseBoard(json), selectedIds: [] }),
+      loadDoc: (json: unknown) => {
+        stopPlayback(store)
+        const doc = parseBoard(json)
+        store.setState({ doc, selectedIds: [], stack: [], pointer: -1, currentFrame: doc.animation.frames.length > 0 ? doc.animation.current : 0 })
+      },
       getState: () => store.getState(),
     }
     return () => {
@@ -184,6 +190,27 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   }
   function finishFieldZones() {
     setZoneEditing(false)
+  }
+
+  // Animation mode: shows the frames strip (AnimationBar). Toggled from the main
+  // toolbar; activation switches to frame 1 (per spec). The authored frames stay
+  // in the document either way — hiding the bar only hides the UI.
+  const [animEditing, setAnimEditing] = useState(false)
+  const playing = useEditorStore((s) => s.playing)
+  function toggleAnimation() {
+    if (animEditing) {
+      stopPlayback(store)
+      setAnimEditing(false)
+      return
+    }
+    store.getState().enterAnimation()
+    // Activation switches to frame 1 — including its stored camera pose (when
+    // it has one): fly there with the shared field tween (frame-tile clicks in
+    // the AnimationBar do the same for their frame).
+    const s = store.getState()
+    const cam = s.doc.animation.frames[0]?.camera
+    if (cam && s.doc.background.field3d) tweenFieldTo(store, cam)
+    setAnimEditing(true)
   }
   const activeTool = useEditorStore((s) => s.activeTool)
   const setActiveTool = useEditorStore((s) => s.setActiveTool)
@@ -342,10 +369,18 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   function animateFieldTo(to: FieldView) {
     tweenFieldTo(store, to)
   }
-  // Cancel + commit any in-flight camera tween on unmount.
+  // Cancel + commit any in-flight camera tween (and stop playback) on unmount.
   useEffect(() => {
-    return () => cancelFieldAnimation(store)
+    return () => {
+      stopPlayback(store)
+      cancelFieldAnimation(store)
+    }
   }, [store])
+  // Entering any camera-authoring/special mode stops animation playback — those
+  // modes own the pose and the toolbar, and playback would fight them.
+  useEffect(() => {
+    if (cameraOverlayActive) stopPlayback(store)
+  }, [cameraOverlayActive, store])
   // Editing the background owns the pose directly — leave navigation and drop the
   // session view (render-phase sync) so finishing shows the freshly-edited saved pose.
   const [navBgSeen, setNavBgSeen] = useState(bgEditing)
@@ -455,6 +490,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     toggleGrid: () => setShowGrid((v) => !v),
     moveCamera,
     zoomCamera,
+    playing,
+    stopPlayback: () => stopPlayback(store),
   })
 
   return (
@@ -505,7 +542,13 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {/* Main toolbar — top-center, or bottom-center in mobile mode. In
               background-edit mode it's replaced by a single "Finish" button. */}
           <div className={cn('pointer-events-none absolute left-1/2 z-30 -translate-x-1/2', mobile ? 'bottom-3' : 'top-3')}>
-            {bgEditing ? (
+            {playing ? (
+              <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
+                <Button size="sm" onClick={() => stopPlayback(store)} className="font-medium">
+                  <Square /> Stop animation
+                </Button>
+              </div>
+            ) : bgEditing ? (
               <div className="pointer-events-auto rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishBackground} className="font-medium">
                   <Check /> Finish editing background
@@ -544,9 +587,19 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 onOpenCategory={openCategory}
                 onEditBackground={editBackground}
                 onPickFormation={setFormation}
+                animActive={animEditing}
+                onToggleAnimation={toggleAnimation}
               />
             )}
           </div>
+
+          {/* Animation toolbar (frames strip) — bottom-center, above the mobile
+              main toolbar; hidden while any special camera mode is up. */}
+          {animEditing && !cameraOverlayActive && (
+            <div className={cn('absolute left-1/2 z-30 -translate-x-1/2', mobile ? 'bottom-14' : 'bottom-3')}>
+              <AnimationBar />
+            </div>
+          )}
 
           {/* Properties panel: always present (both the full and the compact
               form), showing the selection's or the active tool's properties.
@@ -589,7 +642,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           )}
           {/* Edit mode (3D field, not navigating/calibrating): the 3D-camera key/
               mouse shortcuts, so they're discoverable without entering navigation. */}
-          {navAvailable && !navigating && !mobile && (
+          {navAvailable && !navigating && !mobile && !animEditing && (
             <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
               <EditHints />
             </div>

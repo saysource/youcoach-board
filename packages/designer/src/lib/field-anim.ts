@@ -15,7 +15,7 @@ import type { EditorStore } from '../store/editorStore'
 const DECAY = Math.pow(0.72, 60)
 const EPS = 0.05 // metric closeness that snaps to the target and ends the tween
 
-const lerpPose = (a: FieldView, b: FieldView, t: number): FieldView => {
+export const lerpPose = (a: FieldView, b: FieldView, t: number): FieldView => {
   const l = (x: number, y: number) => x + (y - x) * t
   return {
     ref: b.ref,

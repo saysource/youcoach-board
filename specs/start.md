@@ -1327,3 +1327,5 @@ So the application needs to be aware if it is using a legacy 2D background or a 
 
 In the export as menu, replace the word Image with the image icon and add a new export format: 9:16 (1080x1920)
 
+
+Dragging a token by holding option Key does not create a copy when tokens are shown as 3D objets.

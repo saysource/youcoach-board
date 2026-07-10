@@ -1,5 +1,5 @@
 import { type ElementType, useState } from 'react'
-import { Lock, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, RulerDimensionLine } from 'lucide-react'
+import { Film, Lock, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, RulerDimensionLine } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
 import { Button } from './ui/button'
@@ -96,12 +96,16 @@ interface ToolbarProps {
   onEditBackground: () => void
   /** Pick a game system to place (opens its direction/style dialog). */
   onPickFormation: (code: string) => void
+  /** Whether the animation toolbar (frames strip) is shown. */
+  animActive: boolean
+  /** Show/hide the animation toolbar (switches to frame 1 on activation). */
+  onToggleAnimation: () => void
 }
 
 // Which toolbar dropdown is currently open (only one at a time).
 type ToolbarMenu = 'shapes' | 'lines' | 'more'
 
-export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onPickFormation }: ToolbarProps) {
+export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onPickFormation, animActive, onToggleAnimation }: ToolbarProps) {
   // The shape last picked/used, so the Shapes button shows it and re-opening the
   // menu re-activates it. Null until the first use (button shows the generic icon).
   const [lastShape, setLastShape] = useState<ShapeTool | null>(null)
@@ -144,6 +148,10 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <ToolButton label="Eraser" active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
         <Eraser />
+      </ToolButton>
+      <Separator orientation="vertical" className="mx-0.5 h-6" />
+      <ToolButton label="Animation" active={animActive} onClick={onToggleAnimation}>
+        <Film />
       </ToolButton>
     </div>
   )

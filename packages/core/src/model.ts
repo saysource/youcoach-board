@@ -103,11 +103,26 @@ export interface BoardBackground {
   logo: LogoPosition | null
 }
 
-/** Animation settings for the whole drill (keyframes live on each element). */
+/** One animation frame: a full snapshot of the elements' state, plus an optional
+ *  playback camera pose. `doc.elements` is the LIVE working copy of the current
+ *  frame (see BoardAnimation.current); the designer keeps them in sync. */
+export interface AnimationFrame {
+  /** Camera pose the playback flies to for this frame, or null = keep the
+   *  previous frame's (frame 1 null = whatever pose playback starts from). */
+  camera: FieldView | null
+  elements: BoardElement[]
+}
+
+/** Animation settings for the whole drill: an ordered list of frame snapshots.
+ *  Transitions between consecutive frames last a fixed 1 s (Phase 1). */
 export interface BoardAnimation {
   animated: boolean
-  /** Total duration in seconds. */
+  /** Total duration in seconds (legacy field; playback derives (frames−1) × 1 s). */
   duration: number
+  /** The frame snapshots; [] = no animation authored. */
+  frames: AnimationFrame[]
+  /** Which frame `doc.elements` mirrors (the frame being edited). */
+  current: number
 }
 
 /** The persisted board document. `elements` is in paint order (later draws on
@@ -152,7 +167,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
 const LOGO_POSITIONS: LogoPosition[] = ['center', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
 const TRAINING_LAYOUTS: TrainingLayout[] = ['plain', 'zones', 'channel', 'channel_goals', 'ends', 'goals4', 'band_h']
 
-export const DEFAULT_ANIMATION: BoardAnimation = { animated: false, duration: 10 }
+export const DEFAULT_ANIMATION: BoardAnimation = { animated: false, duration: 10, frames: [], current: 0 }
 
 /** A fresh, empty document. */
 export const EMPTY_BOARD: BoardDoc = {
@@ -230,11 +245,22 @@ function parseBackground(raw: unknown): BoardBackground {
 }
 
 function parseAnimation(raw: unknown): BoardAnimation {
-  if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_ANIMATION }
+  if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_ANIMATION, frames: [] }
   const o = raw as Record<string, unknown>
+  const frames: AnimationFrame[] = Array.isArray(o.frames)
+    ? o.frames
+        .filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
+        .map((f) => ({
+          camera: parseFieldView(f.camera),
+          elements: Array.isArray(f.elements) ? f.elements.map(parseElement).filter((e): e is BoardElement => e !== null) : [],
+        }))
+    : []
+  const current = Math.min(Math.max(0, Math.trunc(num(o.current, 0))), Math.max(0, frames.length - 1))
   return {
     animated: typeof o.animated === 'boolean' ? o.animated : DEFAULT_ANIMATION.animated,
     duration: num(o.duration, DEFAULT_ANIMATION.duration),
+    frames,
+    current,
   }
 }
 
@@ -261,14 +287,17 @@ export function parseBoard(input: string | unknown): BoardDoc {
   const elements = Array.isArray(o.elements)
     ? o.elements.map(parseElement).filter((e): e is BoardElement => e !== null)
     : []
+  const animation = parseAnimation(o.animation)
   return {
     version: BOARD_VERSION,
     title: typeof o.title === 'string' ? o.title : '',
     width: num(o.width, BOARD_WIDTH),
     height: num(o.height, BOARD_HEIGHT),
     background: parseBackground(o.background),
-    elements,
-    animation: parseAnimation(o.animation),
+    // With animation frames, the CURRENT frame's snapshot is authoritative for
+    // the live elements (heals docs whose live copy drifted from the frame).
+    elements: animation.frames.length > 0 ? animation.frames[animation.current].elements : elements,
+    animation,
   }
 }
 
@@ -276,7 +305,7 @@ function structuredCloneBoard(doc: BoardDoc): BoardDoc {
   return {
     ...doc,
     background: { ...doc.background, fieldColors: { ...doc.background.fieldColors } },
-    animation: { ...doc.animation },
+    animation: { ...doc.animation, frames: doc.animation.frames.map((f) => ({ camera: f.camera ? { ...f.camera, position: [...f.camera.position] as [number, number, number], target: [...f.camera.target] as [number, number, number] } : null, elements: f.elements.slice() })) },
     elements: doc.elements.slice(),
   }
 }
