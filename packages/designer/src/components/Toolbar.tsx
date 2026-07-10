@@ -337,8 +337,10 @@ function MoreToolsMenu({
         <DropdownMenuItem onSelect={() => onToolChange('draw')}>
           <Pencil /> Pen
         </DropdownMenuItem>
-        {/* Game systems: only on fields that define them (soccer/futsal). */}
-        {systems.length > 0 && (
+        {/* Game systems: only fields that define them (soccer/futsal) can place a
+            formation. On other fields (e.g. area/skills) keep the item visible but
+            disabled — hiding it entirely reads as a bug. */}
+        {systems.length > 0 ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Users /> Game systems
@@ -351,6 +353,10 @@ function MoreToolsMenu({
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+        ) : (
+          <DropdownMenuItem disabled>
+            <Users /> Game systems
+          </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         {/* Lasso: free-draw a selection; elements the loop touches are selected. */}
