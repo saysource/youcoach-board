@@ -8,7 +8,8 @@
 // approximation of the text's homography (visually exact at ~48 strips).
 
 import type * as THREE from 'three'
-import { BOARD_WIDTH, BOARD_HEIGHT, TEXT_FONT, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius, type BoardBackground, type TextElement } from '@youcoach-board/core'
+import { BOARD_WIDTH, BOARD_HEIGHT, textFontStack, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius, type BoardBackground, type TextElement } from '@youcoach-board/core'
+import { fontFaceCssFor, loadBoardFont } from './fonts'
 import { solveHomography } from './homography'
 import { text3dCorners } from './text3d'
 
@@ -22,6 +23,8 @@ export interface ExportEnv {
   cam: THREE.Camera
   /** board coords → container px (the overlay CTM). */
   boardToPx: (b: [number, number]) => { x: number; y: number }
+  /** Curated font ids used by the document's texts (embedded into SVG clones). */
+  fontIds: string[]
 }
 
 // ── Registry: InteractiveBoard registers its exporter; the main menu calls it. ──
@@ -62,7 +65,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 /** Serialize a live SVG element and rasterize it at `scale`× its layout size —
  *  SVG images rasterize at their INTRINSIC size, so the clone's width/height
  *  must carry the full output scale for a crisp (vector-quality) result. */
-async function drawSvg(g: CanvasRenderingContext2D, env: ExportEnv, svg: SVGSVGElement, scale: number): Promise<void> {
+async function drawSvg(g: CanvasRenderingContext2D, env: ExportEnv, svg: SVGSVGElement, scale: number, fontCss = ''): Promise<void> {
   const r = rectOf(env, svg)
   if (r.width < 1 || r.height < 1) return
   const clone = svg.cloneNode(true) as SVGSVGElement
@@ -70,6 +73,13 @@ async function drawSvg(g: CanvasRenderingContext2D, env: ExportEnv, svg: SVGSVGE
   clone.setAttribute('viewBox', clone.getAttribute('viewBox') ?? `0 0 ${r.width} ${r.height}`)
   clone.setAttribute('width', String(Math.ceil(r.width * scale)))
   clone.setAttribute('height', String(Math.ceil(r.height * scale)))
+  if (fontCss) {
+    // Curated board fonts as data-URI @font-face rules: the SVG rasterizes in an
+    // isolated document, so the fonts must travel INSIDE the markup.
+    const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
+    style.textContent = fontCss
+    clone.insertBefore(style, clone.firstChild)
+  }
   const blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   try {
@@ -156,7 +166,7 @@ function drawText3d(g: CanvasRenderingContext2D, env: ExportEnv, el: TextElement
     og.fill()
   }
   og.fillStyle = el.textColor
-  og.font = `${el.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT} ${el.fontSize}px ${TEXT_FONT}`
+  og.font = `${el.italic ? 'italic ' : ''}${el.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT} ${el.fontSize}px ${textFontStack(el.fontFamily)}`
   og.textBaseline = 'middle'
   og.textAlign = el.align === 'right' ? 'right' : el.align === 'center' ? 'center' : 'left'
   const tx = el.align === 'right' ? w - TEXT_PADDING : el.align === 'center' ? w / 2 : TEXT_PADDING
@@ -194,8 +204,9 @@ const SS = 2
 
 /**
  * Composite the live board into a `width`×`height` PNG and download it.
- * The board (4:3) is fitted to the export WIDTH and vertically centered — the
- * native 4:3 target maps exactly; a wider target (16:9) crops top/bottom.
+ * The board (4:3) COVERS the output, centred: the native 4:3 target maps
+ * exactly; 16:9 crops top/bottom; portrait 9:16 fills the height and crops
+ * the sides.
  */
 export async function exportBoardImage(env: ExportEnv, width: number, height: number, filename: string): Promise<void> {
   const br = boardRect(env)
@@ -206,14 +217,21 @@ export async function exportBoardImage(env: ExportEnv, width: number, height: nu
   g.imageSmoothingEnabled = true
   g.imageSmoothingQuality = 'high'
 
-  // Container px → (supersampled) output px: board fitted to the export width,
-  // centered vertically.
-  const k = (width * SS) / br.width
-  g.setTransform(k, 0, 0, k, -br.x * k, -br.y * k + (height * SS - br.height * k) / 2)
+  // Container px → (supersampled) output px, object-fit COVER: the board fills
+  // the whole output and the excess is cropped about the centre — 16:9 trims
+  // top/bottom, portrait 9:16 keeps the full height and trims the sides.
+  const k = Math.max((width * SS) / br.width, (height * SS) / br.height)
+  g.setTransform(k, 0, 0, k, -br.x * k + (width * SS - br.width * k) / 2, -br.y * k + (height * SS - br.height * k) / 2)
+
+  // Curated fonts: ensure they're loaded (the text3d strips draw via canvas,
+  // which uses document.fonts) and build the data-URI @font-face CSS for the
+  // SVG clones (which rasterize in isolated documents).
+  await Promise.all(env.fontIds.map(loadBoardFont))
+  const fontCss = env.fontIds.length ? await fontFaceCssFor(env.fontIds) : ''
 
   await drawBackground(g, env, br)
   drawCanvasLayer(g, env, 'canvas[data-layer="field3d"]')
-  await drawSvg(g, env, env.svg, k)
+  await drawSvg(g, env, env.svg, k, fontCss)
   for (const el of env.texts) drawText3d(g, env, el, k)
   const tokens2d = env.container.querySelector<SVGSVGElement>('svg[data-layer="tokens-2d"]')
   if (tokens2d) await drawSvg(g, env, tokens2d, k)

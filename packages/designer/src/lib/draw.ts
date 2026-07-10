@@ -5,7 +5,7 @@ import {
   DEFAULT_WAVE_LENGTH,
   DEFAULT_WAVE_AMPLITUDE,
   DEFAULT_LINES_OFFSET,
-  TEXT_FONT,
+  textFontStack,
   TEXT_FONT_WEIGHT,
   TEXT_FONT_WEIGHT_BOLD,
   TEXT_LINE_HEIGHT,
@@ -328,6 +328,10 @@ export interface TextStyle {
   fontSize: number
   align: TextAlign
   bold: boolean
+  /** Curated font id (core BOARD_FONTS); undefined = the default font. */
+  fontFamily?: string
+  /** Render italic. */
+  italic?: boolean
   /** Write the text onto the 3D field surface (pinned, leaning) rather than flat. */
   text3d: boolean
   /** 3D text reading direction about the field X axis (0/90/180/270°). */
@@ -358,12 +362,12 @@ function measureCtx(): CanvasRenderingContext2D | null {
  *  the widest line plus TEXT_PADDING on each side, floored to fit an "M"; height
  *  is line-count · line-height + padding. Kept in lockstep with ElementView's
  *  text layout so the SVG and the inline editor overlay agree. */
-export function measureTextBox(text: string, fontSize: number, bold = false): { width: number; height: number } {
+export function measureTextBox(text: string, fontSize: number, bold = false, fontFamily?: string, italic = false): { width: number; height: number } {
   const lines = text.length ? text.split('\n') : ['']
   const ctx = measureCtx()
   let maxW = 0
   if (ctx) {
-    ctx.font = `${bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT} ${fontSize}px ${TEXT_FONT}`
+    ctx.font = `${italic ? 'italic ' : ''}${bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT} ${fontSize}px ${textFontStack(fontFamily)}`
     for (const ln of lines) maxW = Math.max(maxW, ctx.measureText(ln).width)
     maxW = Math.max(maxW, ctx.measureText('M').width) // min width fits an "M"
   } else {
@@ -380,7 +384,7 @@ export function measureTextBox(text: string, fontSize: number, bold = false): { 
 /** Build a text element centered at (cx, cy) with the given style + content.
  *  Its box is measured from the content so it fits exactly (min = one "M"). */
 export function makeText(id: string, cx: number, cy: number, style: TextStyle = DEFAULT_TEXT_STYLE, text = ''): BoardElement {
-  const { width, height } = measureTextBox(text, style.fontSize, style.bold)
+  const { width, height } = measureTextBox(text, style.fontSize, style.bold, style.fontFamily, style.italic)
   return {
     id,
     type: 'text',
@@ -394,6 +398,8 @@ export function makeText(id: string, cx: number, cy: number, style: TextStyle = 
     fontSize: style.fontSize,
     align: style.align,
     bold: style.bold,
+    fontFamily: style.fontFamily,
+    italic: style.italic || undefined,
     ...(style.text3d ? { text3d: true, orientation: style.orientation } : {}),
     transform: { ...IDENTITY_TRANSFORM },
     stroke: '#111111',

@@ -26,6 +26,7 @@ export {
   isLegacyBackground,
 } from './model'
 export { BOARD_WIDTH, BOARD_HEIGHT, BOARD_ASPECT } from './geometry'
+export { BOARD_FONTS, boardFont, textFontStack, type BoardFont } from './fonts'
 export { BoardCanvas } from './BoardCanvas'
 export type { BoardCanvasProps } from './BoardCanvas'
 export { FieldBackground } from './FieldBackground'

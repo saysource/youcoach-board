@@ -275,6 +275,27 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // The hand tool only exists in 2D mode — deriving keeps it from lingering
   // (without an effect) if a 3D field lands while it's on.
   const panning = panMode && flatNav
+  // 3D pan hand (nav toolbar): while orbiting (navigation / Edit Background) a
+  // plain drag pans the field camera instead of rotating it. Derived off when
+  // no orbit overlay is up, so it never lingers into normal mode.
+  const [fieldPan, setFieldPan] = useState(false)
+  const fieldPanning = fieldPan && (navigating || bgEditing)
+  // The nav toolbar's +/− magnifiers. In an orbit session (navigation /
+  // Edit Background) dolly DIRECTLY: the session already coalesces into one
+  // undo step, and the animated tween would commit that transaction early.
+  function zoomFieldButton(dir: 1 | -1) {
+    const cur = store.getState().doc.background.field3d
+    if (!cur) {
+      zoomViewport(dir)
+      return
+    }
+    if (navigating || bgEditing) {
+      const ref = (cur.ref ?? 'soccer11') as PitchType
+      store.getState().setBackground({ field3d: dollyStep(cur, ref, dir > 0 ? 1 / CAM_ZOOM_STEP : CAM_ZOOM_STEP) })
+    } else {
+      zoomCamera(dir)
+    }
+  }
   /** Zoom the 2D view in/out one step about the current view centre. Zooming out
    *  goes to 10% (the board shrinks to a tenth); zooming in to 800%. */
   function zoomViewport(dir: 1 | -1) {
@@ -446,7 +467,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
         fullscreen ? 'fixed inset-0 z-[2147483647]' : 'h-full w-full',
         isDark && 'dark',
       )}
-      style={fullscreen ? undefined : { minHeight: 480 }}
+      // style={fullscreen ? undefined : { minHeight: 480 }}
     >
       <TooltipPrimitive.Provider delayDuration={300}>
         <BoardRootProvider value={rootEl}>
@@ -465,7 +486,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navMarkers={navMarkers} onNavTap={navTap} />
+            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navMarkers={navMarkers} onNavTap={navTap} fieldPanMode={fieldPanning} onExitFieldPan={() => setFieldPan(false)} />
             {/* Navigation-active indicator: an orbit watermark in the working-area
                 top-right corner (decorative, doesn't block input). Kept mounted so
                 it fades in/out with navigation mode. */}
@@ -478,7 +499,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {/* Top-left menu (+ the navigation control below it on mobile). */}
           <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
             <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} onFieldHomography={fieldHomography} onFieldCamera={startFieldCamera} onFieldZones={startFieldZones} />
-            {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} />}
+            {mobile && <NavBar available={navAvailable || navigating || (bgEditing && !!savedField3d)} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} editingBg={bgEditing} onZoom3d={zoomFieldButton} pan3d={fieldPanning} onTogglePan3d={() => setFieldPan((v) => !v)} showPan3d={navigating || bgEditing} />}
           </div>
 
           {/* Main toolbar — top-center, or bottom-center in mobile mode. In
@@ -554,7 +575,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {!mobile && (
             <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
               <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
-              <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} />
+              <NavBar available={navAvailable || navigating || (bgEditing && !!savedField3d)} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} editingBg={bgEditing} onZoom3d={zoomFieldButton} pan3d={fieldPanning} onTogglePan3d={() => setFieldPan((v) => !v)} showPan3d={navigating || bgEditing} />
             </div>
           )}
 

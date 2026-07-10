@@ -3,6 +3,7 @@ import {
   FolderOpen,
   Save,
   ImageDown,
+  Image,
   Command,
   Search,
   CircleHelp,
@@ -86,8 +87,9 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
             <ImageDown /> Export as…
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <DropdownMenuItem onSelect={() => void boardExporter()?.(1440, 1080)}>Image 4:3 (1440×1080)</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void boardExporter()?.(1920, 1080)}>Image 16:9 (1920×1080)</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void boardExporter()?.(1440, 1080)}><Image /> 4:3 (1440×1080)</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void boardExporter()?.(1920, 1080)}><Image /> 16:9 (1920×1080)</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void boardExporter()?.(1080, 1920)}><Image /> 9:16 (1080×1920)</DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 

@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import type { BoardElement } from './elements'
-import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, strokeDash, TOKEN_GEOMETRY, TOKEN_VIEW, TOKEN_STRIPE_PERIOD, TOKEN_SINGLE_STRIPE, TOKEN_CHECKER_SIZE, TOKEN_FONT, TOKEN_FONT_WEIGHT, TOKEN_LABEL_PX, TOKEN_LABEL_GAP_PX, TOKEN_LABEL_PLACEHOLDER, TEXT_FONT, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius } from './elements'
+import { textFontStack } from './fonts'
+import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, strokeDash, TOKEN_GEOMETRY, TOKEN_VIEW, TOKEN_STRIPE_PERIOD, TOKEN_SINGLE_STRIPE, TOKEN_CHECKER_SIZE, TOKEN_FONT, TOKEN_FONT_WEIGHT, TOKEN_LABEL_PX, TOKEN_LABEL_GAP_PX, TOKEN_LABEL_PLACEHOLDER, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius } from './elements'
 
 // Renders a single board element to SVG. Presentational and shared: the viewer
 // renders elements through this directly, and the designer wraps it with
@@ -209,8 +210,9 @@ function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, to
           textAnchor={anchor}
           fontSize={fontSize}
           fontWeight={element.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT}
+          fontStyle={element.italic ? 'italic' : undefined}
           fill={element.textColor}
-          style={{ fontFamily: TEXT_FONT, whiteSpace: 'pre' }}
+          style={{ fontFamily: textFontStack(element.fontFamily), whiteSpace: 'pre' }}
         >
           {lines.map((ln, i) => (
             <tspan key={i} x={tx} y={top + i * lineH + lineH / 2} dominantBaseline="central">

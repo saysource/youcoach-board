@@ -128,6 +128,8 @@ export function usePropertyEditing() {
         fontSize: textTool ? textDefaults.fontSize : undefined,
         align: textTool ? textDefaults.align : undefined,
         bold: textTool ? textDefaults.bold : undefined,
+        italic: textTool ? textDefaults.italic : undefined,
+        fontFamily: textTool ? textDefaults.fontFamily : undefined,
         text3d: textTool ? textDefaults.text3d : undefined,
         orientation: textTool ? textDefaults.orientation : undefined,
         materialColor: undefined as string | undefined,
@@ -178,6 +180,8 @@ export function usePropertyEditing() {
       setFontSize: (fontSize: number) => setTextDefaults({ fontSize }),
       setAlign: (align: TextAlign) => setTextDefaults({ align }),
       setBold: (bold: boolean) => setTextDefaults({ bold }),
+      setItalic: (italic: boolean) => setTextDefaults({ italic }),
+      setFontFamily: (fontFamily?: string) => setTextDefaults({ fontFamily }),
       setText3d: (text3d: boolean) => setTextDefaults({ text3d }),
       setOrientation: (orientation: number) => setTextDefaults({ orientation }),
       setMaterialColor: () => {},
@@ -315,6 +319,8 @@ export function usePropertyEditing() {
       fontSize: firstText?.fontSize,
       align: firstText?.align,
       bold: firstText?.bold,
+      italic: firstText?.italic,
+      fontFamily: firstText?.fontFamily,
       text3d: firstText?.text3d,
       orientation: firstText?.orientation ?? 0,
       // A material's current custom color (its first slot; falls back to the default).
@@ -437,7 +443,7 @@ export function usePropertyEditing() {
     setFontSize: (fontSize: number) => {
       patch(texts, (e) => {
         const t = e as Extract<BoardElement, { type: 'text' }>
-        const { width, height } = measureTextBox(t.text, fontSize, t.bold)
+        const { width, height } = measureTextBox(t.text, fontSize, t.bold, t.fontFamily, t.italic)
         return {
           before: { fontSize: t.fontSize, x: t.x, y: t.y, width: t.width, height: t.height },
           after: { fontSize, x: t.x + (t.width - width) / 2, y: t.y + (t.height - height) / 2, width, height },
@@ -470,11 +476,35 @@ export function usePropertyEditing() {
       patch(texts, (e) => ({ before: { orientation: (e as Extract<BoardElement, { type: 'text' }>).orientation ?? 0 }, after: { orientation } }))
       setTextDefaults({ orientation })
     },
+    // Switching fonts changes the metrics — re-measure the box about its centre.
+    setFontFamily: (fontFamily?: string) => {
+      patch(texts, (e) => {
+        const t = e as Extract<BoardElement, { type: 'text' }>
+        const { width, height } = measureTextBox(t.text, t.fontSize, t.bold, fontFamily, t.italic)
+        return {
+          before: { fontFamily: t.fontFamily, x: t.x, y: t.y, width: t.width, height: t.height },
+          after: { fontFamily, x: t.x + (t.width - width) / 2, y: t.y + (t.height - height) / 2, width, height },
+        }
+      })
+      setTextDefaults({ fontFamily })
+    },
+    // Italic changes the metrics slightly — re-measure the box about its centre.
+    setItalic: (italic: boolean) => {
+      patch(texts, (e) => {
+        const t = e as Extract<BoardElement, { type: 'text' }>
+        const { width, height } = measureTextBox(t.text, t.fontSize, t.bold, t.fontFamily, italic)
+        return {
+          before: { italic: t.italic, x: t.x, y: t.y, width: t.width, height: t.height },
+          after: { italic, x: t.x + (t.width - width) / 2, y: t.y + (t.height - height) / 2, width, height },
+        }
+      })
+      setTextDefaults({ italic })
+    },
     // Bold toggles weight 800; the box is re-measured (bold is wider) about its center.
     setBold: (bold: boolean) => {
       patch(texts, (e) => {
         const t = e as Extract<BoardElement, { type: 'text' }>
-        const { width, height } = measureTextBox(t.text, t.fontSize, bold)
+        const { width, height } = measureTextBox(t.text, t.fontSize, bold, t.fontFamily, t.italic)
         return {
           before: { bold: t.bold, x: t.x, y: t.y, width: t.width, height: t.height },
           after: { bold, x: t.x + (t.width - width) / 2, y: t.y + (t.height - height) / 2, width, height },

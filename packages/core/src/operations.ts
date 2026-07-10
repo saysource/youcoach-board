@@ -74,6 +74,8 @@ export interface ElementPatch {
   fontSize?: number
   align?: TextAlign
   bold?: boolean
+  fontFamily?: string
+  italic?: boolean
   // 3D text: pinned to the field surface, with a reading orientation (0/90/180/270).
   text3d?: boolean
   orientation?: number

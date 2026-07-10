@@ -345,7 +345,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       setExportGuide: (g) => set({ exportGuide: g }),
 
       setTokenSizeM: (m) => {
-        const size = Math.max(2, Math.min(10, m))
+        const size = Math.max(1, Math.min(10, m))
         set({ tokenSizeM: size })
         // Resize every token on the pitch to the new global size (one undo step).
         const { doc } = get()
@@ -717,7 +717,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         get().updateElements(
           texts.map((t) => {
             const bold = !t.bold
-            const { width, height } = measureTextBox(t.text, t.fontSize, bold)
+            const { width, height } = measureTextBox(t.text, t.fontSize, bold, t.fontFamily, t.italic)
             return {
               id: t.id,
               before: { bold: t.bold, x: t.x, y: t.y, width: t.width, height: t.height },
@@ -819,7 +819,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
           if (el.type === 'text' && ('fontSize' in after || 'bold' in after)) {
             const fontSize = (after.fontSize as number | undefined) ?? el.fontSize
             const bold = (after.bold as boolean | undefined) ?? el.bold
-            const { width, height } = measureTextBox(el.text, fontSize, bold)
+            const { width, height } = measureTextBox(el.text, fontSize, bold, el.fontFamily, el.italic)
             before.x = el.x
             after.x = el.x + (el.width - width) / 2
             before.y = el.y

@@ -133,6 +133,24 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
       </div>
 
       <div className="grid gap-1.5">
+        <span className="text-xs font-medium text-muted-foreground">Coverage</span>
+        <div className="flex gap-1 rounded-md bg-muted p-0.5">
+          {(['half', 'whole'] as Spread[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={spread === s}
+              onClick={() => setSpread(s)}
+              className={cn('flex-1 rounded px-2 py-1.5 text-sm capitalize transition-colors', spread === s ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+            >
+              {s === 'half' ? 'Half pitch' : 'Whole pitch'}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+
+      <div className="grid gap-1.5">
         <span className="text-xs font-medium text-muted-foreground">Team</span>
         <div className="flex flex-wrap gap-1.5">
           {options.map((s, i) => (
@@ -150,22 +168,7 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
         </div>
       </div>
 
-      <div className="grid gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Coverage</span>
-        <div className="flex gap-1 rounded-md bg-muted p-0.5">
-          {(['half', 'whole'] as Spread[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              aria-pressed={spread === s}
-              onClick={() => setSpread(s)}
-              className={cn('flex-1 rounded px-2 py-1.5 text-sm capitalize transition-colors', spread === s ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
-            >
-              {s === 'half' ? 'Half pitch' : 'Whole pitch'}
-            </button>
-          ))}
-        </div>
-      </div>
+      
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" size="sm" onClick={onClose}>

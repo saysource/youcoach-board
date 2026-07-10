@@ -233,6 +233,10 @@ export interface TextElement extends BaseElement {
   align: TextAlign
   /** Render bold (font weight 800) instead of the regular weight. */
   bold: boolean
+  /** Curated font id (see fonts.ts BOARD_FONTS); absent = the default font. */
+  fontFamily?: string
+  /** Render italic (synthesized obliquing where a face has no italic file). */
+  italic?: boolean
   /** When true, the text is written onto the 3D field surface (lying flat, leaning
    *  in perspective) instead of floating flat on the board. Pinned via `ground`. */
   text3d?: boolean
@@ -1001,6 +1005,8 @@ export function parseElement(raw: unknown): BoardElement | null {
       fontSize: fs === null ? DEFAULT_TEXT_FONT_SIZE : clamp(fs, TEXT_MIN_FONT, TEXT_MAX_FONT),
       align: aligns.includes(o.align as TextAlign) ? (o.align as TextAlign) : 'center',
       bold: o.bold === true,
+      fontFamily: typeof o.fontFamily === 'string' ? o.fontFamily : undefined,
+      italic: o.italic === true || undefined,
       text3d: o.text3d === true || undefined,
       orientation: [0, 90, 180, 270].includes(o.orientation as number) ? (o.orientation as number) : undefined,
       ground: parseGround(o.ground),

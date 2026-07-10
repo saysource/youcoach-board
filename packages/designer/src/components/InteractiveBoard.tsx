@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ZoomIn, ZoomOut, Hand, RefreshCw, RectangleVertical, RectangleHorizontal, Rotate3d } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BoardCanvas,
   BOARD_WIDTH,
@@ -15,7 +14,7 @@ import {
   TOKEN_LABEL_PX,
   TOKEN_LABEL_GAP_PX,
   TOKEN_LABEL_PLACEHOLDER,
-  TEXT_FONT,
+  textFontStack,
   TEXT_FONT_WEIGHT,
   TEXT_FONT_WEIGHT_BOLD,
   TEXT_LINE_HEIGHT,
@@ -37,6 +36,7 @@ import {
 } from '@youcoach-board/core'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { isCreationTool } from '../store/editorStore'
+import { loadDocFonts, docFontIds } from '../lib/fonts'
 import {
   clientToBoard,
   makeFigure,
@@ -83,8 +83,7 @@ import { FieldZoneTool } from './FieldZoneTool'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
 import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
-import { makeCalibratedCamera, configToOrbit, orbitToConfig, type PitchType, type Orbit } from '../lib/field-camera'
-import { DEFAULT_ZONE } from '../lib/field-zones'
+import { makeCalibratedCamera, type PitchType } from '../lib/field-camera'
 import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
 import { exportBoardImage, registerBoardExporter } from '../lib/export-image'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
@@ -326,7 +325,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {} }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void }) {
   const doc = useEditorStore((s) => s.doc)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -401,6 +400,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // top-left). Only changes on resize/zoom/pan — NOT per field-camera frame — so we
   // keep it in state (measured in an effect) rather than reading the ref in render.
   const [boardCtm, setBoardCtm] = useState<{ a: number; b: number; c: number; d: number; ex: number; ey: number } | null>(null)
+
+  // Load any curated fonts the document's texts use (lazy; cached after the
+  // first load — SVG text reflows automatically when a face becomes available).
+  useEffect(() => {
+    void loadDocFonts(doc)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.elements])
 
   useEffect(() => {
     const svg = svgRef.current
@@ -497,10 +503,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // camera + zone markers align) and coalesce the whole session — orbit + nudges +
   // zone jumps — into ONE undo step (begin on enter, commit on Finish).
   const editing3d = backgroundMode && !!field3d
-  // Camera interaction mode: 'orbit' = free orbit; 'pan' = drag pans (orbit off);
-  // 'portrait'/'landscape' = a near-overhead pan/zoom-only view.
-  const [view, setView] = useState<'orbit' | 'portrait' | 'landscape' | 'pan'>('orbit')
-  const panMode = view !== 'orbit'
   useEffect(() => {
     if (!editing3d || !field3d) return
     // Prepare pitch pins (ONE undoable step, before the field-edit transaction):
@@ -528,13 +530,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigating])
 
-  // Edit-Background camera nudges for the 3D field (coach-friendly, discrete steps;
-  // fov stays 50). Each is one undo step.
-  function nudgeField3d(fn: (o: Orbit) => Orbit) {
-    if (!field3d) return
-    setView('orbit')
-    setBackground({ field3d: orbitToConfig(fn(configToOrbit(field3d)), field3d.ref as PitchType) })
-  }
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
   // Option/Alt + wheel: a 3D "zoom to cursor" of the field camera, in NORMAL mode
@@ -596,14 +591,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundMode, homographyMode, cameraMode, zoneMode, navigating])
 
-  // A near-overhead top view; azimuth sets the orientation (0 = landscape / goals
-  // left-right, 90 = portrait / goals top-bottom). Orbit is disabled while locked.
-  function goTopView(orientation: 'portrait' | 'landscape') {
-    const ref = (field3d?.ref ?? 'soccer11') as PitchType
-    const pose = orbitToConfig({ targetX: 52.5, targetZ: 34, azimuth: orientation === 'portrait' ? 90 : 0, elevation: 89.5, distance: orientation === 'portrait' ? 135 : 100, fov: 50 }, ref)
-    setView(orientation)
-    setBackground({ field3d: pose })
-  }
   // Board point → ground position: metric metres under a field camera/homography.
   function arrow3dGround(p: Point): { x: number; z: number } | null {
     return useHomography ? boardToMetric(fieldH!, p.x, p.y) : boardToGround(p.x, p.y, arrow3dCam)
@@ -1340,7 +1327,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const { box } = computeResize(g.box0, g.t0, g.handle as CornerId, clampToCanvas(g.current), MIN_SIZE, { proportional: true })
     const s = box.width / (g.box0.width || 1)
     const fontSize = Math.max(TEXT_MIN_FONT, Math.min(TEXT_MAX_FONT, Math.round(el.fontSize * s)))
-    const m = measureTextBox(el.text, fontSize, el.bold)
+    const m = measureTextBox(el.text, fontSize, el.bold, el.fontFamily, el.italic)
     const opp = OPPOSITE_CORNER[g.handle as CornerId]
     const c0 = localCorners(g.box0)[opp as CornerId]
     const x = opp === 'nw' || opp === 'sw' ? c0.x : c0.x - m.width
@@ -1632,7 +1619,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           }
           const sel = selectedIds.includes(objId) ? selectedIds : [objId]
           setSelection(sel)
-          if (!el.locked) startMove(sel, p, e.pointerId)
+          // ⌥-drag duplicates and moves the copy, like dragging the 2D badge.
+          if (!el.locked) {
+            if (e.altKey) startAltDuplicateMove(p, e.pointerId)
+            else startMove(sel, p, e.pointerId)
+          }
           return
         }
       }
@@ -1827,7 +1818,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Apply a new text value to the edited element live: re-measure the box and keep
   // its center fixed so it grows symmetrically.
   function applyLiveText(el: Extract<BoardElement, { type: 'text' }>, value: string) {
-    const { width, height } = measureTextBox(value, el.fontSize, el.bold)
+    const { width, height } = measureTextBox(value, el.fontSize, el.bold, el.fontFamily, el.italic)
     updateElements([
       {
         id: el.id,
@@ -2345,6 +2336,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             texts: fieldCamCfg && ctm ? doc.elements.map(liveElement).filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground) : [],
             cam: arrow3dCam,
             boardToPx: (b) => (ctm ? { x: ctm.a * b[0] + ctm.c * b[1] + ctm.ex, y: ctm.b * b[0] + ctm.d * b[1] + ctm.ey } : { x: 0, y: 0 }),
+            fontIds: docFontIds(doc),
           },
           w,
           h,
@@ -2750,25 +2742,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       {cameraMode && <FieldCameraLayer viewBox={viewBox} />}
       {zoneMode && field3d && <FieldZoneTool field3d={field3d} viewBox={viewBox} />}
       {/* 3D-field pose editor: OrbitControls + numbered zone markers (bg-edit). */}
-      {editing3d && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={panMode} onExitPan={() => setView('orbit')} onPose={(p) => setBackground({ field3d: p })} />}
+      {editing3d && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={fieldPanMode} onExitPan={onExitFieldPan} onPose={(p) => setBackground({ field3d: p })} />}
       {/* Navigation mode: the same orbit controls in normal mode, writing the pose
           straight to background.field3d (coalesced by the nav transaction above). */}
-      {navigating && !backgroundMode && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={false} onExitPan={() => {}} onPose={(p) => setBackground({ field3d: p })} showMarkers={navMarkers} onTap={onNavTap} />}
-      {/* Edit-Background controls for the 3D field: coach-friendly discrete nudges. */}
-      {backgroundMode && field3d && (
-        <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg">
-          <FieldCtl label="Zoom in" onClick={() => nudgeField3d((o) => ({ ...o, distance: clamp(o.distance - 12, 4, 400) }))}><ZoomIn /></FieldCtl>
-          <FieldCtl label="Zoom out" onClick={() => nudgeField3d((o) => ({ ...o, distance: clamp(o.distance + 12, 4, 400) }))}><ZoomOut /></FieldCtl>
-          <span className="mx-0.5 h-6 w-px bg-border" />
-          <FieldCtl label="Pan tool (disable orbit)" active={view === 'pan'} onClick={() => setView('pan')}><Hand /></FieldCtl>
-          <span className="mx-0.5 h-6 w-px bg-border" />
-          <FieldCtl label="Top view (portrait)" active={view === 'portrait'} onClick={() => goTopView('portrait')}><RectangleVertical /></FieldCtl>
-          <FieldCtl label="Top view (landscape)" active={view === 'landscape'} onClick={() => goTopView('landscape')}><RectangleHorizontal /></FieldCtl>
-          <FieldCtl label="3D orbit view" active={view === 'orbit'} onClick={() => setView('orbit')}><Rotate3d /></FieldCtl>
-          <span className="mx-0.5 h-6 w-px bg-border" />
-          <FieldCtl label="Reset view" onClick={() => { setView('orbit'); setBackground({ field3d: DEFAULT_ZONE.camera }) }}><RefreshCw /></FieldCtl>
-        </div>
-      )}
+      {navigating && !backgroundMode && field3d && <FieldEditOverlay field3d={field3d} fieldType={doc.background.fieldType} viewBox={viewBox} panMode={fieldPanMode} onExitPan={onExitFieldPan} onPose={(p) => setBackground({ field3d: p })} showMarkers={navMarkers} onTap={onNavTap} />}
       {!navigating && selectedArrow3D && !arrow3dGesture && arrow3dHandles && (
         <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
           {/* Dotted guides: tail → apex → head, and apex → base midpoint. */}
@@ -2905,7 +2882,8 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             top: textBox.top,
             width: textBox.width,
             height: textBox.height,
-            fontFamily: TEXT_FONT,
+            fontFamily: textFontStack(editingTextEl.fontFamily),
+            fontStyle: editingTextEl.italic ? 'italic' : undefined,
             fontSize: textBox.font,
             fontWeight: textBox.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT,
             lineHeight: TEXT_LINE_HEIGHT,
@@ -2926,21 +2904,5 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         />
       )}
     </div>
-  )
-}
-
-// A compact icon button for the 3D-field Edit-Background control bar.
-function FieldCtl({ label, onClick, active, children }: { label: string; onClick: () => void; active?: boolean; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={active}
-      title={label}
-      onClick={onClick}
-      className={cn('flex size-8 items-center justify-center rounded-md [&_svg]:size-4', active ? 'bg-primary/15 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}
-    >
-      {children}
-    </button>
   )
 }

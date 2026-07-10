@@ -1325,3 +1325,5 @@ will be disabled.
 So the application needs to be aware if it is using a legacy 2D background or a real 3D field.
 
 
+In the export as menu, replace the word Image with the image icon and add a new export format: 9:16 (1080x1920)
+

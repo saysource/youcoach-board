@@ -1,6 +1,11 @@
 import { type ComponentType, type ReactNode } from 'react'
 import {
   SlidersHorizontal,
+  ChevronDown,
+  Check,
+  Bold,
+  Italic,
+  Baseline,
   Box,
   MoreHorizontal,
   CopyPlus,
@@ -32,7 +37,7 @@ import {
   AlignEndHorizontal,
   AlignVerticalDistributeCenter,
 } from 'lucide-react'
-import { type ArrowTip, type BoardElement, type Arrow3DElement, type TokenShape, type TokenFill, type TextAlign, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX, TEXT_MIN_FONT, TEXT_MAX_FONT } from '@youcoach-board/core'
+import { type ArrowTip, type BoardElement, type Arrow3DElement, type TokenShape, type TokenFill, type TextAlign, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX, TEXT_MIN_FONT, TEXT_MAX_FONT, BOARD_FONTS, boardFont, textFontStack } from '@youcoach-board/core'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
@@ -43,6 +48,7 @@ import { cn } from '../../lib/cn'
 import { CHECKER_IMAGE } from '../../lib/checker'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { TOKEN_DEFAULT_SIZE_M } from '../../lib/field-anchor'
+import { loadAllBoardFonts, loadBoardFont } from '../../lib/fonts'
 import { useEditorStore } from '../../store/context'
 import type { Breakpoint } from '../../lib/use-breakpoint'
 import { ClosePathIcon, LineStylePlainIcon, LineStyleCurvedIcon, LineStyleZigzagIcon, LineStyleDoubleIcon, OpenPathIcon, PolylineIcon, TokenDiscIcon, JerseyIcon } from '../icons'
@@ -444,15 +450,73 @@ const ALIGN_ITEMS: { value: TextAlign; label: string; render: ReactNode }[] = [
 ]
 
 // 3D-text reading direction about the field X axis.
-const ORIENT_ITEMS: { value: number; label: string; render: ReactNode }[] = [
-  { value: 0, label: '0°', render: <span className="text-[11px]">0°</span> },
-  { value: 90, label: '90°', render: <span className="text-[11px]">90°</span> },
-  { value: 180, label: '180°', render: <span className="text-[11px]">180°</span> },
-  { value: 270, label: '270°', render: <span className="text-[11px]">270°</span> },
-]
+// The 3D text's reading direction, shown as a rotated baseline glyph — the icon
+// points the way the text will read on the pitch (clearer than raw degrees).
+const ORIENT_ITEMS: { value: number; label: string; render: ReactNode }[] = [0, 90, 180, 270].map((deg) => ({
+  value: deg,
+  label: `${deg}°`,
+  render: <Baseline className="size-4" style={{ transform: `rotate(${deg}deg)` }} />,
+}))
 
 // Text element settings popover: font size (2–200) + line alignment. Color and
 // background are their own toolbar buttons (like a shape's border/fill).
+// A small icon toggle (Bold / Italic) styled like a Segmented item.
+function StyleToggle({ icon, label, active, onToggle }: { icon: ReactNode; label: string; active: boolean; onToggle: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          aria-pressed={active}
+          onClick={onToggle}
+          className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border hover:bg-accent', active && 'bg-primary/15 text-primary')}
+        >
+          {icon}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+// Curated font dropdown: each family previewed in itself (all fonts load when
+// the menu opens). Applying a font awaits its load first, so the text box is
+// measured with the REAL metrics rather than the fallback's.
+function FontPicker({ value, onChange }: { value?: string; onChange: (id?: string) => void }) {
+  const current = boardFont(value)
+  const pick = (id?: string) => {
+    if (!id) {
+      onChange(undefined)
+      return
+    }
+    void loadBoardFont(id).then(() => onChange(id))
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="w-full justify-between font-normal" onPointerDown={() => void loadAllBoardFonts()}>
+          <span className="truncate" style={{ fontFamily: textFontStack(value) }}>{current?.label ?? 'Default'}</span>
+          <ChevronDown className="size-4 shrink-0 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-80 w-52 overflow-y-auto">
+        <DropdownMenuItem onSelect={() => pick(undefined)}>
+          <span className="flex-1">Default</span>
+          {!current && <Check className="size-4 shrink-0 text-primary" />}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {BOARD_FONTS.map((f) => (
+          <DropdownMenuItem key={f.id} onSelect={() => pick(f.id)}>
+            <span className="flex-1 text-base leading-tight" style={{ fontFamily: f.stack }}>{f.label}</span>
+            {value === f.id && <Check className="size-4 shrink-0 text-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function TextSettingsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
   const p = usePropertyEditing()
   return (
@@ -469,16 +533,19 @@ function TextSettingsButton({ side, small, translucent }: { side: 'right' | 'top
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
         <div className="grid gap-3">
+          <Field label="Font">
+            <FontPicker value={p.values.fontFamily} onChange={p.setFontFamily} />
+          </Field>
           <Field label={`Font size (${p.values.fontSize ?? 0})`}>
             <WaveSlider min={TEXT_MIN_FONT} max={TEXT_MAX_FONT} value={p.values.fontSize ?? 0} onChange={p.setFontSize} />
           </Field>
           <Field label="Alignment">
-            <Segmented items={ALIGN_ITEMS} value={p.values.align} onChange={p.setAlign} />
+            <div className="flex items-center gap-2">
+              <Segmented items={ALIGN_ITEMS} value={p.values.align} onChange={p.setAlign} />
+              <StyleToggle icon={<Bold className="size-4" />} label="Bold" active={!!p.values.bold} onToggle={() => p.setBold(!p.values.bold)} />
+              <StyleToggle icon={<Italic className="size-4" />} label="Italic" active={!!p.values.italic} onToggle={() => p.setItalic(!p.values.italic)} />
+            </div>
           </Field>
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Bold</span>
-            <Switch checked={!!p.values.bold} onCheckedChange={p.setBold} />
-          </div>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-muted-foreground">On field (3D)</span>
             <Switch checked={!!p.values.text3d} onCheckedChange={p.setText3d} />
@@ -685,7 +752,7 @@ function TokenSettingsWidget() {
         <WaveSlider min={50} max={200} value={Math.round((p.values.tokenLabelScale ?? 1) * 100)} onChange={(v) => p.setTokenLabelScale(v / 100)} />
       </Field>
       <Field label={`Token size (${Math.round(p.values.tokenSize ?? TOKEN_DEFAULT_SIZE_M)} m)`}>
-        <WaveSlider min={2} max={10} value={Math.round(p.values.tokenSize ?? TOKEN_DEFAULT_SIZE_M)} onChange={p.setTokenSize} />
+        <WaveSlider min={1} max={10} value={Math.round(p.values.tokenSize ?? TOKEN_DEFAULT_SIZE_M)} onChange={p.setTokenSize} />
       </Field>
       {/* Render disc tokens as real 3D pucks (background.tokens3d) — a board-wide
           style, so it lives here with the other global token settings. */}
