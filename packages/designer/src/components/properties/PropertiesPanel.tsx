@@ -386,8 +386,12 @@ function objSliderToSize(v: number): number {
 }
 
 function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
-  const p = usePropertyEditing()
-  const useGlobal = p.values.object3dUseGlobal ?? true
+  // 3D object size is ALWAYS global: one scale shared by every placed object —
+  // players AND materials — so resizing any one resizes them all. Edits
+  // background.objectScale directly (no per-object override, no switch).
+  const objectScale = useEditorStore((s) => s.doc.background.objectScale) ?? 1
+  const setBackground = useEditorStore((s) => s.setBackground)
+  const arm = useDragTransaction()
   return (
     <Popover>
       <Tooltip>
@@ -401,20 +405,12 @@ function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
         <TooltipContent>Size</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
-        <div className="grid gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Use global size</span>
-            <Switch checked={useGlobal} onCheckedChange={p.setObject3DUseGlobal} />
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+            <span>Small</span>
+            <span>Big</span>
           </div>
-          {/* Always shown; disabled (and parked at the global midpoint) while the
-              object follows the global size, so the control stays visible. */}
-          <div className={cn('grid gap-1.5', useGlobal && 'opacity-60')}>
-            <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-              <span>Small</span>
-              <span>Big</span>
-            </div>
-            <WaveSlider min={0} max={100} disabled={useGlobal} value={useGlobal ? 50 : Math.round(objSizeToSlider(p.values.object3dSize ?? 1))} onChange={(v) => p.setObject3DSize(objSliderToSize(v))} />
-          </div>
+          <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(objectScale))} onChange={(v) => { arm(); setBackground({ objectScale: objSliderToSize(v) }) }} />
         </div>
       </PopoverContent>
     </Popover>
