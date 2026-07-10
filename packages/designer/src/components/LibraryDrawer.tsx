@@ -67,6 +67,10 @@ interface LibraryDrawerProps {
   /** Selected category (controlled — lives in the shell so the toolbar can jump). */
   categoryId: string | null
   onCategoryChange: (id: string) => void
+  /** True while the OrbitControls overlay is live (navigation / edit-background).
+   *  It owns field3d per-frame, so a zone pick must JUMP the pose (letting the
+   *  overlay fly to it) rather than run our own tween, which would fight it. */
+  orbitActive?: boolean
 }
 
 // Right-side figures library. Header hosts the relocated AI / fill-viewport / pin
@@ -74,7 +78,7 @@ interface LibraryDrawerProps {
 // list) over the selected category's element palette: facet filters (action /
 // facing, or material type) + a thumbnail grid; clicking a thumbnail drops the
 // figure centered on the board. Categories come from the catalog (assets).
-export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, categoryId, onCategoryChange }: LibraryDrawerProps) {
+export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, orbitActive = false }: LibraryDrawerProps) {
   const storeApi = useEditorStoreApi()
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
@@ -121,10 +125,16 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     // (or nothing) just jump — the legacy frames don't line up with the 3D
     // court, so the flight reads wrong.
     const bg = storeApi.getState().doc.background
-    if (bg.field3d) {
+    if (bg.field3d && !orbitActive) {
+      // Normal mode with a 3D pose: tween the saved pose ourselves.
       setBackground(patch)
       animateFieldTo(storeApi, z.camera)
     } else {
+      // No 3D pose to fly from, OR the OrbitControls overlay is live. The overlay
+      // rewrites field3d from its camera every frame and flies to external pose
+      // changes on its own — so our per-frame tween would fight it (the pose snaps
+      // back each frame, tumbling and never arriving). Jump the pose in one write
+      // and let the overlay fly to it (matching what the top-view buttons do).
       setBackground({ ...patch, field3d: z.camera })
     }
     if (typeChanged) storeApi.getState().setTokenSizeM(z.fieldType === 'futsal' ? 2 : TOKEN_DEFAULT_SIZE_M)

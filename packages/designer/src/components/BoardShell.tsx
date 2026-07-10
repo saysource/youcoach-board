@@ -575,6 +575,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             onToggleFullscreen={() => setFullscreen((v) => !v)}
             categoryId={libraryCatId}
             onCategoryChange={selectCategory}
+            orbitActive={navigating || backgroundMode}
           />
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
