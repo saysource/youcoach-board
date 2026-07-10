@@ -82,7 +82,12 @@ export function FieldSceneLayer({ camera, viewport, image: rawImage, svgRef, con
     if (ctxRef.current) return ctxRef.current
     const canvas = canvasRef.current
     if (!canvas) return null
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true })
+    // logarithmicDepthBuffer: the scene spans a 4000 m ground plane down to the
+    // pitch's few-mm-apart surface planes (ground / bands / lines), so a linear
+    // 0.1–4000 depth buffer runs out of precision at grazing/distant views and the
+    // near-coplanar planes z-fight (visible as flicker in the mowing stripes when
+    // rotating). A log depth buffer distributes precision evenly across the range.
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true })
     renderer.setPixelRatio(window.devicePixelRatio)
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
