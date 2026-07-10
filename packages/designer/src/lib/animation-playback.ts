@@ -10,10 +10,11 @@
 // untouched. Stopping restores the exact pre-play state (the frame being edited
 // and the editing camera). One playback per store (WeakMap), like field-anim.
 
-import { applyOperation, type BoardElement, type FieldView } from '@youcoach-board/core'
+import { applyOperation, type AnimationFrame, type BoardElement, type FieldView } from '@youcoach-board/core'
 import type { EditorStore } from '../store/editorStore'
 import { lerpPose, cancelFieldAnimation } from './field-anim'
 import { reprojectChanges, withGroundAnchors } from './field-anchor'
+import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // fixed 1 s per frame transition (Phase 1)
 
@@ -21,12 +22,44 @@ const TRANSITION_MS = 1000 // fixed 1 s per frame transition (Phase 1)
 // speed between frames. Per-transition easings come with the later
 // "Transitions" phase of the spec.
 
-/** Generic numeric interpolation: numbers lerp; same-length arrays and plain
- *  objects recurse; anything else (strings, booleans, shape mismatches) snaps
- *  at the halfway point. Covers transform, x/y/z, rotation, points, ground
- *  anchors, spline fields, sizeM — without per-type knowledge. */
+/** Parse a hex CSS color (#rgb / #rgba / #rrggbb / #rrggbbaa) to RGBA channels. */
+function parseHexColor(s: string): [number, number, number, number] | null {
+  if (!s.startsWith('#')) return null
+  const h = s.slice(1)
+  if (!/^[0-9a-fA-F]+$/.test(h)) return null
+  if (h.length === 3 || h.length === 4) {
+    const c = [...h].map((d) => parseInt(d + d, 16))
+    return [c[0], c[1], c[2], h.length === 4 ? c[3] : 255]
+  }
+  if (h.length === 6 || h.length === 8) {
+    const c = [0, 2, 4, 6].slice(0, h.length / 2).map((i) => parseInt(h.slice(i, i + 2), 16))
+    return [c[0], c[1], c[2], h.length === 8 ? c[3] : 255]
+  }
+  return null
+}
+
+/** Interpolate two hex colors per RGBA channel (alpha emitted only if needed). */
+function lerpHexColor(a: string, b: string, t: number): string | null {
+  const ca = parseHexColor(a)
+  const cb = parseHexColor(b)
+  if (!ca || !cb) return null
+  const c = ca.map((v, i) => Math.round(v + (cb[i] - v) * t))
+  const hex = (v: number) => v.toString(16).padStart(2, '0')
+  return `#${hex(c[0])}${hex(c[1])}${hex(c[2])}${c[3] < 255 ? hex(c[3]) : ''}`
+}
+
+/** Generic numeric interpolation: numbers lerp; hex-color strings lerp per
+ *  channel; same-length arrays and plain objects recurse; anything else
+ *  (other strings, booleans, shape mismatches) snaps at the halfway point.
+ *  Covers transform, x/y/z, rotation, points, ground anchors, spline fields,
+ *  sizeM, colors, opacity, font size, wave/offset params — without per-type
+ *  knowledge. */
 function lerpValue(a: unknown, b: unknown, t: number): unknown {
   if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * t
+  if (typeof a === 'string' && typeof b === 'string' && a !== b) {
+    const c = lerpHexColor(a, b, t)
+    if (c) return c
+  }
   if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) return a.map((v, i) => lerpValue(v, b[i], t))
   if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
     const out: Record<string, unknown> = { ...(b as Record<string, unknown>) }
@@ -47,20 +80,71 @@ function faded(el: BoardElement, f: number): BoardElement {
   return { ...el, transform: { ...el.transform, opacity: el.transform.opacity * f } }
 }
 
-/** The interpolated element list for transition a→b at eased time t. Matched
- *  ids interpolate; b-only elements fade in, a-only fade out (appended last so
- *  they keep painting until gone). Output order follows b. */
-function lerpElements(a: BoardElement[], b: BoardElement[], t: number): BoardElement[] {
+/** The interpolated element list for transition a→b at time t. Matched ids
+ *  interpolate; b-only elements fade in, a-only fade out (appended last so
+ *  they keep painting until gone). Output order follows b. An element with a
+ *  movement path INTO frame b travels along that spline (arc-length pace)
+ *  instead of the straight line — all other properties still interpolate. */
+function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths']): BoardElement[] {
   const byId = new Map(a.map((e) => [e.id, e]))
   const out: BoardElement[] = []
   for (const eb of b) {
     const ea = byId.get(eb.id)
-    if (ea && ea.type === eb.type) out.push(lerpValue(ea, eb, t) as BoardElement)
-    else out.push(faded(eb, t))
+    if (ea && ea.type === eb.type) {
+      // Pitch pins (`ground`) interpolate only when BOTH sides carry compatible
+      // ones. One-sided pins (e.g. the token was dragged/resized — and thereby
+      // pinned — in one frame only) are stripped: lerpValue would hold the
+      // stored pin constant, and reprojection then PARKS the element at that
+      // spot for the whole transition instead of letting its 2D coords travel.
+      // An element following a MOVEMENT PATH is stripped too: the path bends
+      // its 2D coords, and reprojection must derive the grass spot from those
+      // (repositioning from the stored pin would erase the bend).
+      const mids = paths?.[eb.id]
+      const keepGround = !mids?.length && compatibleGround(ea, eb)
+      const [na, nb] = keepGround ? [ea, eb] : [stripGround(ea), stripGround(eb)]
+      let el = lerpValue(na, nb, t) as BoardElement
+      if (mids?.length) el = alongPath(ea, eb, el, mids, t)
+      out.push(el)
+    } else out.push(faded(eb, t))
   }
   const bIds = new Set(b.map((e) => e.id))
   for (const ea of a) if (!bIds.has(ea.id)) out.push(faded(ea, 1 - t))
   return out
+}
+
+type Grounded = BoardElement & { ground?: [number, number] | Array<[number, number]> }
+
+/** Both sides pinned, with matching shapes (per-point pins need equal lengths). */
+function compatibleGround(a: BoardElement, b: BoardElement): boolean {
+  const ga = (a as Grounded).ground
+  const gb = (b as Grounded).ground
+  if (!ga || !gb) return false
+  return typeof ga[0] === 'number' ? typeof gb[0] === 'number' : Array.isArray(gb[0]) && ga.length === gb.length
+}
+
+function stripGround(el: BoardElement): BoardElement {
+  if ((el as Grounded).ground === undefined) return el
+  const copy = { ...el } as Grounded
+  delete copy.ground
+  return copy
+}
+
+/** Whether two poses are numerically identical (JSON comparison is unreliable —
+ *  lerpPose rebuilds objects with a different key order). */
+function samePose(a: FieldView, b: FieldView): boolean {
+  return a.position.every((v, i) => v === b.position[i]) && a.target.every((v, i) => v === b.target[i]) && a.fov === b.fov
+}
+
+/** Re-position the interpolated element so its centre follows the spline
+ *  through [centre(a), ...mids, centre(b)] at arc-length fraction t. */
+function alongPath(a: BoardElement, b: BoardElement, lerped: BoardElement, mids: PathPoint[], t: number): BoardElement {
+  const ca = elementCenter(a)
+  const cb = elementCenter(b)
+  const cl = elementCenter(lerped)
+  if (!ca || !cb || !cl) return lerped
+  const [px, py] = pointAlongPath([ca, ...mids, cb], t)
+  const tr = (lerped as Extract<BoardElement, { transform: { x: number; y: number } }>).transform
+  return { ...lerped, transform: { ...tr, x: tr.x + px - cl[0], y: tr.y + py - cl[1] } } as BoardElement
 }
 
 interface Playback {
@@ -107,7 +191,7 @@ export function startPlayback(store: EditorStore): void {
     const { doc } = store.getState()
     let els = elements
     const from = pb.preCamera
-    if (pose && from && JSON.stringify(pose) !== JSON.stringify(from)) {
+    if (pose && from && !samePose(pose, from)) {
       const changes = reprojectChanges(withGroundAnchors(els, from), from, pose)
       if (changes.length) els = applyOperation({ ...doc, elements: els }, { kind: 'update', changes }).elements
     }
@@ -130,7 +214,7 @@ export function startPlayback(store: EditorStore): void {
     }
     const t = Math.min(1, (now - segStart) / TRANSITION_MS)
     const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, t) : (effCam[seg + 1] ?? effCam[seg])
-    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t), pose, seg + t)
+    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths), pose, seg + t)
     if (t >= 1) {
       seg = seg + 1 < fr.length - 1 ? seg + 1 : 0
       segStart = null

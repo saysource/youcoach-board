@@ -80,6 +80,7 @@ import { Text3DFrames, Text3DHtml } from './Text3DDecoration'
 import { text3dCorners } from '../lib/text3d'
 import { FieldEditOverlay } from './FieldEditOverlay'
 import { FieldZoneTool } from './FieldZoneTool'
+import { MovementPathLayer } from './MovementPathLayer'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
 import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
@@ -325,9 +326,10 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {} }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {}, animMode = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void; animMode?: boolean }) {
   const doc = useEditorStore((s) => s.doc)
   const playing = useEditorStore((s) => s.playing)
+  const currentFrame = useEditorStore((s) => s.currentFrame)
   const activeTool = useEditorStore((s) => s.activeTool)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const tokenDefaults = useEditorStore((s) => s.tokenDefaults)
@@ -2305,6 +2307,18 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Elements are inert (no pointer events) in the calibration/creation modes.
   const elementsInert = creating || backgroundMode || homographyMode || cameraMode || zoneMode || navigating || playing || eraserTool || lassoTool
 
+  // Onion view + movement paths: animation editing on frame ≥ 2, outside the
+  // special camera modes and playback (specs/animation.md Phase 2).
+  const onionActive =
+    animMode && !playing && !backgroundMode && !homographyMode && !cameraMode && !zoneMode && !navigating &&
+    currentFrame > 0 && currentFrame < doc.animation.frames.length
+  const liveIds = new Set(doc.elements.map((e) => e.id))
+  const onionElements = onionActive
+    ? doc.animation.frames[currentFrame - 1].elements.filter(
+        (el) => liveIds.has(el.id) && el.type !== 'object3d' && el.type !== 'arrow3d' && !(el.type === 'text' && el.text3d),
+      )
+    : null
+
   // "Export as…" (main menu): composite the live layer stack into a PNG. The
   // latest closure lives in a ref (it captures doc/camera/ctm) — refreshed in an
   // effect (not during render) — and is registered once on mount.
@@ -2659,9 +2673,30 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           </>
         }
       >
+        {/* Onion view (animation editing, frame ≥ 2): the PREVIOUS frame's
+            elements ghosted at 10% opacity under the live ones. SVG-rendered
+            elements only — 3D-ground elements live in the WebGL layers. */}
+        {onionElements && (
+          <g pointerEvents="none" opacity={0.1}>
+            {onionElements.map((el) =>
+              el.type === 'figure' ? <FigureView key={el.id} element={el} /> : <ElementView key={el.id} element={el} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} />,
+            )}
+          </g>
+        )}
         <g style={{ pointerEvents: elementsInert ? 'none' : 'auto' }}>
           {doc.elements.map((el) => (isElevatedToken(el) ? null : renderBoardElement(el)))}
         </g>
+        {/* Movement paths (animation editing): purple editable splines from the
+            previous frame's positions to the current ones. */}
+        {onionActive && (
+          <MovementPathLayer
+            prevElements={doc.animation.frames[currentFrame - 1].elements}
+            elements={doc.elements}
+            paths={doc.animation.frames[currentFrame]?.paths}
+            scale={scale}
+            onSetPath={(id, pts) => storeApi.getState().setFramePath(currentFrame, id, pts)}
+          />
+        )}
         {fieldCamCfg && (
           <TapeDecorations
             elements={doc.elements

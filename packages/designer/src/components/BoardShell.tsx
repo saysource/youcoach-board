@@ -523,7 +523,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
               paddingRight: boardPaddingRight,
             }}
           >
-            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navMarkers={navMarkers} onNavTap={navTap} fieldPanMode={fieldPanning} onExitFieldPan={() => setFieldPan(false)} />
+            <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navMarkers={navMarkers} onNavTap={navTap} fieldPanMode={fieldPanning} onExitFieldPan={() => setFieldPan(false)} animMode={animEditing} />
             {/* Navigation-active indicator: an orbit watermark in the working-area
                 top-right corner (decorative, doesn't block input). Kept mounted so
                 it fades in/out with navigation mode. */}

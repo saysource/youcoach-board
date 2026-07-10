@@ -62,6 +62,18 @@ export function projectGroundPath(cam: THREE.Camera, pts: Array<[number, number]
   })
 }
 
+/** Remap free board points (e.g. movement-path anchors) from one field pose to
+ *  another: each point keeps its spot on the grass. Points that miss the ground
+ *  plane under the old pose stay where they are. */
+export function reprojectBoardPoints(pts: Array<[number, number]>, before: PosedCamera, after: PosedCamera): Array<[number, number]> {
+  const oldCam = makeCalibratedCamera(before)
+  const newCam = makeCalibratedCamera(after)
+  return pts.map(([bx, by]) => {
+    const g = boardToGround(bx, by, oldCam)
+    return g ? projectGround(newCam, g.x, g.z) : [bx, by]
+  })
+}
+
 /** Elements that stand on the pitch and carry a single ground anchor. */
 export type GroundElement = Extract<BoardElement, { type: 'figure' | 'token' }>
 export function isGroundElement(el: BoardElement): el is GroundElement {

@@ -17,7 +17,7 @@ import {
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
 import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox, nextTokenText } from '../lib/draw'
-import { reprojectChanges, withGroundAnchors, pinNewShape, groundNudgeDelta, tokenSizeChanges, TOKEN_DEFAULT_SIZE_M } from '../lib/field-anchor'
+import { reprojectChanges, reprojectBoardPoints, withGroundAnchors, pinNewShape, groundNudgeDelta, tokenSizeChanges, TOKEN_DEFAULT_SIZE_M } from '../lib/field-anchor'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -266,6 +266,9 @@ export interface EditorState {
   /** Store a playback camera pose on frame k (null = keep the previous frame's).
    *  Doesn't touch elements, so history survives. */
   setFrameCamera: (k: number, pose: FieldView | null) => void
+  /** Store frame k's movement path for an element (the spline's intermediate
+   *  control points, board coords) or clear it (null / empty). Off-stack. */
+  setFramePath: (k: number, elementId: string, points: [number, number][] | null) => void
 }
 
 /** Keep only the selected ids whose elements still exist in `doc` (used after
@@ -608,10 +611,19 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
           const a = d.animation
           if (!camMoved || a.frames.length < 2) return d
           const frames = a.frames.map((f, i) => {
-            if (i === a.current) return f
+            // Movement-path anchors are free board points: keep THEIR grass spots
+            // too (every frame — the current one's elements reproject elsewhere).
+            const paths = f.paths
+              ? Object.fromEntries(Object.entries(f.paths).map(([id, pts]) => [id, reprojectBoardPoints(pts, before3d!, after3d!)]))
+              : undefined
+            if (i === a.current) return paths ? { ...f, paths } : f
             const changes = reprojectChanges(withGroundAnchors(f.elements, before3d!), before3d!, after3d!)
-            if (changes.length === 0) return f
-            return { ...f, elements: applyOperation({ ...d, elements: f.elements }, { kind: 'update', changes }).elements }
+            if (changes.length === 0 && !paths) return f
+            return {
+              ...f,
+              ...(paths ? { paths } : {}),
+              elements: changes.length ? applyOperation({ ...d, elements: f.elements }, { kind: 'update', changes }).elements : f.elements,
+            }
           })
           return { ...d, animation: { ...a, frames } }
         }
@@ -1019,6 +1031,20 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         if (k < 0 || k >= a.frames.length) return
         const frames = a.frames.slice()
         frames[k] = { ...frames[k], camera: pose ? { ...pose, position: [...pose.position] as [number, number, number], target: [...pose.target] as [number, number, number] } : null }
+        const nextDoc = { ...doc, animation: { ...a, frames } }
+        set({ doc: nextDoc })
+        onChange?.(nextDoc)
+      },
+
+      setFramePath: (k, elementId, points) => {
+        const { doc } = get()
+        const a = doc.animation
+        if (k < 0 || k >= a.frames.length) return
+        const frames = a.frames.slice()
+        const paths = { ...(frames[k].paths ?? {}) }
+        if (points && points.length > 0) paths[elementId] = points.map((p) => [...p] as [number, number])
+        else delete paths[elementId]
+        frames[k] = { ...frames[k], ...(Object.keys(paths).length ? { paths } : { paths: undefined }) }
         const nextDoc = { ...doc, animation: { ...a, frames } }
         set({ doc: nextDoc })
         onChange?.(nextDoc)

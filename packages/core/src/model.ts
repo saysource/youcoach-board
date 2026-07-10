@@ -111,6 +111,11 @@ export interface AnimationFrame {
    *  previous frame's (frame 1 null = whatever pose playback starts from). */
   camera: FieldView | null
   elements: BoardElement[]
+  /** Movement paths INTO this frame, keyed by element id: intermediate control
+   *  points (board coords) of the spline the element's centre travels along
+   *  from its previous-frame position. Endpoints are derived from the element
+   *  positions, so straight moves need no entry. Meaningless on frame 0. */
+  paths?: Record<string, [number, number][]>
 }
 
 /** Animation settings for the whole drill: an ordered list of frame snapshots.
@@ -250,10 +255,24 @@ function parseAnimation(raw: unknown): BoardAnimation {
   const frames: AnimationFrame[] = Array.isArray(o.frames)
     ? o.frames
         .filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
-        .map((f) => ({
-          camera: parseFieldView(f.camera),
-          elements: Array.isArray(f.elements) ? f.elements.map(parseElement).filter((e): e is BoardElement => e !== null) : [],
-        }))
+        .map((f) => {
+          const frame: AnimationFrame = {
+            camera: parseFieldView(f.camera),
+            elements: Array.isArray(f.elements) ? f.elements.map(parseElement).filter((e): e is BoardElement => e !== null) : [],
+          }
+          if (typeof f.paths === 'object' && f.paths !== null) {
+            const paths: Record<string, [number, number][]> = {}
+            for (const [id, pts] of Object.entries(f.paths as Record<string, unknown>)) {
+              if (!Array.isArray(pts)) continue
+              const clean = pts
+                .filter((p): p is [unknown, unknown] => Array.isArray(p) && p.length === 2)
+                .map((p) => [num(p[0], 0), num(p[1], 0)] as [number, number])
+              if (clean.length) paths[id] = clean
+            }
+            if (Object.keys(paths).length) frame.paths = paths
+          }
+          return frame
+        })
     : []
   const current = Math.min(Math.max(0, Math.trunc(num(o.current, 0))), Math.max(0, frames.length - 1))
   return {
@@ -305,7 +324,14 @@ function structuredCloneBoard(doc: BoardDoc): BoardDoc {
   return {
     ...doc,
     background: { ...doc.background, fieldColors: { ...doc.background.fieldColors } },
-    animation: { ...doc.animation, frames: doc.animation.frames.map((f) => ({ camera: f.camera ? { ...f.camera, position: [...f.camera.position] as [number, number, number], target: [...f.camera.target] as [number, number, number] } : null, elements: f.elements.slice() })) },
+    animation: {
+      ...doc.animation,
+      frames: doc.animation.frames.map((f) => ({
+        camera: f.camera ? { ...f.camera, position: [...f.camera.position] as [number, number, number], target: [...f.camera.target] as [number, number, number] } : null,
+        elements: f.elements.slice(),
+        ...(f.paths ? { paths: Object.fromEntries(Object.entries(f.paths).map(([id, pts]) => [id, pts.map((p) => [...p] as [number, number])])) } : {}),
+      })),
+    },
     elements: doc.elements.slice(),
   }
 }
