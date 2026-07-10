@@ -8,7 +8,6 @@ import { cn } from '../lib/cn'
 import { useEditorStore } from '../store/context'
 import { makeToken, TOKEN_SIZE, type TokenStyle } from '../lib/draw'
 import { pinTokensAtGround } from '../lib/field-anchor'
-import { topViewForField } from '../lib/field-zones'
 import {
   systemConfigForField,
   formationGround,
@@ -86,10 +85,8 @@ function FieldPreview({ code, kind, dir, spread }: { code: string; kind: FieldKi
 function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose: () => void }) {
   const elements = useEditorStore((s) => s.doc.elements)
   const field3d = useEditorStore((s) => s.doc.background.field3d)
-  const fieldType = useEditorStore((s) => s.doc.background.fieldType)
   const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
   const placeElements = useEditorStore((s) => s.placeElements)
-  const setBackground = useEditorStore((s) => s.setBackground)
   const dirs = directionOptions('horizontal')
   const options = styleOptions(elements)
   const [dir, setDir] = useState<FormationDir>('forward')
@@ -100,18 +97,14 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
     if (!field3d) return // systems only appear on a 3D pitch, so this is set
     const style = options[Math.min(styleIdx, options.length - 1)]
     const grounds = formationGround(code, cfg, dir, spread)
-    // A game system is a WHOLE-pitch construct: snap the field to the full top-view
-    // horizontal so the entire formation is visible and correctly projected. Placing
-    // it from a zoomed / low-perspective navigation pose otherwise projects the
-    // far/behind-camera tokens to degenerate positions (giant off-screen discs) — the
-    // ground anchors are right, but the current camera can't show the full pitch. Pin
-    // the tokens against that same top-view camera so they match the snapped field.
-    const view = topViewForField(fieldType)
-    setBackground({ field3d: view })
+    // Pin the formation against the CURRENT camera — do NOT snap to top view (the
+    // user's chosen pose is preserved). Each token carries its ground anchor, so it
+    // reprojects as the camera later moves; points outside the current frame simply
+    // land off-screen and appear when the view widens.
     // Base tokens (any position); pinning relocates + perspective-sizes each to its
     // ground spot at the shared global token size.
     const base = grounds.map((_, i) => makeToken(crypto.randomUUID(), 0, 0, style, String(i + 1), TOKEN_SIZE))
-    placeElements(pinTokensAtGround(base as Parameters<typeof pinTokensAtGround>[0], grounds, view, tokenSizeM))
+    placeElements(pinTokensAtGround(base as Parameters<typeof pinTokensAtGround>[0], grounds, field3d, tokenSizeM))
     onClose()
   }
 
