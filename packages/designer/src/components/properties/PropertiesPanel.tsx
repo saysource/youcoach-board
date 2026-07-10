@@ -405,12 +405,20 @@ function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
         <TooltipContent>Size</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
-        <div className="grid gap-1.5">
+        <div className="grid gap-1">
           <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
             <span>Small</span>
+            <span className="tabular-nums text-foreground">{Math.round(objectScale * 10) / 10}×</span>
             <span>Big</span>
           </div>
-          <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(objectScale))} onChange={(v) => { arm(); setBackground({ objectScale: objSliderToSize(v) }) }} />
+          <div className="relative">
+            <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(objectScale))} onChange={(v) => { arm(); setBackground({ objectScale: objSliderToSize(v) }) }} />
+            {/* "Real" (×1) reference tick — sits at the slider midpoint (objSizeToSlider(1)=50). */}
+            <span aria-hidden className="pointer-events-none absolute top-1/2 h-3 w-px -translate-y-1/2 bg-muted-foreground/60" style={{ left: `${objSizeToSlider(1)}%` }} />
+          </div>
+          <div className="relative h-3 text-[10px] text-muted-foreground">
+            <span className="absolute -translate-x-1/2" style={{ left: `${objSizeToSlider(1)}%` }}>Real</span>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
