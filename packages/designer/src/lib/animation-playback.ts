@@ -412,14 +412,19 @@ function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: A
       const mids = paths?.[eb.id]
       const keepGround = !mids?.length && compatibleGround(ea, eb)
       const [na, nb] = keepGround ? [ea, eb] : [stripGround(ea), stripGround(eb)]
-      let el = lerpValue(na, nb, t) as BoardElement
+      // Per-element "Easy Easing": this element's OWN transition progress is
+      // eased instead of the default linear pace.
+      const te = eb.effectEase ? easeInOutCubic(t) : t
+      let el = lerpValue(na, nb, te) as BoardElement
       // Point paths whose point COUNT changed between the frames (a vertex was
       // added/removed): lerpValue can only snap mismatched arrays, so guess the
       // morph instead — resample both to a common count and interpolate.
       if ((ea.type === 'polyline' || ea.type === 'draw') && ea.type === eb.type && ea.points.length !== eb.points.length && ea.points.length >= 2 && eb.points.length >= 2) {
-        el = { ...el, points: morphPoints(ea.points, eb.points, t) } as BoardElement
+        el = { ...el, points: morphPoints(ea.points, eb.points, te) } as BoardElement
       }
-      if (mids?.length) el = alongPath(ea, eb, el, mids, t)
+      if (mids?.length) el = alongPath(ea, eb, el, mids, te)
+      // Token "between" effects: motion tail and/or sonar pulse while it MOVES.
+      if (eb.type === 'token' && ea.type === 'token') el = applyBetweenEffect(ea, eb, el, mids, t, eb.effectEase ? easeInOutCubic : (s) => s)
       out.push(el)
     } else out.push(...enterExitParts(eb, t, 'in', cam()))
   }
@@ -449,6 +454,38 @@ function stripGround(el: BoardElement): BoardElement {
  *  lerpPose rebuilds objects with a different key order). */
 function samePose(a: FieldView, b: FieldView): boolean {
   return a.position.every((v, i) => v === b.position[i]) && a.target.every((v, i) => v === b.target[i]) && a.fov === b.fov
+}
+
+/** The BETWEEN effect for a moving token ('tail' / 'pulse'): transient render
+ *  hints attached to the interpolated element while its centre travels. The
+ *  tail samples the SAME trajectory the token follows (movement-path spline or
+ *  the straight line) at recent parameter values, so it always trails the true
+ *  motion. */
+function applyBetweenEffect(ea: BoardElement, eb: BoardElement, lerped: BoardElement, mids: PathPoint[] | undefined, t: number, ease: (s: number) => number): BoardElement {
+  if (!eb.effectTail && !eb.effectPulse) return lerped
+  const ca = elementCenter(ea)
+  const cb = elementCenter(eb)
+  if (!ca || !cb || Math.hypot(cb[0] - ca[0], cb[1] - ca[1]) < 4) return lerped // not moving
+  let el = lerped
+  if (eb.effectPulse) el = { ...el, pulse: (t / 0.35) % 1 } as BoardElement
+  if (eb.effectTail) {
+    const ctrl: PathPoint[] = mids?.length ? [ca, ...mids, cb] : [ca, cb]
+    // The token's actual position at raw time s (its own easing applied).
+    const pos = (s: number): PathPoint => {
+      const q = ease(s)
+      return ctrl.length > 2 ? pointAlongPath(ctrl, q) : [ca[0] + (cb[0] - ca[0]) * q, ca[1] + (cb[1] - ca[1]) * q]
+    }
+    // Sample uniformly over the AVAILABLE span (never clamping several samples
+    // onto the start point): early in the transition the tail is simply
+    // shorter, but its zero-width tip is always the oldest visible point —
+    // never a blunt cut edge.
+    const span = Math.min(t, 14 * 0.028)
+    const s0 = t - span
+    const trail: PathPoint[] = []
+    for (let k = 0; k <= 13; k++) trail.push(pos(s0 + (span * k) / 13))
+    el = { ...el, trail } as BoardElement
+  }
+  return el
 }
 
 /** Re-position the interpolated element so its centre follows the spline

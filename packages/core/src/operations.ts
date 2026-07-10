@@ -29,6 +29,10 @@ export interface ElementPatch {
   textEffectOut?: string
   lengthEffectIn?: string
   lengthEffectOut?: string
+  effectTail?: boolean
+  effectTailColor?: string
+  effectPulse?: boolean
+  effectEase?: boolean
   transform?: ElementTransform
   stroke?: string
   strokeWidth?: number

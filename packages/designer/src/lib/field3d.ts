@@ -129,7 +129,7 @@ export const FLOODLIGHTS: { pos: [number, number, number]; target: [number, numb
  *  tight cone with a hard edge, so each pylon paints a distinct circle of light
  *  on the surface (esp. on a dark surround). */
 export function makeFloodlight(f: { pos: [number, number, number]; target: [number, number, number] }): THREE.SpotLight {
-  const spot = new THREE.SpotLight(0xffffff, 129500, 400, Math.PI / 6, 0.08, 2.7)
+  const spot = new THREE.SpotLight(0xffffff, 9500, 400, Math.PI / 6, 0.08, 2.7)
   spot.position.set(...f.pos)
   spot.target.position.set(...f.target)
   return spot

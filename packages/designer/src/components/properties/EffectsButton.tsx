@@ -3,6 +3,9 @@ import { ChevronRight, Keyboard, Sparkles, UnfoldHorizontal } from 'lucide-react
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { Switch } from '../ui/switch'
+import { Separator } from '../ui/separator'
+import { ColorPickerWidget } from './ColorPickerWidget'
 import { cn } from '../../lib/cn'
 import { useEditorStore } from '../../store/context'
 import fadeIcon from '../../assets/effects/effect_fade.svg'
@@ -133,7 +136,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
   const elements = useEditorStore((s) => s.doc.elements)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const updateElements = useEditorStore((s) => s.updateElements)
-  const [tab, setTab] = useState<'in' | 'out'>('in')
+  const [tab, setTab] = useState<'in' | 'out' | 'between'>('in')
   // Which section is expanded (VA-style accordion) for the sectioned layouts
   // (closed shapes: Border/Fill; texts: Effect/Text).
   const [openSection, setOpenSection] = useState<'first' | 'second' | null>('first')
@@ -148,6 +151,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
   const allClosed = sel.every((e) => e.type === 'rect' || e.type === 'ellipse' || (e.type === 'polyline' && e.closed))
   const allTexts = sel.every((e) => e.type === 'text')
   const allArrows3d = sel.every((e) => e.type === 'arrow3d')
+  const allTokens = sel.every((e) => e.type === 'token')
   const baseEffects = tab === 'in' ? IN_EFFECTS : OUT_EFFECTS
   const pathTile = tab === 'in' ? PATH_IN : PATH_OUT
 
@@ -164,6 +168,12 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
     const v = (first as unknown as Record<string, string | undefined>)[key]
     return v ?? (part === 'text' || part === 'length' ? 'none' : 'fade')
   }
+
+  // The movement-effects tab: independent per-element fields (not exclusive).
+  function setField(key: string, value: boolean | string) {
+    updateElements(sel.map((e) => ({ id: e.id, before: { [key]: (e as unknown as Record<string, unknown>)[key] }, after: { [key]: value } })))
+  }
+  const fv = first as unknown as Record<string, unknown>
 
   function pick(id: string, part: Part = 'main') {
     const key = KEYS[part][tab === 'in' ? 0 : 1]
@@ -183,13 +193,14 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
         <TooltipContent>Enter/exit effects</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-72 p-2">
-        {/* In / Out tabs (VA's layout). */}
+        {/* In / Out (+ Between for tokens) tabs (VA's layout). */}
         <div className="mb-2 flex border-b border-border">
           {(
             [
-              ['in', 'In'],
-              ['out', 'Out'],
-            ] as const
+              ['in', 'In'] as const,
+              ['out', 'Out'] as const,
+              ...(allTokens ? [['between', 'Effects'] as const] : []),
+            ]
           ).map(([value, label]) => (
             <button
               key={value}
@@ -203,7 +214,36 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             </button>
           ))}
         </div>
-        {allClosed ? (
+        {tab === 'between' ? (
+          <div className="space-y-2">
+            {/* Movement effects: independently toggleable, configured inline. */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">Tail</span>
+              <Switch checked={!!fv.effectTail} onCheckedChange={(v) => setField('effectTail', v)} />
+            </div>
+            {!!fv.effectTail && (
+              <div className="grid gap-1.5 pl-1">
+                <span className="text-[11px] font-medium text-muted-foreground">Tail color</span>
+                <ColorPickerWidget
+                  value={(fv.effectTailColor as string) ?? (fv.color1 as string)}
+                  onChange={(c) => setField('effectTailColor', c)}
+                  showOpacity={false}
+                  allowTransparent={false}
+                />
+              </div>
+            )}
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">Pulse</span>
+              <Switch checked={!!fv.effectPulse} onCheckedChange={(v) => setField('effectPulse', v)} />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">Easy Easing</span>
+              <Switch checked={!!fv.effectEase} onCheckedChange={(v) => setField('effectEase', v)} />
+            </div>
+          </div>
+        ) : allClosed ? (
           <div className="max-h-[480px] space-y-1 divide-y divide-border overflow-y-auto">
             {/* Border first (it also offers Path — the outline forming). */}
             <EffectGrid label="Border" effects={baseEffects.concat([pathTile])} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />

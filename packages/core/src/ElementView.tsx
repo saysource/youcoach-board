@@ -26,8 +26,64 @@ export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabel
     `translate(${cx} ${cy}) scale(${scale}) translate(${-cx} ${-cy})`
 
   return (
-    <g transform={transform} opacity={opacity}>
-      <Shape element={element} viewScale={viewScale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokenBadgeHidden} />
+    <>
+      {/* Token "between" effects (playback motion FX): drawn in ABSOLUTE board
+          coords, so they sit outside the element transform. */}
+      {element.type === 'token' && (element.trail || element.pulse !== undefined) && (
+        <TokenMotionFx element={element} cx={cx + x} cy={cy + y} r={(element.width / 2) * (scale || 1)} opacity={opacity} />
+      )}
+      <g transform={transform} opacity={opacity}>
+        <Shape element={element} viewScale={viewScale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokenBadgeHidden} />
+      </g>
+    </>
+  )
+}
+
+/** Playback-only motion FX for tokens (specs/animation.md "between" effects):
+ *  a comet-style TAIL (tapered ribbon through the recent centre positions,
+ *  widest at the token) and/or a sonar PULSE (two expanding rings, half a
+ *  phase apart). Pointer-transparent, painted under the token. */
+function TokenMotionFx({ element, cx, cy, r, opacity }: { element: Extract<BoardElement, { type: 'token' }>; cx: number; cy: number; r: number; opacity: number }) {
+  const rings: React.ReactNode[] = []
+  if (element.pulse !== undefined) {
+    for (const shift of [0, 0.5]) {
+      const ph = (element.pulse + shift) % 1
+      rings.push(<circle key={shift} cx={cx} cy={cy} r={r * (0.9 + 1.8 * ph)} fill="none" stroke={element.color1} strokeWidth={3} opacity={(1 - ph) * 0.55 * opacity} />)
+    }
+  }
+  let tail: React.ReactNode = null
+  const pts = element.trail
+  if (pts && pts.length >= 2) {
+    // Tapered ribbon (the eraser-tail construction): width 0 at the oldest
+    // sample growing to ~the token radius at the head. Each outline is drawn
+    // as a quadratic curve through segment midpoints (the freehand-smoothing
+    // trick), so a bending trail stays silky instead of kinking.
+    const left: Array<[number, number]> = []
+    const right: Array<[number, number]> = []
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)]
+      const b = pts[Math.min(pts.length - 1, i + 1)]
+      let dx = b[0] - a[0]
+      let dy = b[1] - a[1]
+      const len = Math.hypot(dx, dy) || 1
+      dx /= len
+      dy /= len
+      const h = r * 0.85 * (i / (pts.length - 1))
+      left.push([pts[i][0] - dy * h, pts[i][1] + dx * h])
+      right.push([pts[i][0] + dy * h, pts[i][1] - dx * h])
+    }
+    const smooth = (o: Array<[number, number]>): string => {
+      if (o.length < 3) return o.map((q, i) => `${i ? 'L ' : ''}${q[0]},${q[1]}`).join(' ')
+      let d = `${o[0][0]},${o[0][1]}`
+      for (let i = 1; i < o.length - 1; i++) d += ` Q ${o[i][0]},${o[i][1]} ${(o[i][0] + o[i + 1][0]) / 2},${(o[i][1] + o[i + 1][1]) / 2}`
+      return d + ` L ${o[o.length - 1][0]},${o[o.length - 1][1]}`
+    }
+    tail = <path d={`M ${smooth(left)} L ${smooth(right.reverse())} Z`} fill={element.effectTailColor || element.color1} opacity={0.35 * opacity} />
+  }
+  return (
+    <g pointerEvents="none">
+      {tail}
+      {rings}
     </g>
   )
 }

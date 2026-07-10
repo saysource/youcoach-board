@@ -69,6 +69,15 @@ interface BaseElement {
    *  effect so the opacity ramp is opt-in. 'none' when absent. */
   lengthEffectIn?: string
   lengthEffectOut?: string
+  /** Tokens only: effects played while the token MOVES during a frame
+   *  transition — independently toggleable (not exclusive). Tail = a
+   *  comet-style motion trail (own color, defaults to the token color);
+   *  Pulse = a sonar ping. effectEase eases the element's own transition
+   *  (Easy Easing) instead of the default linear motion. */
+  effectTail?: boolean
+  effectTailColor?: string
+  effectPulse?: boolean
+  effectEase?: boolean
   transform: ElementTransform
   /** Stroke color (CSS color). */
   stroke: string
@@ -207,6 +216,11 @@ export interface TokenElement extends BaseElement {
   y: number
   width: number
   height: number
+  /** TRANSIENT render hints (playback "between" effects only, never
+   *  persisted): recent centre positions (board coords, oldest first) for the
+   *  motion TAIL, and the sonar PULSE phase (0‥1). */
+  trail?: Array<[number, number]>
+  pulse?: number
   shape: TokenShape
   tokenFill: TokenFill
   /** Primary / secondary badge colors (CSS). */
@@ -920,6 +934,10 @@ export function parseElement(raw: unknown): BoardElement | null {
     ...(typeof o.textEffectOut === 'string' ? { textEffectOut: o.textEffectOut } : {}),
     ...(typeof o.lengthEffectIn === 'string' ? { lengthEffectIn: o.lengthEffectIn } : {}),
     ...(typeof o.lengthEffectOut === 'string' ? { lengthEffectOut: o.lengthEffectOut } : {}),
+    ...(o.effectTail === true ? { effectTail: true } : {}),
+    ...(typeof o.effectTailColor === 'string' ? { effectTailColor: o.effectTailColor } : {}),
+    ...(o.effectPulse === true ? { effectPulse: true } : {}),
+    ...(o.effectEase === true ? { effectEase: true } : {}),
     transform: parseTransform(o.transform),
     stroke: str(o.stroke, '#000000'),
     strokeWidth: num(o.strokeWidth) ?? 3,
