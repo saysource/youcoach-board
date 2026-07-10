@@ -2465,7 +2465,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         // only on the container — so it can't flicker to the inherited/default value
         // as the pointer crosses the stacked WebGL/overlay layers. Eraser keeps its
         // data-URL cursor from the container (inherited when this is unset).
-        className={cn(creating || lassoTool ? 'cursor-crosshair' : eraserTool ? undefined : 'cursor-default')}
+        // touch-none is ALSO required here, not just on the container: iOS/WebKit
+        // reads touch-action from the touched SVG element itself and won't walk up to
+        // the container's `none`, so without it a finger drag scrolls (cancelling the
+        // pointer) instead of moving the element.
+        className={cn('touch-none', creating || lassoTool ? 'cursor-crosshair' : eraserTool ? undefined : 'cursor-default')}
         background={
           <>
             <BackgroundView doc={doc} />
