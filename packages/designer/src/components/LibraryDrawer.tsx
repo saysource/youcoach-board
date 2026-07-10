@@ -29,9 +29,8 @@ const OBJECT3D_THUMBS = Object.fromEntries(
   Object.entries(import.meta.glob('../assets/materials3d/*.{svg,png}', { eager: true, query: '?url', import: 'default' })).map(([path, url]) => [path.split('/').pop()!.replace(/\.(svg|png)$/, ''), url as string]),
 ) as Record<string, string>
 
-// Movement (px) below which a press is a tap, not a drag; touch hold (ms) to start.
+// Movement (px) below which a press is a tap, not a drag.
 const TAP_SLOP = 8
-const TOUCH_HOLD = 220
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
 // Non-passive so it can cancel the drawer/page scroll while a touch drag is active.
 const preventTouchScroll = (e: TouchEvent) => e.preventDefault()
@@ -489,15 +488,21 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     document.addEventListener('pointermove', d.onMove)
     document.addEventListener('pointerup', d.onUp)
     document.addEventListener('pointercancel', d.onCancel)
-    // Touch: a deliberate hold starts the drag (so a quick swipe still scrolls).
-    if (e.pointerType === 'touch' && d.canDrag) d.timer = setTimeout(() => activateDrag(d, e.clientX, e.clientY), TOUCH_HOLD)
+    // Touch: NO drag — dragging a figure onto the (small, letterboxed) board is
+    // impractical on a phone, so a tap just adds the figure at the board centre
+    // (placeFrom(…, false) on pointerup). A swipe past TAP_SLOP scrolls the list
+    // (cleared in onMove). Mouse/pen keep drag-to-place.
   }
 
   return (
     <aside
       aria-hidden={!open}
       className={cn(
-        'pointer-events-auto absolute inset-y-0 right-0 z-20 flex w-64 flex-col border-l border-border bg-card/90 shadow-none transition-transform duration-200',
+        // z-40: above the floating bars (z-30) so the drawer is never overlapped —
+        // essential on mobile where it overlays the board (on desktop it's docked and
+        // the board refits, so there's nothing to overlap). Still below Radix popovers
+        // (z-50) opened from inside it.
+        'pointer-events-auto absolute inset-y-0 right-0 z-40 flex w-64 flex-col border-l border-border bg-card/90 shadow-none transition-transform duration-200',
         open ? 'translate-x-0' : 'translate-x-full',
       )}
     >

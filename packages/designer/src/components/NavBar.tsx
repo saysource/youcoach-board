@@ -36,18 +36,23 @@ interface NavBarProps {
   pan3d?: boolean
   onTogglePan3d?: () => void
   showPan3d?: boolean
+  /** Stack the controls in a column (mobile, where it sits on the left edge). */
+  vertical?: boolean
 }
 
 // Orbit-navigation control: a toggle to enter/leave a free-orbit "navigation mode"
 // (same controls as Edit Background), plus quick horizontal/vertical top-view
 // shortcuts. Navigation orbits the field's pose directly — it IS the drawing's pose,
 // stored in the JSON — so there's no separate "temporary" view to save or reset.
-export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV, markers, onToggleMarkers, flat = false, zoom = 1, onZoomIn, onZoomOut, onResetZoom, panning = false, onTogglePan, editingBg = false, onZoom3d, pan3d = false, onTogglePan3d, showPan3d = false }: NavBarProps) {
+export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV, markers, onToggleMarkers, flat = false, zoom = 1, onZoomIn, onZoomOut, onResetZoom, panning = false, onTogglePan, editingBg = false, onZoom3d, pan3d = false, onTogglePan3d, showPan3d = false, vertical = false }: NavBarProps) {
+  // Shared shell + divider classes, flipped for the vertical (mobile) layout.
+  const barClass = cn('pointer-events-auto select-none flex items-center rounded-lg border border-border bg-card shadow-md', vertical && 'flex-col')
+  const sepClass = cn('bg-border', vertical ? 'my-0.5 h-px w-5' : 'mx-0.5 h-5 w-px')
   // 2D mode: no orbit — the same spot offers flat zoom (+/− keys too) and the
   // pan hand (⇧+arrows also scroll).
   if (!available && flat) {
     return (
-      <div className="pointer-events-auto flex items-center rounded-lg border border-border bg-card shadow-md">
+      <div className={barClass}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button size="icon-sm" aria-label="Zoom out (−)" disabled={zoom <= 0.1} onClick={onZoomOut}>
@@ -91,7 +96,7 @@ export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV
   const orbitActive = inOrbitSession && !pan3d
   const orbitLabel = !inOrbitSession ? 'Navigate scene (Space)' : pan3d ? 'Orbit (drag rotates)' : editingBg ? 'Orbit — drag rotates the view' : 'Exit navigation (Space)'
   return (
-    <div className="pointer-events-auto flex items-center rounded-lg border border-border bg-card shadow-md">
+    <div className={barClass}>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -138,7 +143,7 @@ export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV
           <TooltipContent>{pan3d ? 'Exit pan' : 'Pan the view'}</TooltipContent>
         </Tooltip>
       )}
-      <span className="mx-0.5 h-5 w-px bg-border" />
+      <span className={sepClass} />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button size="icon-sm" aria-label="Top view (horizontal)" onClick={onTopViewH}>
@@ -157,7 +162,7 @@ export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV
       </Tooltip>
       {navigating && (
         <>
-          <span className="mx-0.5 h-5 w-px bg-border" />
+          <span className={sepClass} />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button size="icon-sm" aria-label={markers ? 'Hide position markers' : 'Show position markers'} aria-pressed={markers} onClick={onToggleMarkers} className={cn(markers && 'text-primary')}>
