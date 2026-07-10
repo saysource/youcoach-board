@@ -128,6 +128,14 @@ export interface BoardAnimation {
   frames: AnimationFrame[]
   /** Which frame `doc.elements` mirrors (the frame being edited). */
   current: number
+  /** Playback speed multiplier (1 = the fixed 1 s per transition), 0.25‥2. */
+  speed: number
+  /** Camera-flight timing during playback: ease-in-out ("Easy Ease", the
+   *  default) or linear. */
+  cameraEasing: 'linear' | 'ease'
+  /** Loop the playback (default). When off, playback stops at the last frame
+   *  and repositions on the first. */
+  loop: boolean
 }
 
 /** The persisted board document. `elements` is in paint order (later draws on
@@ -172,7 +180,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
 const LOGO_POSITIONS: LogoPosition[] = ['center', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
 const TRAINING_LAYOUTS: TrainingLayout[] = ['plain', 'zones', 'channel', 'channel_goals', 'ends', 'goals4', 'band_h']
 
-export const DEFAULT_ANIMATION: BoardAnimation = { animated: false, duration: 10, frames: [], current: 0 }
+export const DEFAULT_ANIMATION: BoardAnimation = { animated: false, duration: 10, frames: [], current: 0, speed: 1, cameraEasing: 'ease', loop: true }
 
 /** A fresh, empty document. */
 export const EMPTY_BOARD: BoardDoc = {
@@ -280,6 +288,9 @@ function parseAnimation(raw: unknown): BoardAnimation {
     duration: num(o.duration, DEFAULT_ANIMATION.duration),
     frames,
     current,
+    speed: Math.min(2, Math.max(0.25, num(o.speed, DEFAULT_ANIMATION.speed))),
+    cameraEasing: o.cameraEasing === 'linear' ? 'linear' : 'ease',
+    loop: o.loop !== false,
   }
 }
 

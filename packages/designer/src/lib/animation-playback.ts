@@ -12,15 +12,17 @@
 
 import { applyOperation, type AnimationFrame, type BoardElement, type FieldView } from '@youcoach-board/core'
 import type { EditorStore } from '../store/editorStore'
-import { lerpPose, cancelFieldAnimation } from './field-anim'
+import { lerpPose, cancelFieldAnimation, animateFieldTo } from './field-anim'
 import { reprojectChanges, withGroundAnchors } from './field-anchor'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
-const TRANSITION_MS = 1000 // fixed 1 s per frame transition (Phase 1)
+const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
 
-// Default transition timing: LINEAR (no easing) — objects move at constant
-// speed between frames. Per-transition easings come with the later
-// "Transitions" phase of the spec.
+// Element timing is LINEAR (no easing) — objects move at constant speed
+// between frames; per-transition easings come with the later "Transitions"
+// phase of the spec. The CAMERA flight optionally eases ("Easy Ease" in the
+// animation settings).
+const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 
 /** Parse a hex CSS color (#rgb / #rgba / #rrggbb / #rrggbbaa) to RGBA channels. */
 function parseHexColor(s: string): [number, number, number, number] | null {
@@ -198,7 +200,10 @@ export function startPlayback(store: EditorStore): void {
     store.setState({ playhead, doc: { ...doc, elements: els, background: { ...doc.background, field3d: pose ?? doc.background.field3d } } })
   }
 
-  let seg = 0 // transition index: frames[seg] → frames[seg + 1]
+  // Playback starts from the frame being EDITED (falling back to the start
+  // when that's the last frame); loop wraps always restart from frame 1.
+  let seg = s.currentFrame < frames.length - 1 ? s.currentFrame : 0
+  let first = true
   let segStart: number | null = null
   const step = (now: number) => {
     if (players.get(store) !== pb || pb.stopped) return
@@ -208,20 +213,44 @@ export function startPlayback(store: EditorStore): void {
       return
     }
     if (segStart === null) {
-      // (Re)starting the loop: hard cut to frame 1 — its camera applies instantly.
-      if (seg === 0) apply(fr[0].elements, effCam[0], 0)
+      // Starting (from the edited frame) or wrapping the loop: hard cut to the
+      // segment's start frame — its camera applies instantly (per spec).
+      if (first || seg === 0) apply(fr[seg].elements, effCam[seg], seg)
+      first = false
       segStart = now
     }
-    const t = Math.min(1, (now - segStart) / TRANSITION_MS)
-    const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, t) : (effCam[seg + 1] ?? effCam[seg])
+    // Settings are read live so speed/easing changes apply immediately.
+    const anim = store.getState().doc.animation
+    const t = Math.min(1, ((now - segStart) * Math.min(2, Math.max(0.25, anim.speed))) / TRANSITION_MS)
+    const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
+    const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
     apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths), pose, seg + t)
     if (t >= 1) {
-      seg = seg + 1 < fr.length - 1 ? seg + 1 : 0
+      if (seg + 1 >= fr.length - 1) {
+        // Reached the last frame. Loop wraps (hard cut back to frame 1);
+        // loop-off stops automatically and repositions ON frame 1.
+        if (!anim.loop) {
+          finishPlayback(store)
+          return
+        }
+        seg = 0
+      } else seg += 1
       segStart = null
     }
     pb.raf = requestAnimationFrame(step)
   }
   pb.raf = requestAnimationFrame(step)
+}
+
+/** Loop-off end of playback: stop, then land on FRAME 1 (like clicking its
+ *  tile — the camera flies to its stored pose, when it has one). */
+function finishPlayback(store: EditorStore): void {
+  stopPlayback(store)
+  const s = store.getState()
+  if (s.doc.animation.frames.length === 0) return
+  s.setCurrentFrame(0)
+  const cam = store.getState().doc.animation.frames[0].camera
+  if (cam && store.getState().doc.background.field3d) animateFieldTo(store, cam)
 }
 
 /** Stop playback and restore the pre-play state (edited frame + camera). */

@@ -269,6 +269,8 @@ export interface EditorState {
   /** Store frame k's movement path for an element (the spline's intermediate
    *  control points, board coords) or clear it (null / empty). Off-stack. */
   setFramePath: (k: number, elementId: string, points: [number, number][] | null) => void
+  /** Update the animation playback settings (speed / camera easing). Off-stack. */
+  setAnimationSettings: (patch: Partial<Pick<BoardDoc['animation'], 'speed' | 'cameraEasing' | 'loop'>>) => void
 }
 
 /** Keep only the selected ids whose elements still exist in `doc` (used after
@@ -1032,6 +1034,13 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         const frames = a.frames.slice()
         frames[k] = { ...frames[k], camera: pose ? { ...pose, position: [...pose.position] as [number, number, number], target: [...pose.target] as [number, number, number] } : null }
         const nextDoc = { ...doc, animation: { ...a, frames } }
+        set({ doc: nextDoc })
+        onChange?.(nextDoc)
+      },
+
+      setAnimationSettings: (patch) => {
+        const { doc } = get()
+        const nextDoc = { ...doc, animation: { ...doc.animation, ...patch } }
         set({ doc: nextDoc })
         onChange?.(nextDoc)
       },

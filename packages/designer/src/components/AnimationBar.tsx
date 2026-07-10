@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Camera, ChevronDown, ClipboardCopy, ClipboardPaste, Copy, Play, Plus, Square, Trash2, Undo2 } from 'lucide-react'
+import { Camera, ChevronDown, ClipboardCopy, ClipboardPaste, Copy, Play, Plus, Settings, Square, Trash2, Undo2 } from 'lucide-react'
 import type { FieldView } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -11,6 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
+import { Slider } from './ui/slider'
+import { Switch } from './ui/switch'
 import { cn } from '../lib/cn'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { startPlayback, stopPlayback } from '../lib/animation-playback'
@@ -27,9 +30,16 @@ export function AnimationBar() {
   const playing = useEditorStore((s) => s.playing)
   const playhead = useEditorStore((s) => s.playhead)
   const field3d = useEditorStore((s) => s.doc.background.field3d)
+  const speed = useEditorStore((s) => s.doc.animation.speed)
+  const cameraEasing = useEditorStore((s) => s.doc.animation.cameraEasing)
+  const loop = useEditorStore((s) => s.doc.animation.loop)
   // Camera-pose clipboard for copying a stored position between frames (local
   // to the bar — not the OS clipboard, not part of the document).
   const [camClipboard, setCamClipboard] = useState<FieldView | null>(null)
+  // Single source of truth for the open frame menu, so opening one closes the
+  // others (the Toolbar's pattern). Close events only clear when they belong to
+  // the still-open menu, so an open-then-close race can't cancel the new menu.
+  const [openMenu, setOpenMenu] = useState<number | null>(null)
 
   // While playing, the highlighted tile follows the playhead (nearest frame);
   // otherwise it's the frame being edited.
@@ -73,7 +83,7 @@ export function AnimationBar() {
             </TooltipTrigger>
             <TooltipContent>Frame {i + 1}</TooltipContent>
           </Tooltip>
-          <DropdownMenu>
+          <DropdownMenu open={openMenu === i} onOpenChange={(o) => setOpenMenu((prev) => (o ? i : prev === i ? null : prev))}>
             <DropdownMenuTrigger asChild>
               <Button size="icon-sm" aria-label={`Frame ${i + 1} options`} disabled={playing} className="w-3.5 rounded-l-none px-0 hover:bg-primary/25">
                 <ChevronDown className="!size-3" />
@@ -134,6 +144,50 @@ export function AnimationBar() {
         </TooltipTrigger>
         <TooltipContent>{playing ? 'Stop' : 'Play the animation in a loop'}</TooltipContent>
       </Tooltip>
+      {/* Animation settings: playback speed + camera easing (saved in the doc). */}
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button size="icon-sm" aria-label="Animation settings" disabled={playing} className="hover:bg-primary/25">
+                <Settings />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Animation settings</TooltipContent>
+        </Tooltip>
+        <PopoverContent align="end" className="w-56 space-y-3 p-3">
+          <div className="grid gap-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground">Playback speed ({speed}x)</span>
+            <Slider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => storeApi.getState().setAnimationSettings({ speed: v })} />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">Loop</span>
+            <Switch checked={loop} onCheckedChange={(v) => storeApi.getState().setAnimationSettings({ loop: v })} />
+          </div>
+          <div className="grid gap-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground">Camera easing</span>
+            <div className="flex gap-1">
+              {(
+                [
+                  ['linear', 'Linear'],
+                  ['ease', 'Easy Ease'],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  aria-pressed={cameraEasing === value}
+                  onClick={() => storeApi.getState().setAnimationSettings({ cameraEasing: value })}
+                  className={cn('flex-1 hover:bg-primary/25', cameraEasing === value && 'bg-primary/40 hover:bg-primary/40')}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }

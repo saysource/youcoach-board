@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import '../styles/board.css'
 import { Check, Rotate3d, Square } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
@@ -595,11 +596,23 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
 
           {/* Animation toolbar (frames strip) — bottom-center, above the mobile
               main toolbar; hidden while any special camera mode is up. */}
-          {animEditing && !cameraOverlayActive && (
-            <div className={cn('absolute left-1/2 z-30 -translate-x-1/2', mobile ? 'bottom-14' : 'bottom-3')}>
-              <AnimationBar />
-            </div>
-          )}
+          <AnimatePresence>
+            {animEditing && !cameraOverlayActive && (
+              <div className={cn('absolute left-1/2 z-30 -translate-x-1/2', mobile ? 'bottom-14' : 'bottom-3')}>
+                {/* Slide up from the bottom edge on activation (catches the eye)
+                    and back down on exit. The motion transform lives on an inner
+                    wrapper so it doesn't fight the centering translate above. */}
+                <motion.div
+                  initial={{ y: 90, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 90, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+                >
+                  <AnimationBar />
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
           {/* Properties panel: always present (both the full and the compact
               form), showing the selection's or the active tool's properties.
