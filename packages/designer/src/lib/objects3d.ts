@@ -967,13 +967,19 @@ function tokenDiscGeometry(): THREE.BufferGeometry {
       nrm.setXYZ(i, nx / len, ny / len, nz / len)
     }
     nrm.needsUpdate = true
-    // Planar UVs from above (unit disc: x/z in [-0.5, 0.5]); the rim inherits the
-    // face's edge texels, so stripes visually continue down the side.
+    // Planar UVs from above (unit disc: x/z in [-0.5, 0.5]). The flat top keeps the
+    // full 1:1 mapping. The RIM/side (near-horizontal normals) would otherwise sample
+    // the texture's outer EDGE texels — the baked ring + gloss — and smear them
+    // vertically down the side. Pull those vertices' UVs inward (toward centre) so the
+    // side samples the disc's clean interior colour instead; every vertex in a rim
+    // column shares one UV (UV ignores height), so there's no vertical streaking.
+    const RIM_UV_SCALE = 0.6
     const pos = geom.getAttribute('position')
     const uv = new Float32Array(pos.count * 2)
     for (let i = 0; i < pos.count; i++) {
-      uv[i * 2] = pos.getX(i) + 0.5
-      uv[i * 2 + 1] = 0.5 - pos.getZ(i)
+      const k = nrm.getY(i) > 0.35 ? 1 : RIM_UV_SCALE
+      uv[i * 2] = 0.5 + pos.getX(i) * k
+      uv[i * 2 + 1] = 0.5 - pos.getZ(i) * k
     }
     geom.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
     geom.computeBoundingBox()
