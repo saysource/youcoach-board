@@ -100,6 +100,11 @@ const DROP_SCALE = 4
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
 
+/** Opacity ramp for the PATH effects (line formation / arrow length): the
+ *  target opacity is reached at 50% of the transition — enter ramps 0 → target
+ *  over the first half, exit ramps target → 0 over the second half. */
+const pathOpacity = (p: number, dir: 'in' | 'out') => Math.min(1, Math.max(0, (dir === 'in' ? p : 1 - p) / 0.5))
+
 /** Offset direction an effect ENTERS from (exit mirrors it): the element moves
  *  toward its place along the named direction (float_up rises into place). */
 const EFFECT_DIR: Record<string, [number, number]> = {
@@ -107,28 +112,30 @@ const EFFECT_DIR: Record<string, [number, number]> = {
   slide_up: [0, 1], slide_down: [0, -1], slide_left: [1, 0], slide_right: [-1, 0],
 }
 
-/** Path formation: the visible LEADING portion of a point path, cut at arc-
- *  length fraction `frac` (0‥1). The cut point is interpolated, so an end
- *  arrow tip rides the forming end. Trimming happens on the control points
- *  (local coords — the transform applies afterwards); ground pins are dropped
- *  (they must stay parallel to `points`, and the partial has fewer). */
-function trimPath(el: Extract<BoardElement, { type: 'polyline' | 'draw' }>, frac: number): BoardElement {
+/** Path formation: the visible sub-path between arc-length fractions `from`
+ *  and `to` (0‥1). Cut points are interpolated, so an end arrow tip rides the
+ *  forming end (and a start tip rides a shrinking start). Trimming happens on
+ *  the control points (local coords — the transform applies afterwards);
+ *  ground pins are dropped (they must stay parallel to `points`, and the
+ *  partial has fewer). */
+function trimPath(el: Extract<BoardElement, { type: 'polyline' | 'draw' }>, from: number, to: number): BoardElement {
   const pts = el.points
-  if (pts.length < 2 || frac >= 1) return el
+  if (pts.length < 2 || (from <= 0 && to >= 1)) return el
   const lens: number[] = [0]
   for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
-  const target = frac * lens[lens.length - 1]
-  const out: Array<[number, number]> = [pts[0]]
-  for (let i = 1; i < pts.length; i++) {
-    if (lens[i] <= target) {
-      out.push(pts[i])
-      continue
-    }
+  const total = lens[lens.length - 1] || 1
+  const at = (target: number): [number, number] => {
+    let i = 1
+    while (i < lens.length - 1 && lens[i] < target) i++
     const span = lens[i] - lens[i - 1] || 1
-    const f = (target - lens[i - 1]) / span
-    out.push([pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f])
-    break
+    const f = Math.min(1, Math.max(0, (target - lens[i - 1]) / span))
+    return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f]
   }
+  const a = Math.max(0, from) * total
+  const b = Math.min(1, to) * total
+  const out: Array<[number, number]> = [at(a)]
+  for (let i = 1; i < pts.length - 1; i++) if (lens[i] > a && lens[i] < b) out.push(pts[i])
+  out.push(at(b))
   const partial = { ...el, points: out } as BoardElement & { ground?: unknown }
   delete partial.ground
   return partial
@@ -276,7 +283,9 @@ function applyArrowLengthEffect(el: BoardElement, p: number, dir: 'in' | 'out'):
   const name = (dir === 'in' ? el.lengthEffectIn : el.lengthEffectOut) ?? 'none'
   if (name !== 'path') return el
   const e = easeOutCubic(p)
-  return { ...el, splineLength: el.splineLength * (dir === 'in' ? e : 1 - e) }
+  // Formation + the half-transition opacity ramp (0 → target in the first
+  // half entering; target → 0 in the second half leaving).
+  return { ...el, splineLength: el.splineLength * (dir === 'in' ? e : 1 - e), opacity: (el.opacity ?? 1) * pathOpacity(p, dir) }
 }
 
 /** The TEXT effect pass (tracking / typewriter), COMPOSED on top of whatever
@@ -339,14 +348,17 @@ function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out', nameOverrid
   const e = easeOutCubic(p)
   const f = dir === 'in' ? e : 1 - e // visibility factor
   if (name === 'path') {
-    // The line/border FORMS along its own path (in) or retracts (out); a fully
-    // retracted line is hidden via opacity (a zero-length stub would still
-    // paint its tip). Closed shapes form their reopened outline loop.
+    // The line/border FORMS along its own path (in: grows from the start, the
+    // end tip riding the forming end) or SHORTENS start → end (out: the tail
+    // vanishes first, the tip leaving last). A fully consumed line is hidden
+    // via opacity (a zero-length stub would still paint its tip). Closed
+    // shapes form/unform their reopened outline loop the same way.
     const target = pathFormable(el) ? el : openBorderPath(el)
     if (target) {
-      const frac = dir === 'in' ? e : 1 - e
-      if (frac <= 0.005) return faded(target, 0)
-      return trimPath(target, frac)
+      const remaining = dir === 'in' ? e : 1 - e
+      if (remaining <= 0.005) return faded(target, 0)
+      // Compose the half-transition opacity ramp with the formation.
+      return faded(dir === 'in' ? trimPath(target, 0, e) : trimPath(target, e, 1), pathOpacity(p, dir))
     }
   }
   const t = el.transform

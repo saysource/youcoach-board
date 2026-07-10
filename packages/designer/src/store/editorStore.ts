@@ -343,12 +343,14 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
     // OBJECT-level element settings, not per-frame: a change made while editing
     // any frame must reach every frame's copy. Enter/exit effects (the out
     // effect plays from the element's LAST frame, the in effect from its first)
-    // and the stroke line style (solid/dashed/dotted), a text's On-field (3D)
+    // the line STYLE — stroke style (solid/dashed/dotted) and the structural
+    // line kind (curved/zigzag/double + arrow tips) — a text's On-field (3D)
     // placement, and a 3D arrow's shape identity (completeness + thickness +
     // stick/tip geometry) — part of what the object IS, unlike the
-    // interpolable geometry/colors which animate per frame.
+    // interpolable geometry/colors (incl. wave freq/amp and the double-line
+    // offset, which the spec lists as animatable) which stay per frame.
     // Mirrored on undo/redo like propagatePresence.
-    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'strokeStyle', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
+    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'strokeStyle', 'curve', 'zigzag', 'double', 'startTip', 'endTip', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
     function propagateEffects(prevElements: BoardElement[], doc: BoardDoc): BoardDoc {
       const a = doc.animation
       if (a.frames.length < 2) return doc

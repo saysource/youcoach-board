@@ -346,14 +346,16 @@ function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, to
       {tips && (
         <defs>
           {/* orient="auto-start-reverse" lets one marker serve both ends; sized
-              in stroke-width units so the arrowhead scales with the stroke. */}
+              in stroke-width units so the arrowhead scales with the stroke —
+              but tapered SUB-linearly past the "Thin" width (3): a full 5×
+              head on the Bold/Extra-Bold strokes overwhelms the line. */}
           <marker
             id={markerId}
             viewBox="0 0 10 10"
             refX="8"
             refY="5"
-            markerWidth={5}
-            markerHeight={5}
+            markerWidth={5 * Math.min(1, Math.pow(3 / element.strokeWidth, 0.4))}
+            markerHeight={5 * Math.min(1, Math.pow(3 / element.strokeWidth, 0.4))}
             orient="auto-start-reverse"
           >
             <path d="M0,0 L10,5 L0,10 z" fill={element.stroke} />
