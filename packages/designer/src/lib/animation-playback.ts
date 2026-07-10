@@ -467,7 +467,7 @@ function applyBetweenEffect(ea: BoardElement, eb: BoardElement, lerped: BoardEle
   const cb = elementCenter(eb)
   if (!ca || !cb || Math.hypot(cb[0] - ca[0], cb[1] - ca[1]) < 4) return lerped // not moving
   let el = lerped
-  if (eb.effectPulse) el = { ...el, pulse: (t / 0.35) % 1 } as BoardElement
+  if (eb.effectPulse) el = { ...el, pulse: (t / 0.4375) % 1 } as BoardElement
   if (eb.effectTail) {
     const ctrl: PathPoint[] = mids?.length ? [ca, ...mids, cb] : [ca, cb]
     // The token's actual position at raw time s (its own easing applied).

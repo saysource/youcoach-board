@@ -350,7 +350,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
     // interpolable geometry/colors (incl. wave freq/amp and the double-line
     // offset, which the spec lists as animatable) which stay per frame.
     // Mirrored on undo/redo like propagatePresence.
-    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'effectTail', 'effectTailColor', 'effectPulse', 'effectEase', 'strokeStyle', 'curve', 'zigzag', 'double', 'startTip', 'endTip', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
+    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'effectTail', 'effectTailColor', 'effectPulse', 'effectPulseColor', 'effectEase', 'strokeStyle', 'curve', 'zigzag', 'double', 'startTip', 'endTip', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
     function propagateEffects(prevElements: BoardElement[], doc: BoardDoc): BoardDoc {
       const a = doc.animation
       if (a.frames.length < 2) return doc

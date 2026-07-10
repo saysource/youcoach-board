@@ -46,9 +46,10 @@ export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabel
 function TokenMotionFx({ element, cx, cy, r, opacity }: { element: Extract<BoardElement, { type: 'token' }>; cx: number; cy: number; r: number; opacity: number }) {
   const rings: React.ReactNode[] = []
   if (element.pulse !== undefined) {
+    const pulseColor = element.effectPulseColor || element.color1
     for (const shift of [0, 0.5]) {
       const ph = (element.pulse + shift) % 1
-      rings.push(<circle key={shift} cx={cx} cy={cy} r={r * (0.9 + 1.8 * ph)} fill="none" stroke={element.color1} strokeWidth={3} opacity={(1 - ph) * 0.55 * opacity} />)
+      rings.push(<circle key={shift} cx={cx} cy={cy} r={r * (0.9 + 1.8 * ph)} fill={pulseColor} opacity={(1 - ph) * 0.4 * opacity} />)
     }
   }
   let tail: React.ReactNode = null

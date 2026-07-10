@@ -77,6 +77,7 @@ interface BaseElement {
   effectTail?: boolean
   effectTailColor?: string
   effectPulse?: boolean
+  effectPulseColor?: string
   effectEase?: boolean
   transform: ElementTransform
   /** Stroke color (CSS color). */
@@ -937,6 +938,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     ...(o.effectTail === true ? { effectTail: true } : {}),
     ...(typeof o.effectTailColor === 'string' ? { effectTailColor: o.effectTailColor } : {}),
     ...(o.effectPulse === true ? { effectPulse: true } : {}),
+    ...(typeof o.effectPulseColor === 'string' ? { effectPulseColor: o.effectPulseColor } : {}),
     ...(o.effectEase === true ? { effectEase: true } : {}),
     transform: parseTransform(o.transform),
     stroke: str(o.stroke, '#000000'),

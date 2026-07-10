@@ -32,6 +32,7 @@ export interface ElementPatch {
   effectTail?: boolean
   effectTailColor?: string
   effectPulse?: boolean
+  effectPulseColor?: string
   effectEase?: boolean
   transform?: ElementTransform
   stroke?: string

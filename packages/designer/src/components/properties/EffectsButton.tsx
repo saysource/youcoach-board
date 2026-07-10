@@ -237,6 +237,17 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
               <span className="text-sm font-medium text-foreground">Pulse</span>
               <Switch checked={!!fv.effectPulse} onCheckedChange={(v) => setField('effectPulse', v)} />
             </div>
+            {!!fv.effectPulse && (
+              <div className="grid gap-1.5 pl-1">
+                <span className="text-[11px] font-medium text-muted-foreground">Pulse color</span>
+                <ColorPickerWidget
+                  value={(fv.effectPulseColor as string) ?? (fv.color1 as string)}
+                  onChange={(c) => setField('effectPulseColor', c)}
+                  showOpacity={false}
+                  allowTransparent={false}
+                />
+              </div>
+            )}
             <Separator />
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">Easy Easing</span>
