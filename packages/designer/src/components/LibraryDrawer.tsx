@@ -8,10 +8,13 @@ import { cn } from '../lib/cn'
 import { useAssets, buildFigureElement, buildObject3DElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
 import { clientToBoard } from '../lib/draw'
 import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
-import { isObject3DPlayer } from '../lib/objects3d'
+import { isObject3DPlayer, PLAYER_NEUTRAL_SLOTS } from '../lib/objects3d'
 import { makeCalibratedCamera } from '../lib/field-camera'
-import { zonesForField, categoriesForField, defaultZoneForField, defaultObjectScaleForField, FIELD_TYPE_OPTIONS, type ZoneCategory, type Zone } from '../lib/field-zones'
-import { useEditorStore } from '../store/context'
+import { fieldCamera } from '../lib/field-reference'
+import { legacyObjectScale, TOKEN_DEFAULT_SIZE_M } from '../lib/field-anchor'
+import { animateFieldTo } from '../lib/field-anim'
+import { zonesForField, categoriesForField, defaultObjectScaleForField, LEGACY_BACKGROUNDS_CAT_ID, type Zone } from '../lib/field-zones'
+import { useEditorStore, useEditorStoreApi } from '../store/context'
 import type { FieldType } from '@youcoach-board/core'
 
 // Bundled zone preview thumbnails (generated from each zone's default pose),
@@ -43,6 +46,19 @@ const FACING_DESC: Record<string, string> = {
   right: 'Players facing right',
 }
 
+// Synthetic "Fields" categories (the 3D pitch presets, one per field type) —
+// they aren't in the catalog; selecting one shows that type's camera-zone grid.
+const FIELDS3D_CATS: { id: string; name: string; type: FieldType }[] = [
+  { id: 'fields3d:soccer11', name: 'Soccer 11', type: 'soccer11' },
+  { id: 'fields3d:training', name: 'Training Area', type: 'training' },
+  { id: 'fields3d:futsal', name: 'Futsal', type: 'futsal' },
+]
+// Synthetic "Legacy Backgrounds" category (a Fields sub-category): ALL the old 2D
+// SVG fields from the catalog's field categories, shown in one sectioned panel.
+const LEGACY_CAT = { id: LEGACY_BACKGROUNDS_CAT_ID, name: 'Legacy Backgrounds' }
+// Display order of the category-list groups (Fields appended last).
+const GROUP_ORDER = ['players', 'materials', 'players3d', 'materials3d']
+
 interface LibraryDrawerProps {
   open: boolean
   onClose: () => void
@@ -51,8 +67,6 @@ interface LibraryDrawerProps {
   /** Selected category (controlled — lives in the shell so the toolbar can jump). */
   categoryId: string | null
   onCategoryChange: (id: string) => void
-  /** Background-edit mode: restrict the category list to field categories. */
-  fieldsOnly?: boolean
 }
 
 // Right-side figures library. Header hosts the relocated AI / fill-viewport / pin
@@ -60,12 +74,18 @@ interface LibraryDrawerProps {
 // list) over the selected category's element palette: facet filters (action /
 // facing, or material type) + a thumbnail grid; clicking a thumbnail drops the
 // figure centered on the board. Categories come from the catalog (assets).
-export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, fieldsOnly = false }: LibraryDrawerProps) {
+export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, categoryId, onCategoryChange }: LibraryDrawerProps) {
+  const storeApi = useEditorStoreApi()
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
+  const updateElements = useEditorStore((s) => s.updateElements)
+  const setDropReplaceId = useEditorStore((s) => s.setDropReplaceId)
   const setBackground = useEditorStore((s) => s.setBackground)
   // The active 3D field camera — a dropped 3D object lands at its ground spot.
   const field3d = useEditorStore((s) => s.doc.background.field3d)
+  // The active legacy field (2D mode): some carry a posed calibration camera that
+  // 3D drops project through; its catalog scale drives the 3D-player size seed.
+  const bgFieldSvg = useEditorStore((s) => s.doc.background.fieldSvg)
   // Active field's default figure scale — applied to figures as they're added.
   const figureScale = useEditorStore((s) => s.doc.background.figureScale)
   // Remembered custom color per material action, so a new material inherits it.
@@ -79,11 +99,9 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
   // Last player's skin/kit slots, inherited by newly added players.
   const playerColors = useEditorStore((s) => s.playerColors)
 
-  // The current field type (background mode); its zones are all shown, grouped by
-  // category. The category control is a shortcut that scrolls to that group.
+  // The current field type — switching type via a zone seeds that type's default
+  // materials scale.
   const fieldType = useEditorStore((s) => s.doc.background.fieldType)
-  const allZones = zonesForField(fieldType)
-  const zoneCats = fieldsOnly ? categoriesForField(fieldType) : []
   // Clicking a zone flies the camera there and applies the zone's background presets
   // (trainingLayout is normalised so a plain pose always resets the training variant).
   // Changing the field TYPE seeds that type's default materials scale (real-size
@@ -93,20 +111,33 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     return ft !== fieldType ? { objectScale: defaultObjectScaleForField(ft) } : {}
   }
   function applyZone(z: Zone) {
-    setBackground({ field3d: z.camera, fieldSvg: null, fieldType: z.fieldType, ...scaleForType(z.fieldType), ...z.background, trainingLayout: z.background?.trainingLayout ?? 'plain' })
-  }
-  // Switching field type jumps to that type's default zone.
-  function selectFieldType(ft: FieldType) {
-    const z = defaultZoneForField(ft)
-    setBackground({ fieldType: ft, fieldSvg: null, ...scaleForType(ft), trainingLayout: z?.background?.trainingLayout ?? 'plain', ...(z ? { field3d: z.camera, ...z.background } : {}) })
-  }
-  // Scroll to a category's group of poses (and flash its header), like "jump to type".
-  function jumpToZoneCat(id: ZoneCategory) {
-    gridRef.current?.querySelector(`[data-section="zcat-${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    setFlash((f) => ({ id: `zcat-${id}`, n: f.n + 1 }))
+    const patch = { fieldSvg: null, fieldType: z.fieldType, ...scaleForType(z.fieldType), ...z.background, trainingLayout: z.background?.trainingLayout ?? 'plain' }
+    // Switching field TYPE also seeds the global token size: the futsal court is
+    // much smaller, so tokens default to 2 m there (4 m elsewhere). Applied only
+    // on a type change, like objectScale, so slider tuning isn't clobbered.
+    const typeChanged = z.fieldType !== fieldType
+    // FLY the camera to the zone when a real 3D pose is active (read FRESH —
+    // mid-flight the subscribed value lags); coming from a legacy background
+    // (or nothing) just jump — the legacy frames don't line up with the 3D
+    // court, so the flight reads wrong.
+    const bg = storeApi.getState().doc.background
+    if (bg.field3d) {
+      setBackground(patch)
+      animateFieldTo(storeApi, z.camera)
+    } else {
+      setBackground({ ...patch, field3d: z.camera })
+    }
+    if (typeChanged) storeApi.getState().setTokenSizeM(z.fieldType === 'futsal' ? 2 : TOKEN_DEFAULT_SIZE_M)
   }
 
   const [listOpen, setListOpen] = useState(false)
+  // Which category-list groups are expanded. Collapsed by default; opening the
+  // list expands the group of the current category.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  function toggleList() {
+    if (!listOpen && activeGroupId) setOpenGroups((o) => ({ ...o, [activeGroupId]: true }))
+    setListOpen(!listOpen)
+  }
   const [facing, setFacing] = useState<string | null>(null)
   // Flash a section title when jumped to. `n` bumps each jump to replay the CSS
   // animation (via the title's key) even when re-selecting the same section.
@@ -115,6 +146,12 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
 
   const catId = categoryId
   const cat: CatalogCategory | null = catId && catalog ? (catalog.categories[catId] ?? null) : null
+  // A synthetic "Fields" category (3D pitch presets)?
+  const fields3dCat = FIELDS3D_CATS.find((c) => c.id === catId) ?? null
+  // The synthetic merged "Legacy Backgrounds" category (also under Fields)?
+  const isLegacyCat = catId === LEGACY_CAT.id
+  // The list group holding the current category (auto-expanded when the list opens).
+  const activeGroupId = fields3dCat || isLegacyCat ? 'fields3d' : catId ? (catalog?.groups.find((g) => g.categories.includes(catId))?.id ?? null) : null
 
   // When the category changes (here or via the toolbar's More-tools menu), reset
   // the facing selection and collapse the category list (render-phase, no effect).
@@ -125,20 +162,32 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     setListOpen(false)
   }
 
-  // 3D-player pose categories (Players 3D (Men)/(Women), later goalkeepers):
-  // the pose thumbnails show 2-up, 1.5× bigger than the regular 3-up grid.
-  const isPlayers3d = !!catId?.startsWith('players3d')
+  // 3D-pose categories (Players 3D and Goalkeepers 3D, Men/Women): the pose
+  // thumbnails show 2-up, 1.5× bigger than the regular 3-up grid.
+  const isPlayers3d = !!catId && (catId.startsWith('players3d') || catId.startsWith('goalkeepers3d'))
 
   // Facing buttons (arrow-ordered) and action sections. Every action shows as a
   // titled section; only the facing filter (if any) narrows the figures.
   const actions = cat?.facets?.action ?? null
   const facings = cat?.facets?.facing ? [...cat.facets.facing].sort((a, b) => FACING_ORDER.indexOf(a.id) - FACING_ORDER.indexOf(b.id)) : null
   const inFacing = (f: CatalogFigure) => !facings || !facing || (f.facing ?? null) === facing
-  const sections = actions
-    ? actions
-        .map((a) => ({ id: a.id, label: a.label, separatorBefore: a.separatorBefore, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && (f.actions ?? []).includes(a.id)) }))
+  const sections = isLegacyCat
+    ? // Legacy Backgrounds: every catalog field category as a titled section of
+      // one merged panel (catalog order). 'fields_all' is skipped — it just
+      // duplicates the fields the other sections already show.
+      (catalog?.groups.find((g) => g.id === 'fields')?.categories ?? [])
+        .filter((id) => id !== 'fields_all')
+        .map((id) => ({ id, label: catalog?.categories[id]?.name ?? id, separatorBefore: false, figures: catalog?.categories[id]?.figures ?? [] }))
         .filter((sec) => sec.figures.length)
-    : [{ id: 'all', label: '', separatorBefore: false, figures: (cat?.figures ?? []).filter(inFacing) }]
+    : actions
+      ? actions
+          .map((a) => ({ id: a.id, label: a.label, separatorBefore: a.separatorBefore, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && (f.actions ?? []).includes(a.id)) }))
+          .filter((sec) => sec.figures.length)
+      : [{ id: 'all', label: '', separatorBefore: false, figures: (cat?.figures ?? []).filter(inFacing) }]
+  // The "Jump to…" dropdown items: the category's action facets, the legacy
+  // panel's field-category sections, or a Fields zone grid's view categories.
+  const zoneJump = fields3dCat ? categoriesForField(fields3dCat.type).map((c) => ({ id: `zcat-${c.id}`, label: c.label, separatorBefore: false })) : null
+  const jumpItems = actions ?? (zoneJump && zoneJump.length > 1 ? zoneJump : isLegacyCat && sections.length > 1 ? sections.map((s) => ({ id: s.id, label: s.label, separatorBefore: false })) : null)
 
   function jumpTo(id: string) {
     gridRef.current?.querySelector(`[data-section="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -195,10 +244,12 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     }
   }
 
-  // Drag/tap payload for a field thumbnail (background category): applied as the
-  // board background (position-independent), whether tapped or dropped.
+  // Drag/tap payload for a field thumbnail (a field category, or the merged
+  // Legacy Backgrounds panel): applied as the board background
+  // (position-independent), whether tapped or dropped.
+  const isFieldKind = cat?.kind === 'field' || isLegacyCat
   function fieldDescriptor(f: CatalogFigure): FieldDragData | null {
-    if (cat?.kind !== 'field' || !f.svg) return null
+    if (!isFieldKind || !f.svg) return null
     return { fieldSvg: f.svg, figureScale: f.scale ?? 1 }
   }
 
@@ -236,6 +287,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
   }
   function cleanupDrag() {
+    setDropReplaceId(null)
     const d = dragRef.current
     if (!d) return
     if (d.timer) clearTimeout(d.timer)
@@ -283,10 +335,42 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     document.addEventListener('touchmove', preventTouchScroll, { passive: false })
   }
 
+  // The selected, unlocked 3D player a player-pose drop at ground (gx, gz)
+  // would REPLACE (pose swap), or undefined.
+  function replaceTarget(droppedId: string, gx: number, gz: number) {
+    if (!isObject3DPlayer(droppedId)) return undefined
+    return elements.find(
+      (e) => e.type === 'object3d' && !e.locked && selectedIds.includes(e.id) && isObject3DPlayer(e.objectId) && Math.hypot(e.x - gx, e.z - gz) < 2.5,
+    )
+  }
+
+  // While dragging a player pose: the replace target under the pointer (drives
+  // the red outline preview), or null.
+  function hoverReplaceId(d: PaletteDrag, x: number, y: number): string | null {
+    if (!d.desc?.object3d || !isObject3DPlayer(d.desc.object3d)) return null
+    const b = boardSurface()
+    if (!b || !overBoard(b, x, y)) return null
+    const p = clientToBoard(b.svg, x, y)
+    const eff = field3d ?? fieldCamera(bgFieldSvg)
+    const cam = eff ? makeCalibratedCamera(eff) : makeArrow3DCamera()
+    const g = boardToGround(clamp(p.x, 0, BOARD_WIDTH), clamp(p.y, 0, BOARD_HEIGHT), cam)
+    if (!g) return null
+    return replaceTarget(d.desc.object3d, g.x, g.z)?.id ?? null
+  }
+
   function placeFrom(d: PaletteDrag, x: number, y: number, atPoint: boolean) {
     const b = boardSurface()
     if (d.isField) {
-      if (d.field && (!atPoint || overBoard(b, x, y))) setBackground({ fieldSvg: d.field.fieldSvg, scale: 1, position: [0, 0], figureScale: d.field.figureScale })
+      // A legacy 2D background REPLACES the 3D field (mutually exclusive modes).
+      if (!d.field || (atPoint && !overBoard(b, x, y))) return
+      const bg = storeApi.getState().doc.background
+      // A 2D futsal drawing sits on an indoor floor: with no surface color set,
+      // the grass image would show behind it — default to a neutral grey (which
+      // replaces the image with a solid fill in legacy mode).
+      const surface = d.field.fieldSvg.includes('futsal') && (!bg.surfaceColor || bg.surfaceColor === 'transparent') ? { surfaceColor: '#8a8a8a' } : {}
+      // Applied instantly — no camera fly for legacy fields (their calibration
+      // frames don't line up with the 3D court, so the flight read wrong).
+      setBackground({ fieldSvg: d.field.fieldSvg, scale: 1, position: [0, 0], figureScale: d.field.figureScale, field3d: null, ...surface })
       return
     }
     if (!d.desc) return
@@ -302,12 +386,33 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
         by = clamp(p.y, 0, BOARD_HEIGHT)
       }
       // Project through the drawing's 3D pose (edited live in navigation), so the
-      // ground spot matches the drop point on screen.
-      const eff = field3d
+      // ground spot matches the drop point on screen. A legacy field's posed
+      // calibration camera counts too — objects land where they were dropped.
+      const eff = field3d ?? fieldCamera(bgFieldSvg)
       const cam = eff ? makeCalibratedCamera(eff) : makeArrow3DCamera()
       const g = boardToGround(bx, by, cam) ?? { x: 52.5, z: 34 }
-      // 3D players inherit the last player's skin/kit slots (like 2D players).
-      createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z, isObject3DPlayer(d.desc.object3d) ? playerColors : undefined))
+      // 3D players inherit the last player's skin/kit slots (like 2D players);
+      // with nothing to inherit they seed the NEUTRAL look (the thumbnails'
+      // colors), so the Skin/Kit editors open populated instead of empty.
+      // Dropping a player pose ONTO a selected 3D player swaps that player's
+      // pose in place (same position/rotation/size/kit) instead of adding a
+      // second player — one undoable change.
+      if (isObject3DPlayer(d.desc.object3d)) {
+        const target = replaceTarget(d.desc.object3d, g.x, g.z)
+        if (target && target.type === 'object3d') {
+          if (target.objectId !== d.desc.object3d) updateElements([{ id: target.id, before: { objectId: target.objectId }, after: { objectId: d.desc.object3d } }])
+          return
+        }
+      }
+      // FIRST 3D player on a 2D background: seed the global materials scale so
+      // the player reads about as tall as this field's 2D player figures
+      // (derived from the field's catalog `scale` through its posed camera).
+      // Later drops leave the user's tuning alone.
+      if (!field3d && isObject3DPlayer(d.desc.object3d) && !elements.some((el) => el.type === 'object3d')) {
+        setBackground({ objectScale: legacyObjectScale(fieldCamera(bgFieldSvg), figureScale) })
+      }
+      const inherited = Object.keys(playerColors).length ? playerColors : PLAYER_NEUTRAL_SLOTS
+      createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z, isObject3DPlayer(d.desc.object3d) ? inherited : undefined))
       return
     }
     if (atPoint) {
@@ -330,7 +435,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
       sy: e.clientY,
       active: false,
       canDrag: !!field || !!desc,
-      isField: cat?.kind === 'field',
+      isField: isFieldKind,
       field,
       desc,
       img: e.currentTarget.querySelector('img'),
@@ -348,6 +453,8 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
           d.ghost.style.left = `${ev.clientX}px`
           d.ghost.style.top = `${ev.clientY}px`
         }
+        // Red-outline preview: the selected player this drop would replace.
+        setDropReplaceId(hoverReplaceId(d, ev.clientX, ev.clientY))
         return
       }
       if (!d.canDrag) return
@@ -402,97 +509,15 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
         <div className="p-3 text-sm text-muted-foreground">Couldn’t load the library ({catalogError}).</div>
       ) : !catalog ? (
         <div className="p-3 text-sm text-muted-foreground">Loading library…</div>
-      ) : fieldsOnly ? (
-        /* Background mode: a FIELD TYPE picker + a category picker over that type's
-           camera ZONES. Clicking a zone flies the camera there and applies its
-           background presets (legacy SVG fields hidden). */
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex items-center gap-1 border-b border-border p-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="flex-1 justify-between font-normal">
-                  <span className="truncate">{FIELD_TYPE_OPTIONS.find((f) => f.value === fieldType)?.label ?? 'Field'}</span>
-                  <ChevronDown />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {FIELD_TYPE_OPTIONS.map((f) => (
-                  <DropdownMenuItem key={f.value} onSelect={() => selectFieldType(f.value)}>
-                    <span className="flex-1">{f.label}</span>
-                    {f.value === fieldType && <Check className="size-4 shrink-0 text-primary" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {/* Zone category (Top View / Perspective) — the "jump to type" list
-                control, styled like the players/materials sub-category selector. */}
-            {zoneCats.length > 1 && (
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon-sm" aria-label="View">
-                        <List />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>Jump to…</TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-                  {zoneCats.map((c) => (
-                    <DropdownMenuItem key={c.id} onSelect={() => jumpToZoneCat(c.id)}>{c.label}</DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-          {/* All poses for the field type, grouped into a titled section per
-              category (like the materials sections). */}
-          <div ref={gridRef} className="flex-1 overflow-y-auto p-2 pt-0">
-            {zoneCats.map((c) => (
-              <div key={c.id} data-section={`zcat-${c.id}`}>
-                <div
-                  key={`zt-${c.id}-${`zcat-${c.id}` === flash.id ? flash.n : 0}`}
-                  className={cn(
-                    'sticky top-0 z-10 -mx-2 mb-1 bg-foreground/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm first:mt-0',
-                    `zcat-${c.id}` === flash.id && 'ycb-flash',
-                  )}
-                >
-                  {c.label}
-                </div>
-                <div className="mb-3 grid grid-cols-2 gap-2 last:mb-0">
-                  {allZones.filter((z) => z.category === c.id).map((z) => (
-                    <button
-                      key={z.id}
-                      type="button"
-                      title={z.label}
-                      onClick={() => applyZone(z)}
-                      className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
-                    >
-                      <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
-                        {ZONE_THUMBS[z.id] ? (
-                          <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
-                        ) : (
-                          <Camera className="size-5 text-muted-foreground" />
-                        )}
-                      </span>
-                      <span className="text-[11px]">{z.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       ) : (
         <>
           {/* Category selector + the sub-categories (actions) jump dropdown. */}
           <div className="flex items-center gap-1 border-b border-border p-2">
-            <Button variant="outline" size="sm" aria-expanded={listOpen} onClick={() => setListOpen((v) => !v)} className="flex-1 justify-between font-normal">
-              <span className="truncate">{cat?.name ?? 'Select category'}</span>
+            <Button variant="outline" size="sm" aria-expanded={listOpen} onClick={toggleList} className="flex-1 justify-between font-normal">
+              <span className="truncate">{cat?.name ?? fields3dCat?.name ?? (isLegacyCat ? LEGACY_CAT.name : 'Select category')}</span>
               <ChevronDown className={cn('transition-transform', listOpen && 'rotate-180')} />
             </Button>
-            {!listOpen && actions && actions.length > 1 && (
+            {!listOpen && jumpItems && jumpItems.length > 1 && (
               <DropdownMenu>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -505,7 +530,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                   <TooltipContent>Jump to…</TooltipContent>
                 </Tooltip>
                 <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-                  {actions.map((a) => (
+                  {jumpItems.map((a) => (
                     <Fragment key={a.id}>
                       {a.separatorBefore && <DropdownMenuSeparator />}
                       <DropdownMenuItem onSelect={() => jumpTo(a.id)}>{a.label}</DropdownMenuItem>
@@ -517,35 +542,102 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
           </div>
 
           {listOpen ? (
-            /* Full categorized list fills the panel. */
+            /* Full categorized list: COLLAPSIBLE groups with big, easy-to-click
+               headers (the categories keep growing). Order: Players, Materials,
+               Players 3D, Materials 3D, Fields (3D presets), Legacy backgrounds. */
             <div className="flex-1 overflow-y-auto">
-              {catalog.groups
-                /* Field categories are hidden from the palette everywhere — 3D-field
-                   presets replace them (background mode shows those instead). */
-                .map((g) => ({ ...g, categories: g.categories.filter((id) => catalog.categories[id]?.kind !== 'field') }))
-                .filter((g) => g.categories.length > 0)
-                .map((g) => (
-                <div key={g.id}>
-                  <div className="sticky top-0 z-10 mt-4 bg-foreground/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm2">{g.name}</div>
-                  {g.categories.map((id) => {
-                    const selected = id === catId
-                    return (
+              {(() => {
+                const byId = new Map(catalog.groups.map((g) => [g.id, g]))
+                const items = (ids: string[]) => ids.map((id) => ({ id, name: catalog.categories[id]?.name ?? id }))
+                const groups: { id: string; name: string; items: { id: string; name: string }[] }[] = GROUP_ORDER.flatMap((gid) => {
+                  const g = byId.get(gid)
+                  if (!g) return []
+                  const ids = g.categories.filter((id) => catalog.categories[id]?.kind !== 'field')
+                  return ids.length ? [{ id: g.id, name: g.name, items: items(ids) }] : []
+                })
+                // Fields: the 3D pitch presets + the merged Legacy Backgrounds
+                // sub-category (all the old 2D SVG fields in one panel).
+                const fieldItems = FIELDS3D_CATS.map((c) => ({ id: c.id, name: c.name }))
+                const legacy = byId.get('fields')
+                if (legacy?.categories.some((id) => (catalog.categories[id]?.figures?.length ?? 0) > 0)) fieldItems.push({ id: LEGACY_CAT.id, name: LEGACY_CAT.name })
+                groups.push({ id: 'fields3d', name: 'Fields', items: fieldItems })
+                return groups.map((g) => {
+                  const expanded = !!openGroups[g.id]
+                  return (
+                    <div key={g.id}>
                       <button
-                        key={id}
                         type="button"
-                        // Always collapse the list on click. A NEW category also collapses
-                        // via the catId-change effect; re-selecting the ACTIVE one doesn't
-                        // change catId, so close it here (else the list would just sit open).
-                        onClick={() => { onCategoryChange(id); setListOpen(false) }}
-                        className={cn('flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground', selected && 'font-medium text-foreground')}
+                        aria-expanded={expanded}
+                        onClick={() => setOpenGroups((o) => ({ ...o, [g.id]: !expanded }))}
+                        className="sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-foreground/20 bg-background px-3 py-3 text-left text-xs font-bold uppercase tracking-wide text-foreground backdrop-blur-sm hover:bg-foreground/5 hover:text-foreground"
                       >
-                        <span className="truncate">{catalog.categories[id]?.name ?? id}</span>
-                        {selected && <Check className="size-4 shrink-0 text-primary" />}
+                        {g.name}
+                        <ChevronDown className={cn('size-4 shrink-0 transition-transform', expanded && 'rotate-180')} />
                       </button>
-                    )
-                  })}
-                </div>
-              ))}
+                      {expanded &&
+                        g.items.map(({ id, name }) => {
+                          const selected = id === catId
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              // Always collapse the list on click. A NEW category also collapses
+                              // via the catId-change effect; re-selecting the ACTIVE one doesn't
+                              // change catId, so close it here (else the list would just sit open).
+                              onClick={() => { onCategoryChange(id); setListOpen(false) }}
+                              className={cn('flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground', selected && 'font-medium text-foreground')}
+                            >
+                              <span className="truncate">{name}</span>
+                              {selected && <Check className="size-4 shrink-0 text-primary" />}
+                            </button>
+                          )
+                        })}
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          ) : fields3dCat ? (
+            /* A "Fields" category: the field type's camera zones, grouped per
+               zone category — clicking one flies there + applies its presets. */
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <div ref={gridRef} className="flex-1 overflow-y-auto p-2 pt-0">
+                {categoriesForField(fields3dCat.type).map((c) => (
+                  <div key={c.id} data-section={`zcat-${c.id}`}>
+                    <div
+                      key={`zt-${c.id}-${`zcat-${c.id}` === flash.id ? flash.n : 0}`}
+                      className={cn(
+                        'sticky top-0 z-10 -mx-2 mb-1 bg-foreground/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm first:mt-0',
+                        `zcat-${c.id}` === flash.id && 'ycb-flash',
+                      )}
+                    >
+                      {c.label}
+                    </div>
+                    <div className="mb-3 grid grid-cols-2 gap-2 last:mb-0">
+                      {zonesForField(fields3dCat.type)
+                        .filter((z) => z.category === c.id)
+                        .map((z) => (
+                          <button
+                            key={z.id}
+                            type="button"
+                            title={z.label}
+                            onClick={() => applyZone(z)}
+                            className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
+                          >
+                            <span className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded bg-muted">
+                              {ZONE_THUMBS[z.id] ? (
+                                <img src={ZONE_THUMBS[z.id]} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                              ) : (
+                                <Camera className="size-5 text-muted-foreground" />
+                              )}
+                            </span>
+                            <span className="text-[11px]">{z.label}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             /* Selected category's palette: facing (arrows), then a thumbnail

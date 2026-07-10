@@ -1246,6 +1246,27 @@ All the propertis of the regular text applies.
 
 I'm going to sleep. Implement the requested fixes an text element on a best effort, I will not able to respond to question, so consider accepted any reccommanded answer.
 
+## 3D text improvements
+
+As you can see from the picture, when projected on the 3D field, the text seems to be not quite right.
+Something similar happens to circles, well our polyline approximation is not optimal.
+So, are we almost reinventing the code to project objects in a 3D space? I understand we are mixing 2D design in a 3D space, which leads to plenty of calculations, should we simplify our approach?
+What I'm thinking is this: why don't we use offscreen canvas to paint textures with our 2D objects and represent them in our 3D space by mean of texturized polygons?
+We could get for free the selection on the 3D space. 
+
+
+I did not check your implementation, but we can discuss it. An option I would consider:
+1. measure the text bounding box with padding and convert the and transform this measure to the measure of a projected rectangle containing the text assuming the field has no transformations (like top view)
+2. 
+
+When a text is rendered as 3D text, we may want to change how it behaves on the screen.
+Right now we take care only of the rendering (by mapping the 2D text on our surface), but the selection figure, where the user clicks to select the text and the editing is all inherited by its 2D couterpart, which is not intuitive. Ideally, a 3D text should present a figure box projected on the field. Think like the logic we use today for the rectangle.
+It is ok if, to edit the text, we open a 2D text area centered on the text pivot point, but the selection should be bounded to the 3D rectangle within which the text is contained. Of course the optimal solution would be being able to modify the text directly on the 3D space.
+About the 3D projection issues:
+ - the box under the text is smaller than the text
+ - the space between the letters seems to change when the text is rendered in 3D.
+
+
 ----
 
 
@@ -1259,3 +1280,48 @@ The size/scale of the token will be a global property shown in the token propert
 - In the properties for 3D object, and tokens we may want to add a new icon "world", which allow to set the the globally synchronized "Size" property. This replace:
  - sync token size (this will be no longer an option, all token will be always of the same size)
  - 
+
+-----
+
+- In the drawer, when selecting an already active category from the category list, the list should close, right now nothing happens, and this confuses users;
+- In the main toolbar, move the pen tool to the tools menu, after the text tool;
+- Move the field homography, field camera and field zones to a dedicated admin menu in the main; menu: we will provide a way to turn this menu on and off, since it is not useful for the final;users, only in "admin" mode.
+- Enable the action "Reset the canvas" in the main menu
+
+
+- 3D tokens do not honor the opacity settings
+- I would give up the stadium lights based shadow, and use just the the global light, which should be repositioned to its original position.
+
+---
+
+An improved drawer navigation.
+
+Right now, when clicking on the category button, we show the list of categories.
+The categories are growing, so we may want to be able to expand/collapse the categories.
+Make the categories headers bigger, so it is easier for the user to click to expand/collapse.
+
+The categories are:
+Players
+Materials
+Players 3D
+Materials 3D
+Fields
+Legacy backgrounds
+
+The fields refer to the category we show when editing the background. This needs to be transformed in a normal category with the following sub categories:
+Soccer 11
+Training Area
+Futsal
+
+The Legacy backgrounds refer to the old fields category we had using regular SVG for the background. When using this type of background, we show the SVG directly on a surface that is always facing the camera, and the background settings for:
+- field lines switch
+- field lines color
+- field lines opacity
+- Mowing opacity
+- Mowing style
+
+will be disabled.
+
+So the application needs to be aware if it is using a legacy 2D background or a real 3D field.
+
+

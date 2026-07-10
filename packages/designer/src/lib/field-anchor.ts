@@ -16,7 +16,7 @@
 import * as THREE from 'three'
 import { type BoardElement, type PolylineElement, type DrawElement, type TokenElement, type TextElement, type ElementTransform, type ElementChange, type Operation, getLocalBounds, BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { makeCalibratedCamera, type PosedCamera } from './field-camera'
-import { boardToGround } from './arrow3d'
+import { boardToGround, makeArrow3DCamera } from './arrow3d'
 import { rectToPolyline, ellipseToPolyline } from './draw'
 import { DEFAULT_ZONE } from './field-zones'
 
@@ -187,6 +187,24 @@ let ppmRefCache: number | null = null
 export function referencePPM(): number {
   if (ppmRefCache == null) ppmRefCache = groundPPM(makeCalibratedCamera(DEFAULT_ZONE.camera), PITCH_CENTRE[0], PITCH_CENTRE[1])
   return ppmRefCache
+}
+
+/** Seed for background.objectScale on a legacy 2D background: the multiplier at
+ *  which a real-size standing player (1.8 m) reads about as tall on the board as
+ *  a 2D player figure sized by the field's catalog `scale` (longest side =
+ *  boardWidth/10 · figureScale). Measured with a vertical yard-stick — it's the
+ *  player's HEIGHT we're matching, not a ground footprint — at the posed field
+ *  camera's look-at spot (or the fixed default camera's centre when the legacy
+ *  field has no calibration). */
+const PLAYER_HEIGHT_M = 1.8
+export function legacyObjectScale(cfg: PosedCamera | null, figureScale: number): number {
+  const cam = cfg ? makeCalibratedCamera(cfg) : makeArrow3DCamera()
+  const [gx, gz] = cfg ? [cfg.target[0], cfg.target[2]] : [0, 0]
+  const foot = new THREE.Vector3(gx, 0, gz).project(cam)
+  const head = new THREE.Vector3(gx, PLAYER_HEIGHT_M, gz).project(cam)
+  const heightPx = (Math.abs(head.y - foot.y) * BOARD_HEIGHT) / 2
+  const targetPx = (BOARD_WIDTH / 10) * figureScale
+  return clamp(Math.round((targetPx / (heightPx || 1)) * 10) / 10, 0.1, 8)
 }
 
 /** On-board height (px) for a token of metric diameter `m` (metres) at ground `g`:

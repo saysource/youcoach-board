@@ -37,7 +37,6 @@ Catch Diving Left, 14, 28
 Catch Middle Low, 13, 48
 Body Block, 8, 26
 Body Block 2 , 8, 36
-
 Deep Kick, 16, 60
 Deep Kick 2, 16, 64
 Deep Kick 3, 16, 68

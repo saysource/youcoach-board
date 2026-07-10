@@ -5,7 +5,7 @@
 // system is offered only when it matches the field's team size.
 
 import type { FieldType } from '@youcoach-board/core'
-import { PITCH_MODELS } from './field-reference'
+import { FIELD_DIMS, FIELD_WORLD_CENTER } from './field3d'
 
 export type FieldPoint = [number, number]
 
@@ -51,18 +51,23 @@ export interface SystemConfig {
   teamSize: number
   /** Metric pitch size [length x, width z] in metres — the 3D ground frame. */
   size: [number, number]
+  /** World position of the pitch's (0,0) corner. Every 3D field is CENTRED on the
+   *  shared pitch centre, so smaller courts (futsal) start away from the origin. */
+  origin: [number, number]
   /** Which field artwork the schematic preview uses. */
   kind: FieldKind
 }
 
 // Game systems are offered on the 3D pitches that define a regulation team size:
-// soccer-11 (105×68 m) and futsal (from the pitch model). A training/area field has
-// no fixed formations. Sizes are read from the shared PITCH_MODELS so the placement
-// and the field-camera wireframe never drift apart.
+// soccer-11 (105×68 m) and futsal (40×20 m). A training/area field has no fixed
+// formations. Size + origin come from the shared FIELD_DIMS (the rendered 3D
+// courts, all centred on the pitch centre), so placement never drifts from the
+// field the user sees.
 export function systemConfigForField(fieldType: FieldType): SystemConfig | null {
-  if (fieldType === 'soccer11') return { teamSize: 11, size: PITCH_MODELS.soccer11.size, kind: 'soccer' }
-  if (fieldType === 'futsal') return { teamSize: 5, size: PITCH_MODELS.futsal.size, kind: 'futsal' }
-  return null
+  if (fieldType !== 'soccer11' && fieldType !== 'futsal') return null
+  const { halfL, halfW } = FIELD_DIMS[fieldType]
+  const origin: [number, number] = [FIELD_WORLD_CENTER[0] - halfL, FIELD_WORLD_CENTER[1] - halfW]
+  return { teamSize: fieldType === 'futsal' ? 5 : 11, size: [2 * halfL, 2 * halfW], origin, kind: fieldType === 'futsal' ? 'futsal' : 'soccer' }
 }
 
 /** Formation codes available on a field (those matching its team size). */
@@ -106,7 +111,8 @@ export function formationFieldPoints(code: string, dir: FormationDir, spread: Sp
  *  axis → pitch width. Forward puts the own goal at x=0 (attack toward +x); reverse
  *  is the same shape point-reflected (handled inside formationFieldPoints), so the
  *  ground spots always match the dialog's preview discs exactly. */
-export function formationGround(code: string, size: [number, number], dir: FormationDir, spread: Spread): FieldPoint[] {
-  const [len, wid] = size
-  return formationFieldPoints(code, dir, spread).map(([fx, fy]) => [len * (1 - fy / FIELD_H), (fx / FIELD_W) * wid])
+export function formationGround(code: string, cfg: SystemConfig, dir: FormationDir, spread: Spread): FieldPoint[] {
+  const [len, wid] = cfg.size
+  const [ox, oz] = cfg.origin
+  return formationFieldPoints(code, dir, spread).map(([fx, fy]) => [ox + len * (1 - fy / FIELD_H), oz + (fx / FIELD_W) * wid])
 }

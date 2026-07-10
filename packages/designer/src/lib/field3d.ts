@@ -10,7 +10,7 @@
 
 import * as THREE from 'three'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
-import { buildGoal } from './goal'
+import { buildGoal, type GoalStyle } from './goal'
 
 // Pitch dims (metres, ~FIFA), matching field-reference.ts.
 const L = 105
@@ -23,12 +23,24 @@ export const FIELD_WORLD_CENTER: [number, number] = [HALF_L, HALF_W]
 // Per-field-type half-dimensions + goal width (metres). Every field is built
 // CENTRED and then translated to the pitch centre (52.5, 0, 34), so objects,
 // arrows and cameras keep sharing one world frame; the camera zones frame each
-// field's own extent. Futsal is a placeholder until real court dims are provided.
+// field's own extent. Futsal: official 40×20 m court, 3 m goals.
 export const FIELD_DIMS: Record<FieldType, { halfL: number; halfW: number; goalW: number }> = {
   soccer11: { halfL: 52.5, halfW: 34, goalW: 7.32 },
   training: { halfL: 20, halfW: 15, goalW: 5 },
   futsal: { halfL: 20, halfW: 10, goalW: 3 },
 }
+
+// ── Futsal court (design from assets/futsal_field.svg; official FIFA metrics) ──
+// The court is a COLORED indoor floor: a court fill (the drawing's "background",
+// driven by the surface color), an out-of-bounds BORDER frame around it, filled
+// AREAS (goal areas + centre-circle disc), and the white markings on top.
+const FUTSAL_BORDER_BAND = 2 // width (m) of the border frame around the court
+const FUTSAL_AREA_R = 6 // goal-area radius (quarter circles off each post)
+const FUTSAL_CIRCLE_R = 3 // centre circle
+const FUTSAL_GOAL_H = 2
+const FUTSAL_GOAL_D = 1
+/** Court fill when no surface color is set — the reference drawing's blue. */
+export const FUTSAL_COURT_FALLBACK = '#3b9ccc'
 // Training-area variants sit inside the 40×30 area, in the centred frame. Dividing
 // lines sit ZONE_INSET metres in from each end; horizontal bands are a third tall.
 const ZONE_INSET = 10
@@ -184,12 +196,101 @@ function disc(pos: number[], cx: number, cz: number, r: number, steps = 16) {
   }
 }
 
+// A filled circular sector (triangle fan about the centre) — futsal area fills.
+function sector(pos: number[], cx: number, cz: number, r: number, a0: number, a1: number, steps: number) {
+  for (let i = 0; i < steps; i++) {
+    const t0 = a0 + ((a1 - a0) * i) / steps
+    const t1 = a0 + ((a1 - a0) * (i + 1)) / steps
+    pos.push(cx, 0, cz, cx + r * Math.cos(t0), 0, cz + r * Math.sin(t0), cx + r * Math.cos(t1), 0, cz + r * Math.sin(t1))
+  }
+}
+
 /** Field markings for a type, built in the centred frame. The training `layout`
  *  adds its divider lines to the outer boundary. */
 export function markingsGeometry(w = LINE_W, fieldType: FieldType = 'soccer11', layout: TrainingLayout = 'plain'): THREE.BufferGeometry {
   const { halfL, halfW } = FIELD_DIMS[fieldType]
   if (fieldType === 'soccer11') return soccerMarkings(w)
-  return trainingMarkings(w, halfL, halfW, fieldType === 'training' ? layout : 'plain')
+  // Futsal lines at HALF width: court markings are thinner (8 cm-ish) and the
+  // small court makes full-width lines read chunky.
+  if (fieldType === 'futsal') return futsalMarkings(w / 2)
+  return trainingMarkings(w, halfL, halfW, layout)
+}
+
+// Futsal markings (official): boundary, halfway + centre circle (r 3) and spot,
+// goal areas (r 6 quarter arcs off each post joined by a straight segment),
+// penalty spot (6 m) + second penalty mark (10 m), corner arcs (r 0.25),
+// substitution-zone ticks on the near touchline (5 m and 10 m from halfway) and
+// the 5 m corner-distance ticks on the goal lines.
+function futsalMarkings(w: number): THREE.BufferGeometry {
+  const { halfL, halfW, goalW } = FIELD_DIMS.futsal
+  const gh = goalW / 2
+  const p: number[] = []
+  const tickW = w * 0.6
+  // Boundary + halfway (disc the T-junctions), centre circle + spot.
+  poly(p, [[-halfL, -halfW], [halfL, -halfW], [halfL, halfW], [-halfL, halfW]], true, w)
+  seg(p, 0, -halfW, 0, halfW, w)
+  arc(p, 0, 0, FUTSAL_CIRCLE_R, 0, 2 * Math.PI, 64, w)
+  disc(p, 0, 0, 0.15)
+  for (const s of [-1, 1]) {
+    const gl = s * halfL
+    // Goal area: a quarter arc off each post + the 6 m chord between them. For the
+    // left end the arcs run from the goal line (pointing ±z) to straight in (+x).
+    const aIn = s < 0 ? 0 : Math.PI // "toward the field" angle
+    arc(p, gl, -gh, FUTSAL_AREA_R, s < 0 ? -Math.PI / 2 : Math.PI, s < 0 ? aIn : Math.PI * 1.5, 16, w)
+    arc(p, gl, gh, FUTSAL_AREA_R, s < 0 ? aIn : Math.PI / 2, s < 0 ? Math.PI / 2 : Math.PI, 16, w)
+    seg(p, gl - s * FUTSAL_AREA_R, -gh, gl - s * FUTSAL_AREA_R, gh, w)
+    // Penalty spot (6 m) + second penalty mark (10 m).
+    disc(p, gl - s * 6, 0, 0.12)
+    disc(p, gl - s * 10, 0, 0.1)
+    // 5 m corner-distance ticks on the goal line (crossing it).
+    for (const z of [-halfW + 5, halfW - 5]) seg(p, gl - 0.4, z, gl + 0.4, z, tickW)
+  }
+  // Corner arcs (r 0.25 — thin, or the arc drowns in the line width).
+  arc(p, -halfL, -halfW, 0.25, 0, Math.PI / 2, 6, tickW)
+  arc(p, halfL, -halfW, 0.25, Math.PI / 2, Math.PI, 6, tickW)
+  arc(p, -halfL, halfW, 0.25, -Math.PI / 2, 0, 6, tickW)
+  arc(p, halfL, halfW, 0.25, Math.PI, Math.PI * 1.5, 6, tickW)
+  // Substitution zones on the near touchline: ticks 5 m and 10 m from halfway.
+  for (const x of [-10, -5, 5, 10]) seg(p, x, halfW - 0.4, x, halfW + 0.4, tickW)
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+  return geo
+}
+
+/** Futsal AREAS fill (the drawing's dark shapes): the two goal areas (quarter
+ *  discs + connecting rectangle) and the centre-circle disc. */
+export function futsalAreasGeometry(): THREE.BufferGeometry {
+  const { halfL, goalW } = FIELD_DIMS.futsal
+  const gh = goalW / 2
+  const p: number[] = []
+  disc(p, 0, 0, FUTSAL_CIRCLE_R, 48)
+  for (const s of [-1, 1]) {
+    const gl = s * halfL
+    const inX = gl - s * FUTSAL_AREA_R
+    sector(p, gl, -gh, FUTSAL_AREA_R, s < 0 ? -Math.PI / 2 : Math.PI, s < 0 ? 0 : Math.PI * 1.5, 16)
+    sector(p, gl, gh, FUTSAL_AREA_R, s < 0 ? 0 : Math.PI / 2, s < 0 ? Math.PI / 2 : Math.PI, 16)
+    quad(p, gl, -gh, inX, -gh, inX, gh, gl, gh)
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+  return geo
+}
+
+/** Futsal BORDER frame: the band between the court boundary and the surround
+ *  (the drawing's orange frame), as four rectangles around the court. */
+export function futsalBorderGeometry(): THREE.BufferGeometry {
+  const { halfL, halfW } = FIELD_DIMS.futsal
+  const b = FUTSAL_BORDER_BAND
+  const oL = halfL + b
+  const oW = halfW + b
+  const p: number[] = []
+  quad(p, -oL, -oW, oL, -oW, oL, -halfW, -oL, -halfW) // top band
+  quad(p, -oL, halfW, oL, halfW, oL, oW, -oL, oW) // bottom band
+  quad(p, -oL, -halfW, -halfL, -halfW, -halfL, halfW, -oL, halfW) // left band
+  quad(p, halfL, -halfW, oL, -halfW, oL, halfW, halfL, halfW) // right band
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+  return geo
 }
 
 // A rectangular training area (outer boundary) plus the layout's divider lines.
@@ -242,6 +343,12 @@ function soccerMarkings(w: number): THREE.BufferGeometry {
 export type FieldBandsOrientation = 'vertical' | 'horizontal' | 'cross' | 'none'
 export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', halfL = HALF_L, halfW = HALF_W, fieldType: FieldType = 'soccer11', layout: TrainingLayout = 'plain'): THREE.BufferGeometry {
   const p: number[] = []
+  // Futsal is an indoor court — no mowing pattern.
+  if (fieldType === 'futsal') {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
+    return geo
+  }
   // A non-plain training layout replaces the mowing stripes with its own shaded
   // region(s) — a single translucent fill over each rect.
   if (fieldType === 'training' && layout !== 'plain') {
@@ -286,11 +393,21 @@ export function bandsGeometry(orientation: FieldBandsOrientation = 'vertical', h
 // goal. The canonical goal opens toward +X with its back behind; the far-end
 // goal is turned 180° so both mouths face the field. Centered between the goal
 // line (front) and its back (GOAL_D outside), just above the lines (GOAL_Y).
-function makeGoal(sign: number, halfL = HALF_L, goalW = GOAL_W, z = 0): THREE.Group {
-  const g = buildGoal({ width: goalW, height: GOAL_H, depth: GOAL_D, style: 'box', postR: POST_R })
-  g.position.set(sign * (halfL + GOAL_D / 2), GOAL_Y, z)
+function makeGoal(sign: number, halfL = HALF_L, goalW = GOAL_W, z = 0, goalH = GOAL_H, goalD = GOAL_D, style: GoalStyle = 'box'): THREE.Group {
+  const g = buildGoal({ width: goalW, height: goalH, depth: goalD, style, postR: POST_R })
+  g.position.set(sign * (halfL + goalD / 2), GOAL_Y, z)
   if (sign > 0) g.rotation.y = Math.PI
   return g
+}
+
+// The two end goals for a field type. Futsal goals are smaller (3×2 m, 1 m deep)
+// and use the striped indoor style (red/white frame, rounded thin back).
+function endGoals(fieldType: FieldType, halfL: number, goalW: number): THREE.Group[] {
+  const futsal = fieldType === 'futsal'
+  const h = futsal ? FUTSAL_GOAL_H : GOAL_H
+  const d = futsal ? FUTSAL_GOAL_D : GOAL_D
+  const style: GoalStyle = futsal ? 'futsal' : 'box'
+  return [makeGoal(-1, halfL, goalW, 0, h, d, style), makeGoal(1, halfL, goalW, 0, h, d, style)]
 }
 
 // A goal on the near/far touchline (z = ±halfW), turned 90° so its mouth faces the
@@ -320,7 +437,7 @@ function makeFlag(x: number, z: number): THREE.Group {
  *  field types share the world frame (objects/arrows/cameras). The ground is
  *  transparent; only the white lines + shading bands are drawn, plus goals + flags.
  *  Flags are only meaningful on the full soccer pitch. */
-export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation; fieldType?: FieldType; layout?: TrainingLayout; surround?: string } = {}): THREE.Group {
+export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?: FieldBandsOrientation; fieldType?: FieldType; layout?: TrainingLayout; surround?: string; court?: string; border?: string; areas?: string } = {}): THREE.Group {
   const fieldType = opts.fieldType ?? 'soccer11'
   const layout = opts.layout ?? 'plain'
   const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
@@ -346,11 +463,54 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
   ground.visible = surroundOn
   group.add(ground)
 
-  // Transparent ground that still catches the goals' soft shadows.
+  // Transparent ground that still catches the goals' soft shadows. Lifted just
+  // above the futsal court fills (which are opaque) so the shadows stay visible.
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(L * 1.6, W * 1.8), new THREE.ShadowMaterial({ opacity: 0.18 }))
   shadow.rotation.x = -Math.PI / 2
+  shadow.position.y = 0.04
   shadow.receiveShadow = true
   group.add(shadow)
+
+  // Futsal indoor floor: court fill (the drawing's "background", driven by the
+  // surface color), the out-of-bounds border frame, and the filled areas (goal
+  // areas + centre circle). Unlit (MeshBasic) so they keep the design's exact
+  // colors; named so the layer can recolor them live.
+  if (fieldType === 'futsal') {
+    // LIT surfaces (like the surround ground) so the stadium/central lights shape
+    // them. Kept a few millimetres apart — close enough that lines no longer read
+    // as floating at grazing angles — with polygonOffset + renderOrder resolving
+    // the depth ties the small gaps alone can't guarantee at distance.
+    // Low roughness = a varnished indoor floor: the floodlights/sun paint glossy
+    // specular highlights that slide across the court as the camera moves.
+    const mat = (color: string, order: number) =>
+      new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 1.0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -order, polygonOffsetUnits: -order * 3 })
+    const courtPos: number[] = []
+    quad(courtPos, -halfL, -halfW, halfL, -halfW, halfL, halfW, -halfL, halfW)
+    const courtGeo = new THREE.BufferGeometry()
+    courtGeo.setAttribute('position', new THREE.Float32BufferAttribute(courtPos, 3))
+    courtGeo.computeVertexNormals()
+    const court = new THREE.Mesh(courtGeo, mat(opts.court ?? FUTSAL_COURT_FALLBACK, 1))
+    court.name = 'field-court'
+    court.position.y = 0.002
+    court.renderOrder = 1
+    group.add(court)
+
+    const borderGeo = futsalBorderGeometry()
+    borderGeo.computeVertexNormals()
+    const border = new THREE.Mesh(borderGeo, mat(opts.border ?? '#ff9f48', 1))
+    border.name = 'field-border'
+    border.position.y = 0.002
+    border.renderOrder = 1
+    group.add(border)
+
+    const areasGeo = futsalAreasGeometry()
+    areasGeo.computeVertexNormals()
+    const areas = new THREE.Mesh(areasGeo, mat(opts.areas ?? '#277ea0', 2))
+    areas.name = 'field-areas'
+    areas.position.y = 0.005
+    areas.renderOrder = 2
+    group.add(areas)
+  }
 
   // Translucent white shading bands (over the field extent), then crisp lines.
   // Named so the layer can rebuild the geometry when the orientation changes.
@@ -362,9 +522,12 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
 
   // Opaque so they depth-test cleanly above the bands (no transparency sorting).
   // Named so the layer can rebuild the geometry at a zoom-dependent width.
-  const lines = new THREE.Mesh(markingsGeometry(LINE_W, fieldType, layout), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }))
+  // Futsal lines sit just above the court fills (a big gap reads as floating at
+  // grazing angles over the colored surfaces); grass pitches keep the safe height.
+  const lines = new THREE.Mesh(markingsGeometry(LINE_W, fieldType, layout), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, ...(fieldType === 'futsal' ? { polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 } : {}) }))
   lines.name = 'field-lines'
-  lines.position.y = LINE_Y
+  lines.position.y = fieldType === 'futsal' ? 0.01 : LINE_Y
+  lines.renderOrder = fieldType === 'futsal' ? 3 : 0
   group.add(lines)
 
   // Goals in a named subgroup so the layer can toggle their visibility live. Soccer
@@ -372,7 +535,7 @@ export function buildFieldGroup(opts: { flags?: boolean; goals?: boolean; bands?
   const goals = new THREE.Group()
   goals.name = 'field-goals'
   if (fieldType === 'training') goals.add(...trainingGoalGroups(layout, halfL, halfW))
-  else goals.add(makeGoal(-1, halfL, goalW), makeGoal(1, halfL, goalW))
+  else goals.add(...endGoals(fieldType, halfL, goalW))
   goals.visible = opts.goals ?? true
   group.add(goals)
 
@@ -397,7 +560,7 @@ export function buildGoalsOverlay(fieldType: FieldType = 'soccer11', layout: Tra
   const { halfL, halfW, goalW } = FIELD_DIMS[fieldType]
   const goals = new THREE.Group()
   if (fieldType === 'training') goals.add(...trainingGoalGroups(layout, halfL, halfW))
-  else goals.add(makeGoal(-1, halfL, goalW), makeGoal(1, halfL, goalW))
+  else goals.add(...endGoals(fieldType, halfL, goalW))
   goals.position.set(HALF_L, 0, HALF_W)
   goals.traverse((o) => {
     const m = o as THREE.Mesh

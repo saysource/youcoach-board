@@ -23,6 +23,7 @@ export {
   DEFAULT_ANIMATION,
   parseBoard,
   serializeBoard,
+  isLegacyBackground,
 } from './model'
 export { BOARD_WIDTH, BOARD_HEIGHT, BOARD_ASPECT } from './geometry'
 export { BoardCanvas } from './BoardCanvas'

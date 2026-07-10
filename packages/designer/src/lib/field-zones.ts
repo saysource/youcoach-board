@@ -66,7 +66,9 @@ const TRAINING_LAYOUTS: { id: TrainingLayout; label: string; goals: boolean }[] 
   { id: 'channel', label: 'Channel', goals: false },
   { id: 'zones', label: 'Zones', goals: false },
 ]
-const TRAINING_TOP: CameraConfig = { ref: 'soccer11', position: [52.5, 38, 34], target: [52.5, 0, 34], fov: 50 }
+// A hair of z-offset — an exactly vertical look-at has no defined "up" (see the
+// futsal top-h note), so the first click could land in the wrong orientation.
+const TRAINING_TOP: CameraConfig = { ref: 'soccer11', position: [52.5, 38, 34.6], target: [52.5, 0, 34], fov: 50 }
 // Elevated 3/4 view pulled well back so the whole 40×30 area (and the goal
 // variants' goals) fit the canvas with margins — the previous pose sat too low
 // and too close, cropping the near edge.
@@ -76,16 +78,40 @@ const TRAINING_ZONES: Zone[] = TRAINING_LAYOUTS.flatMap((l): Zone[] => [
   { id: `training-${l.id}-persp`, label: l.label, fieldType: 'training', category: 'perspective', target: [52.5, 0, 34], camera: TRAINING_PERSP, background: { showGoals: l.goals, trainingLayout: l.id } },
 ])
 
+// Futsal court (40×20 m + 2 m border, centred on the pitch centre): the two
+// straight-down full-court views plus a few angled perspectives.
+const FUTSAL_ZONES: Omit<Zone, 'category'>[] = [
+  // Top-h keeps a hair of z-offset: an EXACTLY vertical look-at has no defined
+  // "up", so its screen orientation would depend on the previous camera pose
+  // (first click could land vertical) — same trick as the soccer full-top zone.
+  { id: 'futsal-top-h', label: 'Full Top Horizontal', fieldType: 'futsal', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [52.5, 38, 34.6], target: [52.5, 0, 34], fov: 50 } },
+  { id: 'futsal-top-v', label: 'Full Top Vertical', fieldType: 'futsal', target: [52.5, 0, 34], camera: orbitToConfig({ targetX: 52.5, targetZ: 34, azimuth: 90, elevation: 89.5, distance: 50, fov: 50 }, 'soccer11') },
+  { id: 'half-top', label: 'Half Top', fieldType: 'futsal', target: [42.97, 0, 34], camera: { ref: 'soccer11', position: [43.22, 28.71, 34], target: [42.97, 0, 34], fov: 50 } },
+  { id: 'futsal-full-persp', label: 'Full Court', fieldType: 'futsal', target: [52.5, 0, 34], camera: { ref: 'soccer11', position: [52.5, 26, 8], target: [52.5, 0, 34], fov: 50 } },
+  { id: 'futsal-goal-area', label: 'Goal Area', fieldType: 'futsal', target: [36, 0, 34], camera: { ref: 'soccer11', position: [62, 12, 34], target: [36, 0, 34], fov: 50 } },
+  { id: 'futsal-behind-goal', label: 'Behind Goal', fieldType: 'futsal', target: [48, 0, 34], camera: { ref: 'soccer11', position: [24, 7, 34], target: [48, 0, 34], fov: 50 } },
+  { id: 'futsal-corner', label: 'Corner', fieldType: 'futsal', target: [62, 0, 30], camera: { ref: 'soccer11', position: [80, 12, 50], target: [62, 0, 30], fov: 50 } },
+]
+
 export const FIELD_ZONES: Zone[] = [
   ...SOCCER_ZONES.map((z) => ({ ...z, category: pitchCategory(z.camera) })),
   ...TRAINING_ZONES,
+  ...FUTSAL_ZONES.map((z) => ({ ...z, category: pitchCategory(z.camera) })),
 ]
 
-// Field types offered in the drawer, in order. Futsal is defined in the model but
-// has no zones/geometry yet, so it's omitted here until its court is provided.
+// Drawer category ids for the Fields group (synthetic — not catalog categories).
+export const LEGACY_BACKGROUNDS_CAT_ID = 'fields:legacy'
+/** The drawer category for a background: its 3D field type's zone grid, or the
+ *  merged Legacy Backgrounds panel — where Edit Background points the drawer. */
+export function fieldsCategoryIdFor(fieldType: FieldType, legacy: boolean): string {
+  return legacy ? LEGACY_BACKGROUNDS_CAT_ID : `fields3d:${fieldType}`
+}
+
+// Field types offered in the drawer, in order.
 export const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
   { value: 'soccer11', label: 'Soccer 11' },
   { value: 'training', label: 'Training Area' },
+  { value: 'futsal', label: 'Futsal' },
 ]
 
 const CATEGORY_LABELS: Record<ZoneCategory, string> = { top: 'Top View', perspective: 'Perspective' }
@@ -96,7 +122,10 @@ const CATEGORY_LABELS: Record<ZoneCategory, string> = { top: 'Top View', perspec
 // a drill's cones/players/goals are legible by default. Applied only when the field
 // TYPE changes (so tuning the slider or re-picking a layout isn't clobbered).
 export function defaultObjectScaleForField(fieldType: FieldType): number {
-  return fieldType === 'training' ? 8 : 4
+  // On the small fields (training 40×30, futsal 40×20) the camera sits much
+  // closer, so 3× is plenty — bigger multipliers made players tower over the
+  // goals. The full pitch keeps 4×.
+  return fieldType === 'soccer11' ? 4 : 3
 }
 
 // A straight-down "top view" pose framing the whole field of a given type (reuses
@@ -109,8 +138,12 @@ export function topViewForField(fieldType: FieldType, ref = 'soccer11', orientat
   // Azimuth orients the pitch: 0 = length horizontal (goals left/right), 90 =
   // length vertical (goals top/bottom). Portrait needs more distance to fit the
   // pitch's long axis on the short screen side.
-  const training = fieldType === 'training'
-  const distance = orientation === 'portrait' ? (training ? 52 : 135) : training ? 38 : 100
+  const distance =
+    fieldType === 'training'
+      ? orientation === 'portrait' ? 52 : 38
+      : fieldType === 'futsal'
+        ? orientation === 'portrait' ? 50 : 38
+        : orientation === 'portrait' ? 135 : 100
   return orbitToConfig({ targetX: 52.5, targetZ: 34, azimuth: orientation === 'portrait' ? 90 : 0, elevation: 89.5, distance, fov: 50 }, ref as PitchType)
 }
 

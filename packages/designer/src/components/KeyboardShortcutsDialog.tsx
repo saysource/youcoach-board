@@ -71,6 +71,11 @@ const VIEW: Section = {
   rows: [
     { label: 'Toggle grid', combos: [['G']] },
     { label: 'Snap to objects', combos: [[ALT, 'S']] },
+    // No selection: arrows orbit the 3D camera; ⇧+arrows pan it (or, without a
+    // 3D field, scroll the flat 2D view). +/− zoom either mode.
+    { label: 'Orbit camera (3D, nothing selected)', combos: [['←', '→', '↑', '↓']] },
+    { label: 'Pan the view', combos: [[SHIFT, '←', '→', '↑', '↓']] },
+    { label: 'Zoom in / out', combos: [['+'], ['−']] },
     { label: 'Keyboard shortcuts', combos: [['?']] },
   ],
 }

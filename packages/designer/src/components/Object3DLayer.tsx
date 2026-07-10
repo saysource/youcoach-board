@@ -40,6 +40,9 @@ interface Props {
    *  player. [] in the legacy homography/fixed modes (Arrow3DLayer handles those). */
   arrows?: Arrow3DElement[]
   selectedIds: string[]
+  /** While a player pose is dragged from the drawer: the id of the player a
+   *  drop would REPLACE — its outline shows RED instead of the selection blue. */
+  replaceTargetId?: string | null
   /** Ids currently under the eraser (queued for deletion) — rendered at half
    *  opacity as a "will be erased" cue. */
   erasingIds?: Set<string>
@@ -49,6 +52,10 @@ interface Props {
   camera: PosedCamera | null
   /** Global display multiplier for placed objects (background.objectScale). */
   objectScale: number
+  /** Lower bound for the effective object scale. 1 on a real 3D field (objects are
+   *  never smaller than real size); relaxed on legacy 2D backgrounds, where matching
+   *  the 2D figures' size can need a sub-real multiplier. */
+  minScale?: number
   /** The field's goals, re-rendered here as an ALWAYS-ON-TOP overlay so placed 3D
    *  objects never occlude the goal frame (the field layer draws the base + shadow). */
   fieldType: FieldType
@@ -75,6 +82,7 @@ interface Ctx {
 }
 
 const SELECT_COLOR = 0x2a6cff
+const REPLACE_COLOR = 0xe03131 // drop-would-replace preview
 
 /* ---- 3D arrows (ported from Arrow3DLayer for the shared-scene path) --------- */
 
@@ -134,7 +142,7 @@ function setObjectDim(obj: THREE.Object3D, dim: boolean) {
   })
 }
 
-export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, tokens = [], arrows = [], selectedIds, erasingIds, viewport, camera, objectScale, fieldType, layout, showGoals, svgRef, containerRef }, ref) {
+export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, tokens = [], arrows = [], selectedIds, replaceTargetId = null, erasingIds, viewport, camera, objectScale, minScale = 1, fieldType, layout, showGoals, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -263,14 +271,14 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         ctx.meshes.set(e.id, obj)
       }
       // Effective scale: a global-tracking or custom multiplier over the real-size
-      // mesh, floored at ×1 (never smaller than real). Goals are real-metric
-      // structural objects, so they ignore the global "make materials bigger" scale.
+      // mesh, floored at minScale (×1 on a 3D field — never smaller than real;
+      // relaxed on legacy 2D backgrounds to allow figure-size parity).
       const rel = e.useGlobalSize ? 1 : e.size
       // Goals are real-metric structural objects (ignore the global scale). 3D
       // players scale with the same materials multiplier as cones/hurdles/etc., so
       // players and materials stay the same relative size (aligned defaults).
       const mult = objectScale
-      const scale = isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(1, rel * mult)
+      const scale = isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(minScale, rel * mult)
       obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
       obj.position.set(e.x, -baseMinY * scale, e.z)
@@ -470,7 +478,16 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     ctx.outlineCam.copy(activeCam)
     ctx.outlineCam.layers.set(0)
     ctx.outlinePass.renderCamera = ctx.outlineCam
-    ctx.outlinePass.selectedObjects = selectedIds.map((id) => ctx.meshes.get(id) ?? ctx.tokenMeshes.get(id)).filter((o): o is THREE.Object3D => !!o)
+    // Drop-replace preview: while a drawer drag hovers a replaceable player,
+    // the outline turns RED and highlights only that player; otherwise the
+    // normal blue selection outline.
+    const replaceMesh = replaceTargetId ? ctx.meshes.get(replaceTargetId) : undefined
+    const outlineColor = replaceMesh ? REPLACE_COLOR : SELECT_COLOR
+    ctx.outlinePass.visibleEdgeColor.set(outlineColor)
+    ctx.outlinePass.hiddenEdgeColor.set(outlineColor)
+    ctx.outlinePass.selectedObjects = replaceMesh
+      ? [replaceMesh]
+      : selectedIds.map((id) => ctx.meshes.get(id) ?? ctx.tokenMeshes.get(id)).filter((o): o is THREE.Object3D => !!o)
     ctx.composer.render()
   }
 
@@ -482,7 +499,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, tokens, arrows, selectedIds, erasingIds, viewport, camera, objectScale, fieldType, layout, showGoals])
+  }, [elements, tokens, arrows, selectedIds, replaceTargetId, erasingIds, viewport, camera, objectScale, minScale, fieldType, layout, showGoals])
 
   useEffect(() => {
     const container = containerRef.current

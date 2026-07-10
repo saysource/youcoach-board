@@ -53,6 +53,14 @@ export interface BoardBackground {
   /** Colour of the 3D field markings (lines) — NOT the mown shading bands. Default
    *  white. */
   lineColor: string
+  /** Futsal court: colour of the playing surface itself (the drawing's inner
+   *  "background"). The master surfaceColor only drives the infinite surround. */
+  courtColor: string
+  /** Futsal court: colour of the out-of-bounds BORDER frame around the court (the
+   *  band between the court's outer perimeter and the surround). */
+  borderColor: string
+  /** Futsal court: colour of the filled AREAS (goal areas + centre circle disc). */
+  areasColor: string
   /** URL of a raster background image (e.g. grass), or null. */
   image: string | null
   /** URL of an overlay field SVG (e.g. an 11v11 pitch), or null. */
@@ -118,6 +126,10 @@ export interface BoardDoc {
 export const DEFAULT_BACKGROUND: BoardBackground = {
   surfaceColor: 'transparent',
   lineColor: '#ffffff',
+  // Futsal court defaults, sampled from assets/futsal_field.svg.
+  courtColor: '#3b9ccc',
+  borderColor: '#ff9f48',
+  areasColor: '#277ea0',
   image: null,
   fieldSvg: null,
   field3d: null,
@@ -189,6 +201,9 @@ function parseBackground(raw: unknown): BoardBackground {
             ? o.color
             : DEFAULT_BACKGROUND.surfaceColor,
     lineColor: typeof o.lineColor === 'string' ? o.lineColor : DEFAULT_BACKGROUND.lineColor,
+    courtColor: typeof o.courtColor === 'string' ? o.courtColor : DEFAULT_BACKGROUND.courtColor,
+    borderColor: typeof o.borderColor === 'string' ? o.borderColor : DEFAULT_BACKGROUND.borderColor,
+    areasColor: typeof o.areasColor === 'string' ? o.areasColor : DEFAULT_BACKGROUND.areasColor,
     image: typeof o.image === 'string' ? o.image : null,
     fieldSvg: typeof o.fieldSvg === 'string' ? o.fieldSvg : null,
     field3d: parseFieldView(o.field3d),
@@ -264,6 +279,14 @@ function structuredCloneBoard(doc: BoardDoc): BoardDoc {
     animation: { ...doc.animation },
     elements: doc.elements.slice(),
   }
+}
+
+/** Whether the background is a LEGACY 2D field (an SVG drawn flat on the board,
+ *  always facing the camera) rather than a real 3D pitch. Mutually exclusive by
+ *  construction: applying a legacy field clears `field3d`, applying a 3D zone
+ *  clears `fieldSvg`. 3D-only settings (markings, mowing, lights) don't apply. */
+export function isLegacyBackground(bg: BoardBackground): boolean {
+  return !!bg.fieldSvg && !bg.field3d
 }
 
 /** Serialize a document to pretty-printed JSON (the on-disk / wire form). */

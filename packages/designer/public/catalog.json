@@ -54,7 +54,9 @@
    "name": "Players 3D",
    "categories": [
     "players3d_men",
-    "players3d_women"
+    "players3d_women",
+    "goalkeepers3d_men",
+    "goalkeepers3d_women"
    ]
   },
   {
@@ -17666,11 +17668,32 @@
      "label": "Jog"
     },
     {
+     "object3d": "pose_man_diagonal_jog",
+     "thumb": "materials3d/pose_man_diagonal_jog",
+     "w": 100,
+     "h": 100,
+     "label": "Diagonal Jog"
+    },
+    {
+     "object3d": "pose_man_diagonal_jog_2",
+     "thumb": "materials3d/pose_man_diagonal_jog_2",
+     "w": 100,
+     "h": 100,
+     "label": "Diagonal Jog 2"
+    },
+    {
      "object3d": "pose_man_run",
      "thumb": "materials3d/pose_man_run",
      "w": 100,
      "h": 100,
      "label": "Run"
+    },
+    {
+     "object3d": "pose_man_run_start",
+     "thumb": "materials3d/pose_man_run_start",
+     "w": 100,
+     "h": 100,
+     "label": "Run Start"
     },
     {
      "object3d": "pose_man_kick",
@@ -17687,6 +17710,27 @@
      "label": "Low Kick"
     },
     {
+     "object3d": "pose_man_deep_kick",
+     "thumb": "materials3d/pose_man_deep_kick",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick"
+    },
+    {
+     "object3d": "pose_man_deep_kick_2",
+     "thumb": "materials3d/pose_man_deep_kick_2",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick 2"
+    },
+    {
+     "object3d": "pose_man_deep_kick_3",
+     "thumb": "materials3d/pose_man_deep_kick_3",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick 3"
+    },
+    {
      "object3d": "pose_man_pass",
      "thumb": "materials3d/pose_man_pass",
      "w": 100,
@@ -17701,11 +17745,25 @@
      "label": "Receive"
     },
     {
+     "object3d": "pose_man_receive_2",
+     "thumb": "materials3d/pose_man_receive_2",
+     "w": 100,
+     "h": 100,
+     "label": "Receive 2"
+    },
+    {
      "object3d": "pose_man_dribbling",
      "thumb": "materials3d/pose_man_dribbling",
      "w": 100,
      "h": 100,
      "label": "Dribbling"
+    },
+    {
+     "object3d": "pose_man_deceleration",
+     "thumb": "materials3d/pose_man_deceleration",
+     "w": 100,
+     "h": 100,
+     "label": "Deceleration"
     },
     {
      "object3d": "pose_man_header",
@@ -17733,7 +17791,14 @@
      "thumb": "materials3d/pose_man_scissor",
      "w": 100,
      "h": 100,
-     "label": "Scissor Kick"
+     "label": "Scissor"
+    },
+    {
+     "object3d": "pose_man_spin",
+     "thumb": "materials3d/pose_man_spin",
+     "w": 100,
+     "h": 100,
+     "label": "Spin"
     }
    ]
   },
@@ -17756,11 +17821,32 @@
      "label": "Jog"
     },
     {
+     "object3d": "pose_woman_diagonal_jog",
+     "thumb": "materials3d/pose_woman_diagonal_jog",
+     "w": 100,
+     "h": 100,
+     "label": "Diagonal Jog"
+    },
+    {
+     "object3d": "pose_woman_diagonal_jog_2",
+     "thumb": "materials3d/pose_woman_diagonal_jog_2",
+     "w": 100,
+     "h": 100,
+     "label": "Diagonal Jog 2"
+    },
+    {
      "object3d": "pose_woman_run",
      "thumb": "materials3d/pose_woman_run",
      "w": 100,
      "h": 100,
      "label": "Run"
+    },
+    {
+     "object3d": "pose_woman_run_start",
+     "thumb": "materials3d/pose_woman_run_start",
+     "w": 100,
+     "h": 100,
+     "label": "Run Start"
     },
     {
      "object3d": "pose_woman_kick",
@@ -17777,6 +17863,27 @@
      "label": "Low Kick"
     },
     {
+     "object3d": "pose_woman_deep_kick",
+     "thumb": "materials3d/pose_woman_deep_kick",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick"
+    },
+    {
+     "object3d": "pose_woman_deep_kick_2",
+     "thumb": "materials3d/pose_woman_deep_kick_2",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick 2"
+    },
+    {
+     "object3d": "pose_woman_deep_kick_3",
+     "thumb": "materials3d/pose_woman_deep_kick_3",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick 3"
+    },
+    {
      "object3d": "pose_woman_pass",
      "thumb": "materials3d/pose_woman_pass",
      "w": 100,
@@ -17791,11 +17898,25 @@
      "label": "Receive"
     },
     {
+     "object3d": "pose_woman_receive_2",
+     "thumb": "materials3d/pose_woman_receive_2",
+     "w": 100,
+     "h": 100,
+     "label": "Receive 2"
+    },
+    {
      "object3d": "pose_woman_dribbling",
      "thumb": "materials3d/pose_woman_dribbling",
      "w": 100,
      "h": 100,
      "label": "Dribbling"
+    },
+    {
+     "object3d": "pose_woman_deceleration",
+     "thumb": "materials3d/pose_woman_deceleration",
+     "w": 100,
+     "h": 100,
+     "label": "Deceleration"
     },
     {
      "object3d": "pose_woman_header",
@@ -17823,7 +17944,194 @@
      "thumb": "materials3d/pose_woman_scissor",
      "w": 100,
      "h": 100,
-     "label": "Scissor Kick"
+     "label": "Scissor"
+    },
+    {
+     "object3d": "pose_woman_spin",
+     "thumb": "materials3d/pose_woman_spin",
+     "w": 100,
+     "h": 100,
+     "label": "Spin"
+    }
+   ]
+  },
+  "goalkeepers3d_men": {
+   "name": "Goalkeepers 3D (Men)",
+   "kind": "figure",
+   "figures": [
+    {
+     "object3d": "pose_gk_man_idle",
+     "thumb": "materials3d/pose_gk_man_idle",
+     "w": 100,
+     "h": 100,
+     "label": "Idle"
+    },
+    {
+     "object3d": "pose_gk_man_catch_middle",
+     "thumb": "materials3d/pose_gk_man_catch_middle",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Middle"
+    },
+    {
+     "object3d": "pose_gk_man_catch_jumping",
+     "thumb": "materials3d/pose_gk_man_catch_jumping",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Jumping"
+    },
+    {
+     "object3d": "pose_gk_man_catch_side_low",
+     "thumb": "materials3d/pose_gk_man_catch_side_low",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Side Low"
+    },
+    {
+     "object3d": "pose_gk_man_catch_diving_right",
+     "thumb": "materials3d/pose_gk_man_catch_diving_right",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Diving Right"
+    },
+    {
+     "object3d": "pose_gk_man_catch_diving_left",
+     "thumb": "materials3d/pose_gk_man_catch_diving_left",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Diving Left"
+    },
+    {
+     "object3d": "pose_gk_man_catch_middle_low",
+     "thumb": "materials3d/pose_gk_man_catch_middle_low",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Middle Low"
+    },
+    {
+     "object3d": "pose_gk_man_body_block",
+     "thumb": "materials3d/pose_gk_man_body_block",
+     "w": 100,
+     "h": 100,
+     "label": "Body Block"
+    },
+    {
+     "object3d": "pose_gk_man_body_block_2",
+     "thumb": "materials3d/pose_gk_man_body_block_2",
+     "w": 100,
+     "h": 100,
+     "label": "Body Block 2"
+    },
+    {
+     "object3d": "pose_gk_man_deep_kick",
+     "thumb": "materials3d/pose_gk_man_deep_kick",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick"
+    },
+    {
+     "object3d": "pose_gk_man_deep_kick_2",
+     "thumb": "materials3d/pose_gk_man_deep_kick_2",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick 2"
+    },
+    {
+     "object3d": "pose_gk_man_deep_kick_3",
+     "thumb": "materials3d/pose_gk_man_deep_kick_3",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick 3"
+    }
+   ]
+  },
+  "goalkeepers3d_women": {
+   "name": "Goalkeepers 3D (Women)",
+   "kind": "figure",
+   "figures": [
+    {
+     "object3d": "pose_gk_woman_idle",
+     "thumb": "materials3d/pose_gk_woman_idle",
+     "w": 100,
+     "h": 100,
+     "label": "Idle"
+    },
+    {
+     "object3d": "pose_gk_woman_catch_middle",
+     "thumb": "materials3d/pose_gk_woman_catch_middle",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Middle"
+    },
+    {
+     "object3d": "pose_gk_woman_catch_jumping",
+     "thumb": "materials3d/pose_gk_woman_catch_jumping",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Jumping"
+    },
+    {
+     "object3d": "pose_gk_woman_catch_side_low",
+     "thumb": "materials3d/pose_gk_woman_catch_side_low",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Side Low"
+    },
+    {
+     "object3d": "pose_gk_woman_catch_diving_right",
+     "thumb": "materials3d/pose_gk_woman_catch_diving_right",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Diving Right"
+    },
+    {
+     "object3d": "pose_gk_woman_catch_diving_left",
+     "thumb": "materials3d/pose_gk_woman_catch_diving_left",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Diving Left"
+    },
+    {
+     "object3d": "pose_gk_woman_catch_middle_low",
+     "thumb": "materials3d/pose_gk_woman_catch_middle_low",
+     "w": 100,
+     "h": 100,
+     "label": "Catch Middle Low"
+    },
+    {
+     "object3d": "pose_gk_woman_body_block",
+     "thumb": "materials3d/pose_gk_woman_body_block",
+     "w": 100,
+     "h": 100,
+     "label": "Body Block"
+    },
+    {
+     "object3d": "pose_gk_woman_body_block_2",
+     "thumb": "materials3d/pose_gk_woman_body_block_2",
+     "w": 100,
+     "h": 100,
+     "label": "Body Block 2"
+    },
+    {
+     "object3d": "pose_gk_woman_deep_kick",
+     "thumb": "materials3d/pose_gk_woman_deep_kick",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick"
+    },
+    {
+     "object3d": "pose_gk_woman_deep_kick_2",
+     "thumb": "materials3d/pose_gk_woman_deep_kick_2",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick 2"
+    },
+    {
+     "object3d": "pose_gk_woman_deep_kick_3",
+     "thumb": "materials3d/pose_gk_woman_deep_kick_3",
+     "w": 100,
+     "h": 100,
+     "label": "Deep Kick 3"
     }
    ]
   }

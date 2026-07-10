@@ -49,6 +49,8 @@ export interface ElementPatch {
   figureId?: string
   colors?: Record<string, string>
   mirror?: boolean
+  // 3D object (object3d) model id — patched when a drop swaps a player's pose.
+  objectId?: string
   // 3D object (object3d) size: a relative multiplier + whether to follow the global scale.
   size?: number
   useGlobalSize?: boolean

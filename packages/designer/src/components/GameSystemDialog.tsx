@@ -99,7 +99,7 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
   function place() {
     if (!field3d) return // systems only appear on a 3D pitch, so this is set
     const style = options[Math.min(styleIdx, options.length - 1)]
-    const grounds = formationGround(code, cfg.size, dir, spread)
+    const grounds = formationGround(code, cfg, dir, spread)
     // A game system is a WHOLE-pitch construct: snap the field to the full top-view
     // horizontal so the entire formation is visible and correctly projected. Placing
     // it from a zoomed / low-perspective navigation pose otherwise projects the

@@ -1,5 +1,6 @@
-import { type LogoPosition, type FieldBands } from '@youcoach-board/core'
+import { isLegacyBackground, type LogoPosition, type FieldBands } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
+import { cn } from '../../lib/cn'
 import { useDragTransaction } from '../../lib/use-drag-transaction'
 import { Slider } from '../ui/slider'
 import { Switch } from '../ui/switch'
@@ -63,6 +64,13 @@ const SURFACE_COLORS = ['transparent', '#2f8a3e', '#256e31', '#3b7a57', '#5b8c3a
 // Common field-line colours (default white).
 const LINE_COLORS = ['#ffffff', '#000000', '#e6e6e6', '#f5d90a', '#111827', '#3389e0']
 
+// Futsal court presets: the playing surface, the border (out-of-bounds frame)
+// and the areas (goal areas + centre circle) — the reference design's colors
+// plus common indoor floors.
+const COURT_COLORS = ['#3b9ccc', '#2b7bb0', '#2f8a3e', '#d1651f', '#8a8a8a', '#b04a3c']
+const BORDER_COLORS = ['#ff9f48', '#d1651f', '#2f8a3e', '#3389e0', '#8a8a8a', '#22301f']
+const AREAS_COLORS = ['#277ea0', '#1d5f7a', '#2f8a3e', '#d1651f', '#8a8a8a', '#4a4a4a']
+
 // The unified "Surface color" picker (its own toolbar button): one colour driving
 // both the flat 2D board background and the 3D ground plane. 'transparent' = off
 // (the default field image shows, no surround).
@@ -122,6 +130,12 @@ export function BackgroundSettings() {
   const bg = useEditorStore((s) => s.doc.background)
   const setBackground = useEditorStore((s) => s.setBackground)
   const arm = useDragTransaction()
+  // A legacy 2D background (flat SVG field) has no 3D markings/mowing to style:
+  // those controls are disabled until a real 3D field is applied.
+  const legacy = isLegacyBackground(bg)
+  // The futsal court is indoor: no mowing bands; it adds its own Border/Areas colors.
+  const futsal = !legacy && !!bg.field3d && bg.fieldType === 'futsal'
+  const dim = (on: boolean) => (on ? 'pointer-events-none opacity-40' : undefined)
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
@@ -129,12 +143,12 @@ export function BackgroundSettings() {
         <Switch checked={bg.showGoals} onCheckedChange={(v) => setBackground({ showGoals: v })} />
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className={cn('flex items-center justify-between', dim(legacy))}>
         <span className="text-[11px] font-medium text-muted-foreground">Field lines</span>
-        <Switch checked={bg.showLines} onCheckedChange={(v) => setBackground({ showLines: v })} />
+        <Switch disabled={legacy} checked={bg.showLines} onCheckedChange={(v) => setBackground({ showLines: v })} />
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className={cn('flex items-center justify-between', dim(legacy))}>
         <span className="text-[11px] font-medium text-muted-foreground">Line color</span>
         {/* Field markings colour (not the mowing bands); default white. */}
         <Popover>
@@ -154,26 +168,87 @@ export function BackgroundSettings() {
         </Popover>
       </div>
 
-      <div className="grid gap-1.5">
+      {/* Futsal court colors: the playing surface, the border frame + the filled
+          areas (the master surface color only drives the infinite surround). */}
+      {futsal && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">Court</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" aria-label="Court color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+                  <span className="block size-full" style={{ background: bg.courtColor }} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="left" align="start" className="w-60 p-3">
+                <ColorPickerWidget
+                  value={bg.courtColor}
+                  onChange={(c) => setBackground({ courtColor: c === '' || c === 'transparent' ? '#3b9ccc' : c })}
+                  presets={COURT_COLORS}
+                  showOpacity={false}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">Border</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" aria-label="Border color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+                  <span className="block size-full" style={{ background: bg.borderColor }} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="left" align="start" className="w-60 p-3">
+                <ColorPickerWidget
+                  value={bg.borderColor}
+                  onChange={(c) => setBackground({ borderColor: c === '' || c === 'transparent' ? '#ff9f48' : c })}
+                  presets={BORDER_COLORS}
+                  showOpacity={false}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">Areas</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" aria-label="Areas color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+                  <span className="block size-full" style={{ background: bg.areasColor }} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="left" align="start" className="w-60 p-3">
+                <ColorPickerWidget
+                  value={bg.areasColor}
+                  onChange={(c) => setBackground({ areasColor: c === '' || c === 'transparent' ? '#277ea0' : c })}
+                  presets={AREAS_COLORS}
+                  showOpacity={false}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </>
+      )}
+
+      <div className={cn('grid gap-1.5', dim(legacy || futsal))}>
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-medium text-muted-foreground">Mowing opacity</span>
           <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round(bg.bandsOpacity * 100)}%</span>
         </div>
-        <Slider min={0} max={100} step={5} value={[Math.round(bg.bandsOpacity * 100)]} onValueChange={([v]) => { arm(); setBackground({ bandsOpacity: v / 100 }) }} />
+        <Slider disabled={legacy || futsal} min={0} max={100} step={5} value={[Math.round(bg.bandsOpacity * 100)]} onValueChange={([v]) => { arm(); setBackground({ bandsOpacity: v / 100 }) }} />
       </div>
 
-      <div className="grid gap-1.5">
+      <div className={cn('grid gap-1.5', dim(legacy || futsal))}>
         <span className="text-[11px] font-medium text-muted-foreground">Mowing</span>
         <Segmented items={BANDS_OPTIONS} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
       </div>
 
-      <div className="grid gap-1.5">
+      <div className={cn('grid gap-1.5', dim(legacy))}>
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-medium text-muted-foreground">Central light</span>
           <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round((bg.centerLight ?? 1) * 100)}%</span>
         </div>
         {/* Central point-light intensity: 0 … 125 % of the default (1 = default). */}
-        <Slider min={0} max={125} step={5} value={[Math.round((bg.centerLight ?? 1) * 100)]} onValueChange={([v]) => { arm(); setBackground({ centerLight: v / 100 }) }} />
+        <Slider disabled={legacy} min={0} max={125} step={5} value={[Math.round((bg.centerLight ?? 1) * 100)]} onValueChange={([v]) => { arm(); setBackground({ centerLight: v / 100 }) }} />
       </div>
 
       <div className="grid gap-1.5">

@@ -9,6 +9,8 @@ import {
   applyOperation,
   invertOperation,
   getElementBounds,
+  BOARD_WIDTH,
+  BOARD_HEIGHT,
 } from '@youcoach-board/core'
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
@@ -84,6 +86,10 @@ export interface EditorState {
   /** The last few configured kits (FIFO, newest first) shown as presets in the
    *  kit editor. */
   kitHistory: PlayerKit[]
+  /** While a player pose is dragged from the drawer: the id of the selected 3D
+   *  player that a drop would REPLACE (its outline turns red), or null. */
+  dropReplaceId: string | null
+  setDropReplaceId: (id: string | null) => void
   /** When true, a creation tool stays active after creating (the lock toggle);
    *  otherwise the editor falls back to the selection tool, per the spec. */
   keepToolActive: boolean
@@ -183,6 +189,9 @@ export interface EditorState {
   pinSetup: (ops: Operation[]) => void
   /** Merge changes into the document background (not on the undo stack for now). */
   setBackground: (patch: Partial<BoardBackground>) => void
+  /** Merge changes into the view transform (2D zoom/pan), clamped so zoom stays
+   *  in [1, 8] and the view never leaves the board. Not on the undo stack. */
+  setViewport: (patch: Partial<Viewport>) => void
   /** Restore the background to its default (one undoable op). */
   resetBackground: () => void
   /** Clone the selected elements (offset) as one undoable op; select the clones. */
@@ -280,6 +289,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       figureScales: {},
       playerColors: {},
       kitHistory: [],
+      dropReplaceId: null,
       keepToolActive: false,
       snapToObjects: true,
       adminMode: false,
@@ -314,6 +324,24 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       setAdminMode: (on) => set({ adminMode: on }),
 
+      setViewport: (patch) =>
+        set((s) => {
+          const zoom = Math.max(0.1, Math.min(8, patch.zoom ?? s.viewport.zoom))
+          // Zoomed IN (view smaller than the board): keep the view inside the board.
+          // Zoomed OUT (view bigger than the board): centre the board in the view.
+          const clampPan = (v: number, span: number) => {
+            const view = span / zoom
+            return view >= span ? (span - view) / 2 : Math.max(0, Math.min(span - view, v))
+          }
+          return {
+            viewport: {
+              zoom,
+              panX: clampPan(patch.panX ?? s.viewport.panX, BOARD_WIDTH),
+              panY: clampPan(patch.panY ?? s.viewport.panY, BOARD_HEIGHT),
+            },
+          }
+        }),
+
       setExportGuide: (g) => set({ exportGuide: g }),
 
       setTokenSizeM: (m) => {
@@ -345,6 +373,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       rememberPlayerColors: (colors) =>
         set((s) => (JSON.stringify(s.playerColors) === JSON.stringify(colors) ? s : { playerColors: colors })),
+
+      setDropReplaceId: (id) => set((s) => (s.dropReplaceId === id ? s : { dropReplaceId: id })),
 
       pushKit: (kit) =>
         set((s) => {

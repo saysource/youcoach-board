@@ -4,7 +4,7 @@ import { Check, Rotate3d } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { Button } from './ui/button'
 import { BoardRootProvider } from '../lib/board-root'
-import { BOARD_ASPECT, parseBoard, type FieldView } from '@youcoach-board/core'
+import { BOARD_ASPECT, BOARD_WIDTH, BOARD_HEIGHT, parseBoard, isLegacyBackground, type FieldView } from '@youcoach-board/core'
 import { useTheme, type ThemeSetting } from '../lib/use-theme'
 import { useElementSize } from '../lib/use-element-size'
 import type { Breakpoint } from '../lib/use-breakpoint'
@@ -12,8 +12,9 @@ import { cn } from '../lib/cn'
 import { useAssets, figureColorInfo, figureIndex, figureBaseSize, fieldFigureScale } from '../lib/assets'
 import { playerSvgs, PLAYER_SLOTS } from '../lib/player-kit'
 import { isObject3DPlayer } from '../lib/objects3d'
-import { topViewForField } from '../lib/field-zones'
+import { topViewForField, fieldsCategoryIdFor } from '../lib/field-zones'
 import { orbitStep, panStep, dollyStep, type PitchType } from '../lib/field-camera'
+import { animateFieldTo as tweenFieldTo, cancelFieldAnimation } from '../lib/field-anim'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
 import { addBall } from '../lib/quick-add'
@@ -45,25 +46,6 @@ const DRAWER_AUTO_OPEN_WIDTH = 1200
 const CAM_ROTATE_STEP = 3
 // Distance factor the field camera dollies per +/- press (< 1 = zoom in).
 const CAM_ZOOM_STEP = 1.15
-// Normal-mode keyboard camera tween: fraction of the remaining distance covered
-// per frame, and the metric snap threshold that ends the animation.
-const CAM_ANIM_LERP = 0.28
-const CAM_ANIM_EPS = 0.05
-
-const lerpPose = (a: FieldView, b: FieldView, t: number): FieldView => {
-  const l = (x: number, y: number) => x + (y - x) * t
-  return {
-    ref: b.ref,
-    fov: l(a.fov, b.fov),
-    position: [l(a.position[0], b.position[0]), l(a.position[1], b.position[1]), l(a.position[2], b.position[2])],
-    target: [l(a.target[0], b.target[0]), l(a.target[1], b.target[1]), l(a.target[2], b.target[2])],
-  }
-}
-const poseClose = (a: FieldView, b: FieldView): boolean => {
-  let s = Math.abs(a.fov - b.fov)
-  for (let i = 0; i < 3; i++) s += Math.abs(a.position[i] - b.position[i]) + Math.abs(a.target[i] - b.target[i])
-  return s < CAM_ANIM_EPS
-}
 
 export interface BoardShellProps {
   initialTheme?: ThemeSetting
@@ -145,18 +127,24 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // drawer to fields, and is committed by "Finish" or ESC.
   const [bgEditing, setBgEditing] = useState(false)
   const backgroundMode = bgEditing
+  // The category the drawer was on before Edit Background pointed it at Fields,
+  // restored on Finish (matching the old dedicated fields view's behavior).
+  const preBgCatRef = useRef<string | null>(null)
   function editBackground() {
     setBgEditing(true)
     const s = store.getState()
     s.setSelection([])
     s.setActiveTool('select')
-    // The drawer switches to the 3D-field zone UI (fieldsOnly) on its own and is
-    // forced open by bgEditing (see drawerOpen). We must NOT point libraryCatId at
-    // the legacy 'fields' catalog category, or exiting bg-edit would strand the
-    // normal drawer on the (hidden) old-fields palette.
+    // Point the (forced-open) drawer at the regular Fields category matching the
+    // current background — the user picks Soccer 11 / Training / Futsal / Legacy
+    // Backgrounds from the normal category list.
+    const bg = s.doc.background
+    preBgCatRef.current = libraryCatId
+    setLibraryCatId(fieldsCategoryIdFor(bg.fieldType, isLegacyBackground(bg)))
   }
   function finishBackground() {
     setBgEditing(false)
+    if (preBgCatRef.current) setLibraryCatId(preBgCatRef.current)
   }
 
   // Field-homography calibration mode: a dedicated overlay (bespoke handles) that
@@ -251,54 +239,84 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // through FieldEditOverlay's own handler (so its mirrored pose stays in sync).
   function moveCamera(mode: 'orbit' | 'pan', ux: number, uy: number) {
     const cur = store.getState().doc.background.field3d
-    if (!cur) return
+    if (!cur) {
+      // 2D mode: no orbit — ⇧+arrows scroll the flat viewport instead.
+      if (mode === 'pan') panViewport(ux, uy)
+      return
+    }
     const ref = (cur.ref ?? 'soccer11') as PitchType
     animateFieldTo(mode === 'orbit' ? orbitStep(cur, ref, ux * CAM_ROTATE_STEP, -uy * CAM_ROTATE_STEP) : panStep(cur, ref, ux, -uy))
   }
   // +/- dolly the 3D field camera (normal mode; nav + bg-edit zoom via the overlay).
+  // Without a 3D field the same keys/buttons zoom the flat 2D viewport instead.
   function zoomCamera(dir: 1 | -1) {
     const cur = store.getState().doc.background.field3d
-    if (!cur) return
+    if (!cur) {
+      zoomViewport(dir)
+      return
+    }
     const ref = (cur.ref ?? 'soccer11') as PitchType
     animateFieldTo(dollyStep(cur, ref, dir > 0 ? 1 / CAM_ZOOM_STEP : CAM_ZOOM_STEP))
   }
-  // Smoothly tween the saved field pose toward `to` (rAF, exponential ease-out),
-  // coalescing the whole keyboard gesture into one undo step. A new call while
-  // animating just retargets, so rapid presses chain into continuous motion.
-  const camAnimRef = useRef<{ raf: number; to: FieldView } | null>(null)
+
+  // ── 2D viewport zoom/pan (no 3D field: no orbit — the flat view scrolls) ────
+  // The 2D nav bar (magnifiers + pan hand) and ⇧+arrows drive these; the store
+  // clamps zoom to [1, 8] and keeps the view inside the board.
+  const flatNav = !savedField3d && !bgEditing && !homographyEditing && !cameraEditing && !zoneEditing
+  const viewZoom = useEditorStore((s) => s.viewport.zoom)
+  const [panMode, setPanMode] = useState(false)
+  // The hand tool only exists in 2D mode — deriving keeps it from lingering
+  // (without an effect) if a 3D field lands while it's on.
+  const panning = panMode && flatNav
+  /** Zoom the 2D view in/out one step about the current view centre. Zooming out
+   *  goes to 10% (the board shrinks to a tenth); zooming in to 800%. */
+  function zoomViewport(dir: 1 | -1) {
+    const { viewport, setViewport } = store.getState()
+    const zoom = Math.max(0.1, Math.min(8, viewport.zoom * (dir > 0 ? 1.25 : 1 / 1.25)))
+    const cx = viewport.panX + BOARD_WIDTH / viewport.zoom / 2
+    const cy = viewport.panY + BOARD_HEIGHT / viewport.zoom / 2
+    setViewport({ zoom, panX: cx - BOARD_WIDTH / zoom / 2, panY: cy - BOARD_HEIGHT / zoom / 2 })
+  }
+  /** Reset the 2D zoom to 100% (whole board, centred). */
+  function resetZoom() {
+    store.getState().setViewport({ zoom: 1, panX: 0, panY: 0 })
+  }
+  /** Pan the 2D view one keyboard step (board units shrink as you zoom in). */
+  function panViewport(ux: number, uy: number) {
+    const { viewport, setViewport } = store.getState()
+    const step = 60 / viewport.zoom
+    setViewport({ panX: viewport.panX + ux * step, panY: viewport.panY + uy * step })
+  }
+  /** Hand-tool drag: pan the 2D view following the pointer (screen px → board units). */
+  function startPanDrag(e: React.PointerEvent<HTMLDivElement>) {
+    const surface = rootEl?.querySelector('[data-board-surface]') as HTMLElement | null
+    const rect = surface?.getBoundingClientRect()
+    if (!rect || e.button !== 0) return
+    e.preventDefault()
+    let last = { x: e.clientX, y: e.clientY }
+    const move = (ev: PointerEvent) => {
+      const { viewport, setViewport } = store.getState()
+      const k = BOARD_WIDTH / viewport.zoom / rect.width // board units per screen px
+      setViewport({ panX: viewport.panX - (ev.clientX - last.x) * k, panY: viewport.panY - (ev.clientY - last.y) * k })
+      last = { x: ev.clientX, y: ev.clientY }
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+  // Smoothly tween the saved field pose (shared animator — the drawer's zone /
+  // legacy-field transitions retarget the same tween, so motions chain).
   function animateFieldTo(to: FieldView) {
-    if (camAnimRef.current) {
-      camAnimRef.current.to = to
-      return
-    }
-    store.getState().beginTransaction()
-    const st: { raf: number; to: FieldView } = { raf: 0, to }
-    camAnimRef.current = st
-    const step = () => {
-      const a = camAnimRef.current
-      if (!a) return
-      const s = store.getState()
-      const cur = s.doc.background.field3d
-      if (!cur || poseClose(cur, a.to)) {
-        if (cur) s.setBackground({ field3d: a.to })
-        s.commitTransaction()
-        camAnimRef.current = null
-        return
-      }
-      s.setBackground({ field3d: lerpPose(cur, a.to, CAM_ANIM_LERP) })
-      a.raf = requestAnimationFrame(step)
-    }
-    st.raf = requestAnimationFrame(step)
+    tweenFieldTo(store, to)
   }
   // Cancel + commit any in-flight camera tween on unmount.
   useEffect(() => {
-    return () => {
-      if (camAnimRef.current) {
-        cancelAnimationFrame(camAnimRef.current.raf)
-        store.getState().commitTransaction()
-        camAnimRef.current = null
-      }
-    }
+    return () => cancelFieldAnimation(store)
   }, [store])
   // Editing the background owns the pose directly — leave navigation and drop the
   // session view (render-phase sync) so finishing shows the freshly-edited saved pose.
@@ -445,12 +463,15 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
                 top-right corner (decorative, doesn't block input). Kept mounted so
                 it fades in/out with navigation mode. */}
             <Rotate3d aria-hidden className="pointer-events-none absolute z-20 text-foreground transition-opacity duration-300" style={{ top: fieldTopGap + 8, right: fieldRightGap + 8, width: 100, height: 100, opacity: navigating ? 0.25 : 0 }} />
+            {/* 2D pan hand: a transparent capture layer over the board — dragging
+                scrolls the zoomed flat viewport without touching the elements. */}
+            {panning && <div className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing" onPointerDown={startPanDrag} />}
           </div>
 
           {/* Top-left menu (+ the navigation control below it on mobile). */}
           <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
             <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} onFieldHomography={fieldHomography} onFieldCamera={startFieldCamera} onFieldZones={startFieldZones} />
-            {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} />}
+            {mobile && <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} />}
           </div>
 
           {/* Main toolbar — top-center, or bottom-center in mobile mode. In
@@ -526,7 +547,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           {!mobile && (
             <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2">
               <UndoRedoBar canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
-              <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} />
+              <NavBar available={navAvailable || navigating} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} />
             </div>
           )}
 
@@ -554,7 +575,6 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             onToggleFullscreen={() => setFullscreen((v) => !v)}
             categoryId={libraryCatId}
             onCategoryChange={selectCategory}
-            fieldsOnly={bgEditing}
           />
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
