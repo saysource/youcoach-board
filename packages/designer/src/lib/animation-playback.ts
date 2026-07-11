@@ -656,15 +656,15 @@ function applyObject3DMove(
   }
   // Movement effects (same semantics as tokens): the motion TAIL samples the
   // real trajectory in BOARD coords (an SVG overlay draws it under the WebGL
-  // object); the sonar PULSE carries its phase. Both only while moving.
-  if ((b.effectTail || b.effectPulse) && dist > 0.5 && cam) {
+  // object). The PULSE pings even when stationary; the tail needs motion.
+  if ((b.effectTail || b.effectPulse) && cam) {
     if (b.effectPulse) {
       // Base ring radius from the RENDERED size (incl. the global/ball scale),
       // so the ping clears the mesh instead of hiding under it.
       const baseR = (isObject3DBall(b.objectId) ? 0.4 : 0.7) * Math.max(1, (b.useGlobalSize ? 1 : b.size) * objMult)
       el = { ...el, pulseRings: pulseRingsFor(cam, el.x, el.z, baseR, (t / 0.4375) % 1) }
     }
-    if (b.effectTail) {
+    if (b.effectTail && dist > 0.5) {
       const ease = easeOf(b)
       const span = Math.min(t, 14 * 0.028)
       const s0 = t - span
@@ -692,7 +692,10 @@ function applyBetweenEffect(ea: BoardElement, eb: BoardElement, lerped: BoardEle
   if (!eb.effectTail && !eb.effectPulse) return lerped
   const ca = elementCenter(ea)
   const cb = elementCenter(eb)
-  if (!ca || !cb || Math.hypot(cb[0] - ca[0], cb[1] - ca[1]) < 4) return lerped // not moving
+  if (!ca || !cb) return lerped
+  // The PULSE pings even on a stationary element (marking a spot); only the
+  // TAIL requires actual motion.
+  const moving = Math.hypot(cb[0] - ca[0], cb[1] - ca[1]) >= 4
   let el = lerped
   if (eb.effectPulse) {
     const phase = (t / 0.4375) % 1
@@ -705,7 +708,7 @@ function applyBetweenEffect(ea: BoardElement, eb: BoardElement, lerped: BoardEle
       el = { ...el, pulseRings: pulseRingsFor(cam, g.x, g.z, baseR, phase) } as BoardElement
     } else el = { ...el, pulse: phase } as BoardElement
   }
-  if (eb.effectTail) {
+  if (eb.effectTail && moving) {
     const ctrl: PathPoint[] = mids?.length ? [ca, ...mids, cb] : [ca, cb]
     const ga = (ea as { ground?: [number, number] }).ground
     const gb = (eb as { ground?: [number, number] }).ground
