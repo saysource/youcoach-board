@@ -101,7 +101,8 @@ function drawCanvasLayer(g: CanvasRenderingContext2D, env: ExportEnv, selector: 
 /** The board background (photo object-cover, else solid color), like the CSS div. */
 async function drawBackground(g: CanvasRenderingContext2D, env: ExportEnv, br: { x: number; y: number; width: number; height: number }): Promise<void> {
   const bg = env.background
-  if (bg.image) {
+  // A solid surface colour replaces the grass photo (same rule as the live board).
+  if (bg.image && (!bg.surfaceColor || bg.surfaceColor === 'transparent')) {
     try {
       const img = await loadImage(bg.image)
       // object-fit: cover

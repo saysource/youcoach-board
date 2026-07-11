@@ -73,7 +73,10 @@ export function FieldSceneLayer({ camera, viewport, image: rawImage, svgRef, con
   // set, else a dark indoor-hall grey.
   const futsal = fieldType === 'futsal'
   const surface = futsal && (!rawSurface || rawSurface === 'transparent') ? '#282828' : rawSurface
-  const image = futsal ? null : rawImage
+  // A solid surface colour REPLACES the grass image everywhere (board backdrop
+  // + the horizon behind the pitch) — the image only shows when the colour is
+  // transparent/off.
+  const image = futsal || (rawSurface && rawSurface !== 'transparent') ? null : rawImage
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const bgRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
