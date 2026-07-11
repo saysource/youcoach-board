@@ -35,7 +35,8 @@ import {
 } from './ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/cn'
-import { useEditorStore } from '../store/context'
+import { useEditorStore, useEditorStoreApi } from '../store/context'
+import { openBoardFromFile, saveBoardToFile } from '../lib/board-file'
 import { boardExporter } from '../lib/export-image'
 import type { ThemeSetting } from '../lib/use-theme'
 
@@ -54,6 +55,7 @@ interface MainMenuProps {
 }
 
 export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts, onFieldHomography, onFieldCamera, onFieldZones }: MainMenuProps) {
+  const storeApi = useEditorStoreApi()
   const snapToObjects = useEditorStore((s) => s.snapToObjects)
   const toggleSnapToObjects = useEditorStore((s) => s.toggleSnapToObjects)
   const adminMode = useEditorStore((s) => s.adminMode)
@@ -74,13 +76,13 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
       </Tooltip>
 
       <DropdownMenuContent align="start" className="min-w-60">
-        {/* Phase 1: all items are inert placeholders except the theme switch. */}
-        <DropdownMenuItem disabled>
+        <DropdownMenuItem onSelect={() => openBoardFromFile(storeApi)}>
           <FolderOpen /> Open…
           <DropdownMenuShortcut>⌘O</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
+        <DropdownMenuItem onSelect={() => saveBoardToFile(storeApi.getState().doc)}>
           <Save /> Save to…
+          <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>

@@ -48,6 +48,9 @@ export interface HotkeyDeps {
   /** Animation playback: while playing all edit keys are ignored; ESC stops. */
   playing?: boolean
   stopPlayback?: () => void
+  /** File open/save (⌘O / ⌘S). */
+  openFile?: () => void
+  saveFile?: () => void
 }
 
 // Whether the event originates from a text field (so we don't hijack typing).
@@ -111,6 +114,8 @@ export function useDesignerHotkeys(deps: HotkeyDeps) {
         if (alt && shift && (key === '-' || key === '_')) { e.preventDefault(); s.resizeSelected(1 / 1.1); return }
 
         switch (lower) {
+          case 'o': e.preventDefault(); deps.openFile?.(); return
+          case 's': e.preventDefault(); deps.saveFile?.(); return
           case 'z': e.preventDefault(); if (shift) s.redo(); else s.undo(); return
           case 'y': e.preventDefault(); s.redo(); return
           case 'a': e.preventDefault(); s.selectAll(); return

@@ -5,7 +5,7 @@ import { Check, Rotate3d, Square } from 'lucide-react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { Button } from './ui/button'
 import { BoardRootProvider } from '../lib/board-root'
-import { BOARD_ASPECT, BOARD_WIDTH, BOARD_HEIGHT, parseBoard, isLegacyBackground, type FieldView } from '@youcoach-board/core'
+import { BOARD_ASPECT, BOARD_WIDTH, BOARD_HEIGHT, isLegacyBackground, type FieldView } from '@youcoach-board/core'
 import { useTheme, type ThemeSetting } from '../lib/use-theme'
 import { useElementSize } from '../lib/use-element-size'
 import type { Breakpoint } from '../lib/use-breakpoint'
@@ -17,6 +17,7 @@ import { topViewForField, fieldsCategoryIdFor } from '../lib/field-zones'
 import { orbitStep, panStep, dollyStep, type PitchType } from '../lib/field-camera'
 import { animateFieldTo as tweenFieldTo, cancelFieldAnimation } from '../lib/field-anim'
 import { stopPlayback } from '../lib/animation-playback'
+import { applyOpenedBoard, loadBoard, openBoardFromFile, saveBoardToFile } from '../lib/board-file'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
 import { addBall } from '../lib/quick-add'
@@ -110,11 +111,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     if (!import.meta.env.DEV) return
     const w = window as unknown as { __ycbE2E?: unknown }
     w.__ycbE2E = {
-      loadDoc: (json: unknown) => {
-        stopPlayback(store)
-        const doc = parseBoard(json)
-        store.setState({ doc, selectedIds: [], stack: [], pointer: -1, currentFrame: doc.animation.frames.length > 0 ? doc.animation.current : 0 })
-      },
+      loadDoc: (json: unknown) => loadBoard(store, json),
+      openText: (text: string) => applyOpenedBoard(store, text),
       getState: () => store.getState(),
     }
     return () => {
@@ -502,6 +500,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
     zoomCamera,
     playing,
     stopPlayback: () => stopPlayback(store),
+    openFile: () => openBoardFromFile(store),
+    saveFile: () => saveBoardToFile(store.getState().doc),
   })
 
   return (
