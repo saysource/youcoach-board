@@ -141,3 +141,35 @@ as object properties.
 Add the standard effects, plus the category Arrow Length which should have an effect like the path for lines, but separated, so we can decide to add or not opacity effect as base effect.
 The path effect on arrow 3D simply animate the completeness property from 0 to the value set by the user.
 
+## The ball
+
+The 3D ball is somehow a special object because it is used with the 3D players, in which case the global scale is the right choice, but can also be used with tokens on a field where the size of the ball is driven more by its visibility. I propose to allow the ball to scale independently by the players. The idea is to have a switch in the scale options (cube icon): Apply the same scale to all 3D objects (enabled by default) and increase the value of "Big" in the slider to 20x.
+
+The scale options panel for object should be organized as follow:
+
+- A title saying: "3D Objects size (with the scale-3d lucene icon)"
+- Global switch with the label "Apply only to this object" (off by default)
+- The slider which shows in the icon the boxes lucide icon if the slider is changing the global value, the box lucide icon if the change is only for this object.
+
+
+
+Implement the model JSON serializer and loader, so I can save and open projects with the Open and Save to... menu items. The only requirement is to have a "version": "3" property, which will be used to identify youcoach-board fiels saved and stored by our designer.
+The next step is to create a special loader/converter for the old version 2 format, we will get to it.
+
+
+## 3D players
+
+It's now time to give life to our 3D Players. Right now we animate their position and initial pose.
+Let's mix their movements with some standard rules related to:
+- movement speed (jog, diagonal jog, run)
+- movement direction (along the path)
+- proximity of the ball (pass=ball going away to another player, kick=ball going away not to another player)
+- dribbling (move with the ball close in the movement)
+
+Try to identify rules that can help, and mix animations.
+
+Length of the frame: till now, we always assume a frame length (in terms of time) constant. With animations, the time between two frames could become the longest required to:
+- complete the pose animation, use the next animation to reach the correct position.
+
+Prepare a plan, then we can implement it step by step.
+
