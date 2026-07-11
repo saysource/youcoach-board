@@ -144,11 +144,13 @@ export function SelectionHandles({ element, scale, onHandleDown, hideFrame = fal
     )
   }
 
-  // Open polyline (line / arrow / curve / multi-point path): NO bounding-box frame.
-  // The per-vertex handles already convey the selection, and a wider frame-colour
-  // stroke drawn UNDER the path (in InteractiveBoard) highlights the curve. We drop
-  // rotation + uniform resize, which are rarely useful for an open path.
-  if (element.type === 'polyline' && !element.closed) {
+  // Polyline — open (line / arrow / curve / path) or closed (polygon / shape):
+  // NO bounding-box frame. The per-vertex handles already convey the selection,
+  // and a wider frame-colour stroke drawn UNDER the path (in InteractiveBoard)
+  // highlights it — the old editor's treatment for polygons too. Ovals are the
+  // exception: they present as an ellipse (no vertex editing), so they fall
+  // through to the box frame below.
+  if (element.type === 'polyline' && !element.oval) {
     return (
       <g>
         {anchors}
@@ -245,20 +247,6 @@ export function SelectionHandles({ element, scale, onHandleDown, hideFrame = fal
           ))}
         </>
       )}
-      {/* mid-segment anchors (under the vertices) + polyline vertex handles,
-          drawn last so they sit above the corners. */}
-      {anchors}
-      {element.type === 'polyline' &&
-        !element.oval &&
-        element.points.map((p, i) => (
-          <EndpointHandle
-            key={`pt-${i}`}
-            at={elementToBoard({ x: p[0], y: p[1] }, box, t)}
-            scale={scale}
-            handle={`point-${i}`}
-            onDown={(e) => onHandleDown!(`point-${i}`, e)}
-          />
-        ))}
     </g>
   )
 }

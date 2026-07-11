@@ -1313,6 +1313,75 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     return { lp: boardToElement(snapped.board, g.box0, g.t0), guides: snapped.guides }
   }
 
+  // ⌥-drag on a CLOSED shape's vertex — the old editor's "regular figure" mode:
+  // the whole polygon is rebuilt as a REGULAR n-gon about the shape's centre
+  // (bbox centre captured at drag start, fixed for the drag), radius =
+  // centre→cursor, the dragged vertex at the cursor's angle and the others at
+  // 360°/n steps (winding preserved so the shape doesn't flip). With ⇧ the
+  // vertex angle magnets (±5°) to notable steps — 45° for quads (axis-aligned
+  // rectangle ⇄ diamond), 90° otherwise — with an axis-cross guide through the
+  // centre. On a 3D field everything is computed in ground (pitch) coordinates,
+  // so the shape is regular ON THE PITCH and the snaps follow the field axes.
+  function regularPointDrag(g: Gesture): { points: Array<[number, number]>; guides: SnapLine[] } | null {
+    const el = doc.elements.find((e) => e.id === g.id)
+    if (!el || el.type !== 'polyline' || !el.closed || el.oval || el.points.length < 3) return null
+    const n = el.points.length
+    const i = Number(g.handle.slice('point-'.length))
+    // Working plane: pitch ground coords on a 3D field, board coords otherwise.
+    const toPlane = (b: Point): [number, number] | null => {
+      if (!fieldCamCfg) return [b.x, b.y]
+      const gp = arrow3dGround(b)
+      return gp ? [gp.x, gp.z] : null
+    }
+    const fromPlane = (px: number, py: number): Point => {
+      if (!fieldCamCfg) return { x: px, y: py }
+      const nb = projectGround(arrow3dCam, px, py)
+      return { x: nb[0], y: nb[1] }
+    }
+    const start: Array<[number, number]> = []
+    for (const p of el.points) {
+      const pl = toPlane(elementToBoard({ x: p[0], y: p[1] }, g.box0, g.t0))
+      if (!pl) return null
+      start.push(pl)
+    }
+    const cur = toPlane(clampToCanvas(g.current))
+    if (!cur) return null
+    const xs = start.map((p) => p[0])
+    const ys = start.map((p) => p[1])
+    const c: [number, number] = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]
+    const radius = Math.hypot(cur[0] - c[0], cur[1] - c[1])
+    if (radius < 1e-6) return null
+    let angle = (Math.atan2(cur[1] - c[1], cur[0] - c[0]) * 180) / Math.PI
+    const guides: SnapLine[] = []
+    if (g.snap) {
+      const step = n === 4 ? 45 : 90
+      const off = ((angle % step) + step) % step
+      if (off < 5 || off > step - 5) {
+        angle = Math.round(angle / step) * step
+        const r = radius * 1.25
+        const h1 = fromPlane(c[0] - r, c[1])
+        const h2 = fromPlane(c[0] + r, c[1])
+        const v1 = fromPlane(c[0], c[1] - r)
+        const v2 = fromPlane(c[0], c[1] + r)
+        guides.push({ x1: h1.x, y1: h1.y, x2: h2.x, y2: h2.y, marks: [] }, { x1: v1.x, y1: v1.y, x2: v2.x, y2: v2.y, marks: [] })
+      }
+    }
+    // Winding of the drag-start polygon (shoelace) — keep it.
+    let area = 0
+    for (let k = 0; k < n; k++) {
+      area += start[k][0] * start[(k + 1) % n][1] - start[(k + 1) % n][0] * start[k][1]
+    }
+    const dir = area >= 0 ? 1 : -1
+    const points = el.points.map((p) => [...p]) as Array<[number, number]>
+    for (let k = 0; k < n; k++) {
+      const ang = ((angle + dir * k * (360 / n)) * Math.PI) / 180
+      const b = fromPlane(c[0] + radius * Math.cos(ang), c[1] + radius * Math.sin(ang))
+      const lp = boardToElement(b, g.box0, g.t0)
+      points[(i + k) % n] = [lp.x, lp.y]
+    }
+    return { points, guides }
+  }
+
   // Resize pointer for a token's bottom handles: those sit a caption-band below
   // the badge corner (so the frame wraps the label), but resize math uses the
   // badge box — so shift the pointer up by the band to avoid a jump on grab.
@@ -1401,6 +1470,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         return { ...el, x: box.x, y: box.y, width: box.width, height: box.height, transform } as BoardElement
       }
       if (gesture.kind === 'point' && el.type === 'polyline') {
+        // ⌥ on a closed shape: regular-figure mode replaces ALL points.
+        const reg = gesture.alt ? regularPointDrag(gesture) : null
+        if (reg) return liveReground(el, reg.points)
         const i = Number(gesture.handle.slice('point-'.length))
         const { lp } = resolvePointDrag(gesture)
         const points = el.points.map((p, idx) => (idx === i ? ([lp.x, lp.y] as [number, number]) : p))
@@ -2200,10 +2272,15 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         updateElements([resizeChange])
       }
     } else if (g.kind === 'point' && el.type === 'polyline') {
-      const i = Number(g.handle.slice('point-'.length))
-      const { lp } = resolvePointDrag(g)
-      const after = el.points.map((p, idx) => (idx === i ? ([lp.x, lp.y] as [number, number]) : p))
-      updateElements([reanchorPoints(el, after)])
+      const reg = g.alt ? regularPointDrag(g) : null
+      if (reg) {
+        updateElements([reanchorPoints(el, reg.points)])
+      } else {
+        const i = Number(g.handle.slice('point-'.length))
+        const { lp } = resolvePointDrag(g)
+        const after = el.points.map((p, idx) => (idx === i ? ([lp.x, lp.y] as [number, number]) : p))
+        updateElements([reanchorPoints(el, after)])
+      }
     } else if (g.kind === 'anchor' && el.type === 'polyline') {
       const seg = Number(g.handle.slice('anchor-'.length))
       const { lp } = resolveAnchorDrag(g)
@@ -2271,7 +2348,12 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     const el = doc.elements.find((e) => e.id === gesture.id)
     return el ? resizePointer(el, gesture).guides : []
   })()
-  const pointGuides = gesture?.kind === 'point' ? resolvePointDrag(gesture).guides : gesture?.kind === 'anchor' ? resolveAnchorDrag(gesture).guides : []
+  const pointGuides =
+    gesture?.kind === 'point'
+      ? ((gesture.alt ? regularPointDrag(gesture)?.guides : null) ?? resolvePointDrag(gesture).guides)
+      : gesture?.kind === 'anchor'
+        ? resolveAnchorDrag(gesture).guides
+        : []
   const alignGuides = [...(fieldMoveSnap?.guides ?? []), ...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides, ...object3dSnapGuides]
   const gapGuides = objectSnap?.gaps ?? []
 
@@ -2399,11 +2481,19 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           ? { ...live, showLabel: false }
           : { ...live, text: '' }
         : live
-    // Single-selected open path: draw the highlight halo UNDER the path.
-    const showHalo = render.type === 'polyline' && !render.closed && !erasing && selectedIds.length === 1 && selectedIds[0] === el.id
+    // Single-selected path (open OR closed — the old editor treated polygons the
+    // same): draw the highlight halo UNDER the path. Ovals keep the box frame.
+    const showHalo = render.type === 'polyline' && !render.oval && !erasing && selectedIds.length === 1 && selectedIds[0] === el.id
     return (
       <g key={el.id} style={{ cursor: 'move', opacity: erasing ? 0.25 : undefined }} onPointerDown={(e) => onElementPointerDown(e, el)}>
-        {showHalo && render.type === 'polyline' && <ElementView element={pathHalo(render, scale)} viewScale={scale} />}
+        {/* The halo is purely visual: its widened stroke (and the fat companion
+            hit stroke every ElementView carries) must not extend the grab area,
+            or clicks outside the shape can't deselect it. */}
+        {showHalo && render.type === 'polyline' && (
+          <g pointerEvents="none">
+            <ElementView element={pathHalo(render, scale)} viewScale={scale} />
+          </g>
+        )}
         {t3dHit ? (
           <polygon points={text3dHitPoints(live)} fill="transparent" />
         ) : render.type === 'figure' ? (
@@ -2497,10 +2587,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             )}
             {/* Per-element grab areas (the padded selection frame) for moving.
                 Drawn under the handles so handles win the pointer. Skipped for
-                straight lines (2-point polylines), grabbed by their own stroke. */}
+                ALL polylines (open or closed, except ovals): they show no bbox
+                frame, so hits must follow the real path — the stroke (+ selection
+                halo) and, for closed shapes, the fill. A bbox overlay here would
+                eat the click outside a rotated shape and block deselection. */}
             {!creating &&
               liveSelected2D.map((el) =>
-                el.type === 'polyline' && el.points.length === 2 ? null : (tokens3d && el.type === 'token' && el.shape === 'token') ? null : (
+                el.type === 'polyline' && !el.oval ? null : (tokens3d && el.type === 'token' && el.shape === 'token') ? null : (
                   <polygon
                     key={`hit-${el.id}`}
                     points={isText3dHit(el) ? text3dHitPoints(el) : framePoints(el)}
