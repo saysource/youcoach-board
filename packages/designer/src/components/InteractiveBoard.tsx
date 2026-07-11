@@ -81,6 +81,7 @@ import { text3dCorners } from '../lib/text3d'
 import { FieldEditOverlay } from './FieldEditOverlay'
 import { FieldZoneTool } from './FieldZoneTool'
 import { MovementPathLayer } from './MovementPathLayer'
+import { Object3DMotionFx } from './Object3DMotionFx'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
 import { isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
@@ -729,6 +730,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           x: ground[0],
           z: ground[1],
           sizeM,
+          elevation: live.elevation ?? 0,
           opacity: live.transform.opacity,
           style: { tokenFill: live.tokenFill, color1: live.color1, color2: live.color2, text: live.text, textColor: live.textColor, textScale: tokenTextScale },
         }]
@@ -2690,6 +2692,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         <g style={{ pointerEvents: elementsInert ? 'none' : 'auto' }}>
           {doc.elements.map((el) => (isElevatedToken(el) ? null : renderBoardElement(el)))}
         </g>
+        {/* 3D objects' movement effects (playback): tails/pulses drawn in the
+            board SVG (the meshes live in WebGL above). */}
+        {playing && <Object3DMotionFx elements={doc.elements} cam={arrow3dCam} objectScale={doc.background.objectScale} />}
         {/* Movement paths (animation editing): purple editable splines from the
             previous frame's positions to the current ones. */}
         {onionActive && (
@@ -2698,6 +2703,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             elements={doc.elements}
             paths={doc.animation.frames[currentFrame]?.paths}
             scale={scale}
+            center3D={(el) => (el.type === 'object3d' ? [projectGround(arrow3dCam, el.x, el.z)[0], projectGround(arrow3dCam, el.x, el.z)[1]] : null)}
             onSetPath={(id, pts) => storeApi.getState().setFramePath(currentFrame, id, pts)}
           />
         )}

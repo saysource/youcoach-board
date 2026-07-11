@@ -79,6 +79,9 @@ interface BaseElement {
   effectPulse?: boolean
   effectPulseColor?: string
   effectEase?: boolean
+  /** Ball only: the move's height follows a parabolic trajectory (a lofted
+   *  pass — up mid-flight, landing at the destination). */
+  effectParabolic?: boolean
   transform: ElementTransform
   /** Stroke color (CSS color). */
   stroke: string
@@ -222,6 +225,13 @@ export interface TokenElement extends BaseElement {
    *  motion TAIL, and the sonar PULSE phase (0‥1). */
   trail?: Array<[number, number]>
   pulse?: number
+  /** TRANSIENT (playback enter/exit effects): height off the pitch in metres —
+   *  3D disc tokens render lifted by it (drop/lift/up/down in world space). */
+  elevation?: number
+  /** TRANSIENT (3D fields): the sonar pulse as GROUND rings — circles on the
+   *  pitch projected through the camera (board coords), so the ping follows
+   *  the perspective. When absent, `pulse` renders flat screen circles. */
+  pulseRings?: Array<{ points: Array<[number, number]>; opacity: number }>
   shape: TokenShape
   tokenFill: TokenFill
   /** Primary / secondary badge colors (CSS). */
@@ -344,9 +354,22 @@ export interface Object3DElement extends BaseElement {
    *  players (yc-skin, yc-hair, yc-color-1 …). Absent → the authored look. */
   colors?: Record<string, string>
   /** TRANSIENT render hints (playback enter/exit effects only, never
-   *  persisted): mesh opacity (0‥1) and an extra scale multiplier. */
+   *  persisted): mesh opacity (0‥1), an extra scale multiplier, and a height
+   *  off the pitch in metres (vertical drop/lift/up/down effects). */
   opacity?: number
   effectScale?: number
+  elevation?: number
+  /** TRANSIENT (playback movement): rolling angle (radians) about `rollAxis`
+   *  ([x, z], ground plane) — the ball rolling along its path. */
+  roll?: number
+  rollAxis?: [number, number]
+  /** TRANSIENT (playback movement effects): recent BOARD positions for the
+   *  motion tail (oldest first) and the sonar pulse phase — rendered by the
+   *  designer's SVG overlay (the mesh itself lives in WebGL). */
+  trail?: Array<[number, number]>
+  pulse?: number
+  /** TRANSIENT: projected ground rings for the pulse (see TokenElement). */
+  pulseRings?: Array<{ points: Array<[number, number]>; opacity: number }>
 }
 
 export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement | Object3DElement
@@ -940,6 +963,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     ...(o.effectPulse === true ? { effectPulse: true } : {}),
     ...(typeof o.effectPulseColor === 'string' ? { effectPulseColor: o.effectPulseColor } : {}),
     ...(o.effectEase === true ? { effectEase: true } : {}),
+    ...(o.effectParabolic === true ? { effectParabolic: true } : {}),
     transform: parseTransform(o.transform),
     stroke: str(o.stroke, '#000000'),
     strokeWidth: num(o.strokeWidth) ?? 3,

@@ -22,11 +22,14 @@ interface Props {
   paths: AnimationFrame['paths']
   /** Current render scale (screen px per board unit) for constant-size strokes. */
   scale: number
+  /** Board-space centre for elements living in ground metres (object3d) —
+   *  their paths are edited in board coords like everyone else's. */
+  center3D?: (el: BoardElement) => PathPoint | null
   /** Commit an element's path (null clears it). */
   onSetPath: (elementId: string, points: PathPoint[] | null) => void
 }
 
-export function MovementPathLayer({ prevElements, elements, paths, scale, onSetPath }: Props) {
+export function MovementPathLayer({ prevElements, elements, paths, scale, center3D, onSetPath }: Props) {
   const s = scale || 1
   // Anchor being dragged: live points held locally, committed on pointer-up.
   const [drag, setDrag] = useState<{ id: string; index: number; points: PathPoint[] } | null>(null)
@@ -64,11 +67,12 @@ export function MovementPathLayer({ prevElements, elements, paths, scale, onSetP
   return (
     <g data-layer="movement-paths">
       {elements.map((el) => {
-        if (!pathable(el)) return null
+        if (el.type === 'arrow3d') return null // owns its own 3D spline
+        const centerOf = (e: BoardElement) => (pathable(e) ? elementCenter(e) : (center3D?.(e) ?? null))
         const prev = prevElements.find((p) => p.id === el.id && p.type === el.type)
         if (!prev) return null
-        const a = elementCenter(prev)
-        const b = elementCenter(el)
+        const a = centerOf(prev)
+        const b = centerOf(el)
         if (!a || !b) return null
         const stored = paths?.[el.id] ?? []
         const mids = drag?.id === el.id ? drag.points : stored

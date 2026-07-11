@@ -29,7 +29,7 @@ export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabel
     <>
       {/* Token "between" effects (playback motion FX): drawn in ABSOLUTE board
           coords, so they sit outside the element transform. */}
-      {element.type === 'token' && (element.trail || element.pulse !== undefined) && (
+      {element.type === 'token' && (element.trail || element.pulse !== undefined || element.pulseRings) && (
         <TokenMotionFx element={element} cx={cx + x} cy={cy + y} r={(element.width / 2) * (scale || 1)} opacity={opacity} />
       )}
       <g transform={transform} opacity={opacity}>
@@ -45,7 +45,13 @@ export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabel
  *  phase apart). Pointer-transparent, painted under the token. */
 function TokenMotionFx({ element, cx, cy, r, opacity }: { element: Extract<BoardElement, { type: 'token' }>; cx: number; cy: number; r: number; opacity: number }) {
   const rings: React.ReactNode[] = []
-  if (element.pulse !== undefined) {
+  if (element.pulseRings) {
+    // 3D field: the ping lies ON the pitch (projected ground rings).
+    const pulseColor = element.effectPulseColor || element.color1
+    element.pulseRings.forEach((ring, i) => {
+      rings.push(<polygon key={`r${i}`} points={ring.points.map((p) => `${p[0]},${p[1]}`).join(' ')} fill={pulseColor} opacity={ring.opacity * opacity} />)
+    })
+  } else if (element.pulse !== undefined) {
     const pulseColor = element.effectPulseColor || element.color1
     for (const shift of [0, 0.5]) {
       const ph = (element.pulse + shift) % 1

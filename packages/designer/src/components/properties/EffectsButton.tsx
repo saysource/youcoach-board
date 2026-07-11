@@ -8,6 +8,7 @@ import { Separator } from '../ui/separator'
 import { ColorPickerWidget } from './ColorPickerWidget'
 import { cn } from '../../lib/cn'
 import { useEditorStore } from '../../store/context'
+import { isObject3DBall } from '../../lib/objects3d'
 import fadeIcon from '../../assets/effects/effect_fade.svg'
 import zoomIcon from '../../assets/effects/effect_zoom.svg'
 import dropIcon from '../../assets/effects/effect_drop.svg'
@@ -136,7 +137,14 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
   const elements = useEditorStore((s) => s.doc.elements)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const updateElements = useEditorStore((s) => s.updateElements)
+  const currentFrame = useEditorStore((s) => s.currentFrame)
+  const frames = useEditorStore((s) => s.doc.animation.frames)
+  const setFrameEffects = useEditorStore((s) => s.setFrameEffects)
   const [tab, setTab] = useState<'in' | 'out' | 'between'>('in')
+  // Scope of the movement-effects tab: "Whole animation" edits the object-
+  // level fields; "This move" writes a per-turn override for the transition
+  // INTO the frame being edited (the movement-path mental model).
+  const [scope, setScope] = useState<'all' | 'move'>('all')
   // Which section is expanded (VA-style accordion) for the sectioned layouts
   // (closed shapes: Border/Fill; texts: Effect/Text).
   const [openSection, setOpenSection] = useState<'first' | 'second' | null>('first')
@@ -151,7 +159,12 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
   const allClosed = sel.every((e) => e.type === 'rect' || e.type === 'ellipse' || (e.type === 'polyline' && e.closed))
   const allTexts = sel.every((e) => e.type === 'text')
   const allArrows3d = sel.every((e) => e.type === 'arrow3d')
-  const allTokens = sel.every((e) => e.type === 'token')
+  // Tail/Pulse apply to anything that MOVES as a unit on the pitch: tokens and
+  // 3D objects (players/materials/ball).
+  const allMovable = sel.every((e) => e.type === 'token' || e.type === 'object3d')
+  // Ball-specific movement effects: Power Shot (its kick-and-glide easing) and
+  // the Parabolic (lofted) shot.
+  const allBalls = sel.every((e) => e.type === 'object3d' && isObject3DBall(e.objectId))
   const baseEffects = tab === 'in' ? IN_EFFECTS : OUT_EFFECTS
   const pathTile = tab === 'in' ? PATH_IN : PATH_OUT
 
@@ -169,11 +182,28 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
     return v ?? (part === 'text' || part === 'length' ? 'none' : 'fade')
   }
 
-  // The movement-effects tab: independent per-element fields (not exclusive).
+  // The movement-effects tab (see the scope state above). Frame 1 has no
+  // incoming move.
+  const canMove = currentFrame > 0 && currentFrame < frames.length
+  const moveScope = scope === 'move' && canMove
+  const override = moveScope ? frames[currentFrame]?.effects?.[first.id] : undefined
+  // Override keys ↔ the object-level field names.
+  const OV: Record<string, keyof NonNullable<typeof override>> = { effectTail: 'tail', effectTailColor: 'tailColor', effectPulse: 'pulse', effectPulseColor: 'pulseColor', effectEase: 'ease', effectParabolic: 'parabolic' }
+
   function setField(key: string, value: boolean | string) {
+    if (moveScope) {
+      for (const e of sel) setFrameEffects(currentFrame, e.id, { [OV[key]]: value })
+      return
+    }
     updateElements(sel.map((e) => ({ id: e.id, before: { [key]: (e as unknown as Record<string, unknown>)[key] }, after: { [key]: value } })))
   }
-  const fv = first as unknown as Record<string, unknown>
+  // Effective values shown by the switches: the override (this move) wins.
+  const fv = new Proxy(first as unknown as Record<string, unknown>, {
+    get: (target, key: string) => {
+      if (moveScope && override && OV[key] && override[OV[key]] !== undefined) return override[OV[key]]
+      return target[key]
+    },
+  })
 
   function pick(id: string, part: Part = 'main') {
     const key = KEYS[part][tab === 'in' ? 0 : 1]
@@ -199,7 +229,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             [
               ['in', 'In'] as const,
               ['out', 'Out'] as const,
-              ...(allTokens ? [['between', 'Effects'] as const] : []),
+              ['between', 'Effects'] as const,
             ]
           ).map(([value, label]) => (
             <button
@@ -216,41 +246,82 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
         </div>
         {tab === 'between' ? (
           <div className="space-y-2">
-            {/* Movement effects: independently toggleable, configured inline. */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">Tail</span>
-              <Switch checked={!!fv.effectTail} onCheckedChange={(v) => setField('effectTail', v)} />
+            {/* Scope: animation-wide vs just the move INTO the current frame. */}
+            <div className="flex rounded-md border border-border p-0.5">
+              {(
+                [
+                  ['all', 'Whole animation'],
+                  ['move', 'This move'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  disabled={value === 'move' && !canMove}
+                  onClick={() => setScope(value)}
+                  className={cn(
+                    'flex-1 rounded px-1 py-1 text-xs font-medium text-muted-foreground disabled:opacity-40',
+                    scope === value && 'bg-primary/20 text-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            {!!fv.effectTail && (
-              <div className="grid gap-1.5 pl-1">
-                <span className="text-[11px] font-medium text-muted-foreground">Tail color</span>
-                <ColorPickerWidget
-                  value={(fv.effectTailColor as string) ?? (fv.color1 as string)}
-                  onChange={(c) => setField('effectTailColor', c)}
-                  showOpacity={false}
-                  allowTransparent={false}
-                />
-              </div>
+            {moveScope && override && (
+              <button onClick={() => sel.forEach((e) => setFrameEffects(currentFrame, e.id, null))} className="w-full rounded-md border border-border py-1 text-xs text-muted-foreground hover:bg-primary/10">
+                Use animation settings for this move
+              </button>
             )}
-            <Separator />
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">Pulse</span>
-              <Switch checked={!!fv.effectPulse} onCheckedChange={(v) => setField('effectPulse', v)} />
-            </div>
-            {!!fv.effectPulse && (
-              <div className="grid gap-1.5 pl-1">
-                <span className="text-[11px] font-medium text-muted-foreground">Pulse color</span>
-                <ColorPickerWidget
-                  value={(fv.effectPulseColor as string) ?? (fv.color1 as string)}
-                  onChange={(c) => setField('effectPulseColor', c)}
-                  showOpacity={false}
-                  allowTransparent={false}
-                />
-              </div>
+            {/* Movement effects: independently toggleable, configured inline.
+                Tail/Pulse are token effects; Easy Easing (the element's own
+                transition easing) applies to EVERY element type. */}
+            {allMovable && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">Tail</span>
+                  <Switch checked={!!fv.effectTail} onCheckedChange={(v) => setField('effectTail', v)} />
+                </div>
+                {!!fv.effectTail && (
+                  <div className="grid gap-1.5 pl-1">
+                    <span className="text-[11px] font-medium text-muted-foreground">Tail color</span>
+                    <ColorPickerWidget
+                      value={(fv.effectTailColor as string) ?? (fv.color1 as string)}
+                      onChange={(c) => setField('effectTailColor', c)}
+                      showOpacity={false}
+                      allowTransparent={false}
+                    />
+                  </div>
+                )}
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">Pulse</span>
+                  <Switch checked={!!fv.effectPulse} onCheckedChange={(v) => setField('effectPulse', v)} />
+                </div>
+                {!!fv.effectPulse && (
+                  <div className="grid gap-1.5 pl-1">
+                    <span className="text-[11px] font-medium text-muted-foreground">Pulse color</span>
+                    <ColorPickerWidget
+                      value={(fv.effectPulseColor as string) ?? (fv.color1 as string)}
+                      onChange={(c) => setField('effectPulseColor', c)}
+                      showOpacity={false}
+                      allowTransparent={false}
+                    />
+                  </div>
+                )}
+                <Separator />
+              </>
             )}
-            <Separator />
+            {allBalls && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">Parabolic Shot</span>
+                  <Switch checked={!!fv.effectParabolic} onCheckedChange={(v) => setField('effectParabolic', v)} />
+                </div>
+                <Separator />
+              </>
+            )}
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">Easy Easing</span>
+              <span className="text-sm font-medium text-foreground">{allBalls ? 'Power Shot' : 'Easy Easing'}</span>
               <Switch checked={!!fv.effectEase} onCheckedChange={(v) => setField('effectEase', v)} />
             </div>
           </div>

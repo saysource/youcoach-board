@@ -271,6 +271,9 @@ export interface EditorState {
   setFramePath: (k: number, elementId: string, points: [number, number][] | null) => void
   /** Update the animation playback settings (speed / camera easing). Off-stack. */
   setAnimationSettings: (patch: Partial<Pick<BoardDoc['animation'], 'speed' | 'cameraEasing' | 'loop'>>) => void
+  /** Set (merge) or clear an element's per-TURN movement-effect override for
+   *  the transition INTO frame k. Off-stack, like setFramePath. */
+  setFrameEffects: (k: number, elementId: string, patch: Partial<import('@youcoach-board/core').FrameEffectOverride> | null) => void
 }
 
 /** Keep only the selected ids whose elements still exist in `doc` (used after
@@ -350,7 +353,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
     // interpolable geometry/colors (incl. wave freq/amp and the double-line
     // offset, which the spec lists as animatable) which stay per frame.
     // Mirrored on undo/redo like propagatePresence.
-    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'effectTail', 'effectTailColor', 'effectPulse', 'effectPulseColor', 'effectEase', 'strokeStyle', 'curve', 'zigzag', 'double', 'startTip', 'endTip', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
+    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'effectTail', 'effectTailColor', 'effectPulse', 'effectPulseColor', 'effectEase', 'effectParabolic', 'strokeStyle', 'curve', 'zigzag', 'double', 'startTip', 'endTip', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
     function propagateEffects(prevElements: BoardElement[], doc: BoardDoc): BoardDoc {
       const a = doc.animation
       if (a.frames.length < 2) return doc
@@ -1122,6 +1125,24 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       setAnimationSettings: (patch) => {
         const { doc } = get()
         const nextDoc = { ...doc, animation: { ...doc.animation, ...patch } }
+        set({ doc: nextDoc })
+        onChange?.(nextDoc)
+      },
+
+      setFrameEffects: (k, elementId, patch) => {
+        const { doc } = get()
+        const a = doc.animation
+        if (k < 0 || k >= a.frames.length) return
+        const frames = a.frames.slice()
+        const effects = { ...(frames[k].effects ?? {}) }
+        if (patch === null) delete effects[elementId]
+        else {
+          const merged = { ...(effects[elementId] ?? {}), ...patch }
+          if (Object.keys(merged).length) effects[elementId] = merged
+          else delete effects[elementId]
+        }
+        frames[k] = { ...frames[k], ...(Object.keys(effects).length ? { effects } : { effects: undefined }) }
+        const nextDoc = { ...doc, animation: { ...a, frames } }
         set({ doc: nextDoc })
         onChange?.(nextDoc)
       },

@@ -298,6 +298,12 @@ export function isObject3DColorable(objectId: string): boolean {
 
 // A placed goal (real-metric, structural) — exempt from the global object scale so
 // the "make materials bigger" default doesn't balloon regulation goals.
+/** The procedural soccer ball — the one object that can scale independently
+ *  (background.ballScale) since its size is visibility-driven next to tokens. */
+export function isObject3DBall(objectId: string): boolean {
+  return objectId === 'ball'
+}
+
 export function isObject3DGoal(objectId: string): boolean {
   return objectId in GOALS
 }

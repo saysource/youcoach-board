@@ -26,6 +26,8 @@ export interface Token3D {
   x: number
   z: number
   sizeM: number
+  /** Height off the pitch in metres (playback vertical effects). */
+  elevation: number
   /** The element's opacity (transform.opacity), applied to the disc material. */
   opacity: number
   style: TokenFaceStyle
@@ -268,6 +270,11 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
         } else {
           obj.userData.baseMinY = new THREE.Box3().setFromObject(obj).min.y
         }
+        // Local (unscaled) centre height — the rolling pivot. The ball GLB's
+        // origin sits at the GROUND, so rotating about the origin would wobble
+        // the sphere around its bottom point instead of spinning it.
+        const box = new THREE.Box3().setFromObject(obj)
+        obj.userData.centerY = (box.min.y + box.max.y) / 2
         ctx.scene.add(obj)
         ctx.meshes.set(e.id, obj)
       }
@@ -283,8 +290,23 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       const scale = (isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(minScale, rel * mult)) * Math.max(0.001, e.effectScale ?? 1)
       obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
-      obj.position.set(e.x, -baseMinY * scale, e.z)
+      obj.position.set(e.x, -baseMinY * scale + (e.elevation ?? 0), e.z)
       obj.rotation.set(0, e.rotation, 0)
+      // Rolling (playback): world-space rotation about the ground axis
+      // perpendicular to the motion, PIVOTED AT THE MESH CENTRE (the ball's
+      // origin is at the ground, so a naive origin rotation would wobble).
+      if (e.roll && e.rollAxis) {
+        const axis = new THREE.Vector3(e.rollAxis[0], 0, e.rollAxis[1]).normalize()
+        const q = new THREE.Quaternion().setFromAxisAngle(axis, e.roll)
+        obj.quaternion.premultiply(q)
+        const cy = ((obj.userData.centerY as number) ?? 0) * scale
+        if (cy) {
+          // Rotating about C instead of the origin: P' = C + R·(P − C), with
+          // P − C = (0, −cy, 0) in world space.
+          const off = new THREE.Vector3(0, -cy, 0).applyQuaternion(q).add(new THREE.Vector3(0, cy, 0))
+          obj.position.add(off)
+        }
+      }
       setObjectDim(obj, (e.opacity ?? 1) * (erasingIds?.has(e.id) ? 0.5 : 1))
       obj.visible = (e.opacity ?? 1) > 0
       obj.userData.id = e.id
@@ -370,7 +392,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       } else {
         setTokenDiscFace(mesh, t.style)
       }
-      mesh.position.set(t.x, 0, t.z)
+      mesh.position.set(t.x, t.elevation, t.z)
       mesh.scale.setScalar(Math.max(0.05, t.sizeM))
       mesh.userData.id = t.id
       // Element opacity × the eraser's half-opacity cue, applied directly (the

@@ -83,7 +83,7 @@ export interface BoardBackground {
   figureScale: number
   /** Display scale for placed 3D objects (cones, hurdles, goals, …). The models
    *  are authored at real metric size; this multiplies them so small props stay
-   *  visible on a top-down board. 1 = real size, up to 8×. */
+   *  visible on a top-down board. 1 = real size, up to 20×. */
   objectScale: number
   /** Whether the two 3D goals at the ends of the pitch are shown. */
   showGoals: boolean
@@ -116,6 +116,20 @@ export interface AnimationFrame {
    *  from its previous-frame position. Endpoints are derived from the element
    *  positions, so straight moves need no entry. Meaningless on frame 0. */
   paths?: Record<string, [number, number][]>
+  /** Per-TURN movement-effect overrides for the transition INTO this frame,
+   *  keyed by element id: any field set here wins over the element's
+   *  animation-wide setting for just this move. Meaningless on frame 0. */
+  effects?: Record<string, FrameEffectOverride>
+}
+
+/** One element's movement-effect override for a single transition. */
+export interface FrameEffectOverride {
+  tail?: boolean
+  tailColor?: string
+  pulse?: boolean
+  pulseColor?: string
+  ease?: boolean
+  parabolic?: boolean
 }
 
 /** Animation settings for the whole drill: an ordered list of frame snapshots.
@@ -279,6 +293,23 @@ function parseAnimation(raw: unknown): BoardAnimation {
             }
             if (Object.keys(paths).length) frame.paths = paths
           }
+          if (typeof f.effects === 'object' && f.effects !== null) {
+            const effects: Record<string, FrameEffectOverride> = {}
+            for (const [id, raw2] of Object.entries(f.effects as Record<string, unknown>)) {
+              if (typeof raw2 !== 'object' || raw2 === null) continue
+              const o2 = raw2 as Record<string, unknown>
+              const ov: FrameEffectOverride = {
+                ...(typeof o2.tail === 'boolean' ? { tail: o2.tail } : {}),
+                ...(typeof o2.tailColor === 'string' ? { tailColor: o2.tailColor } : {}),
+                ...(typeof o2.pulse === 'boolean' ? { pulse: o2.pulse } : {}),
+                ...(typeof o2.pulseColor === 'string' ? { pulseColor: o2.pulseColor } : {}),
+                ...(typeof o2.ease === 'boolean' ? { ease: o2.ease } : {}),
+                ...(typeof o2.parabolic === 'boolean' ? { parabolic: o2.parabolic } : {}),
+              }
+              if (Object.keys(ov).length) effects[id] = ov
+            }
+            if (Object.keys(effects).length) frame.effects = effects
+          }
           return frame
         })
     : []
@@ -341,6 +372,7 @@ function structuredCloneBoard(doc: BoardDoc): BoardDoc {
         camera: f.camera ? { ...f.camera, position: [...f.camera.position] as [number, number, number], target: [...f.camera.target] as [number, number, number] } : null,
         elements: f.elements.slice(),
         ...(f.paths ? { paths: Object.fromEntries(Object.entries(f.paths).map(([id, pts]) => [id, pts.map((p) => [...p] as [number, number])])) } : {}),
+        ...(f.effects ? { effects: Object.fromEntries(Object.entries(f.effects).map(([id, ov]) => [id, { ...ov }])) } : {}),
       })),
     },
     elements: doc.elements.slice(),

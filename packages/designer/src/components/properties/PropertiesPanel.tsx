@@ -36,6 +36,8 @@ import {
   AlignCenterHorizontal,
   AlignEndHorizontal,
   AlignVerticalDistributeCenter,
+  Boxes,
+  Scale3d,
 } from 'lucide-react'
 import { type ArrowTip, type BoardElement, type Arrow3DElement, type TokenShape, type TokenFill, type TextAlign, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX, TEXT_MIN_FONT, TEXT_MAX_FONT, BOARD_FONTS, boardFont, textFontStack } from '@youcoach-board/core'
 import { Button } from '../ui/button'
@@ -379,10 +381,10 @@ function Object3DControls({ side }: { side: 'right' | 'top' }) {
   )
 }
 
-// Size range as a multiplier of real size: from ×1 (Real, never smaller) up to ×10
+// Size range as a multiplier of real size: from ×1 (Real, never smaller) up to ×20
 // (Big). Log-mapped so the slider is proportional across the range.
 const OBJ_SIZE_MIN = 1
-const OBJ_SIZE_MAX = 10
+const OBJ_SIZE_MAX = 20
 function objSizeToSlider(size: number): number {
   const s = Math.min(OBJ_SIZE_MAX, Math.max(OBJ_SIZE_MIN, size))
   return (Math.log(s / OBJ_SIZE_MIN) / Math.log(OBJ_SIZE_MAX / OBJ_SIZE_MIN)) * 100
@@ -393,12 +395,31 @@ function objSliderToSize(v: number): number {
 }
 
 function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
-  // 3D object size is ALWAYS global: one scale shared by every placed object —
-  // players AND materials — so resizing any one resizes them all. Edits
-  // background.objectScale directly (no per-object override, no switch).
+  // 3D object size (specs/animation.md): ONE slider that edits the GLOBAL
+  // scale (background.objectScale — every object follows), unless the
+  // "Apply only to this object" switch is on, in which case it edits the
+  // selection's own per-object size (a multiplier over the global). The
+  // slider's leading icon says which: Boxes = global, Box = this object.
   const objectScale = useEditorStore((s) => s.doc.background.objectScale) ?? 1
   const setBackground = useEditorStore((s) => s.setBackground)
+  const elements = useEditorStore((s) => s.doc.elements)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
+  const updateElements = useEditorStore((s) => s.updateElements)
   const arm = useDragTransaction()
+  const sel = elements.filter((e): e is Extract<BoardElement, { type: 'object3d' }> => selectedIds.includes(e.id) && e.type === 'object3d')
+  const perObject = sel.length > 0 && sel.every((e) => !e.useGlobalSize)
+  // The slider always shows the EFFECTIVE scale (real-size multiplier).
+  const effective = perObject ? Math.max(1, (sel[0].size ?? 1) * objectScale) : objectScale
+  function togglePerObject(v: boolean) {
+    if (sel.length === 0) return
+    // Turning ON seeds size = 1 (same rendered size as the global).
+    updateElements(sel.map((e) => ({ id: e.id, before: { useGlobalSize: e.useGlobalSize, size: e.size }, after: { useGlobalSize: !v, size: v ? 1 : e.size } })))
+  }
+  function setEffective(v: number) {
+    const s = objSliderToSize(v)
+    if (perObject) updateElements(sel.map((e) => ({ id: e.id, before: { size: e.size }, after: { size: Math.max(0.05, s / objectScale) } })))
+    else setBackground({ objectScale: s })
+  }
   return (
     <Popover>
       <Tooltip>
@@ -412,13 +433,25 @@ function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
         <TooltipContent>Size</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
-        <div className="grid gap-1.5">
-          <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-            <span>Real</span>
-            <span className="tabular-nums text-foreground">{Math.round(objectScale * 10) / 10}×</span>
-            <span>Big</span>
+        <div className="grid gap-3">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <Scale3d className="size-4 text-muted-foreground" /> 3D Objects size
           </div>
-          <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(objectScale))} onChange={(v) => { arm(); setBackground({ objectScale: objSliderToSize(v) }) }} />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-medium text-muted-foreground">Apply only to this object</span>
+            <Switch checked={perObject} onCheckedChange={togglePerObject} disabled={sel.length === 0} />
+          </div>
+          <div className="flex items-center gap-2">
+            {perObject ? <Box className="size-4 shrink-0 text-muted-foreground" /> : <Boxes className="size-4 shrink-0 text-muted-foreground" />}
+            <div className="grid flex-1 gap-1.5">
+              <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>Real</span>
+                <span className="tabular-nums text-foreground">{Math.round(effective * 10) / 10}×</span>
+                <span>Big</span>
+              </div>
+              <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(effective))} onChange={(v) => { arm(); setEffective(v) }} />
+            </div>
+          </div>
         </div>
       </PopoverContent>
     </Popover>

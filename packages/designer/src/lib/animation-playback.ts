@@ -14,10 +14,11 @@ import { applyOperation, BOARD_HEIGHT, BOARD_WIDTH, type AnimationFrame, type Bo
 import type { EditorStore } from '../store/editorStore'
 import { lerpPose, cancelFieldAnimation, animateFieldTo } from './field-anim'
 import { rectToPolyline, ellipseToPolyline } from './draw'
-import type * as THREE from 'three'
-import { projectGround, reprojectChanges, withGroundAnchors } from './field-anchor'
+import * as THREE from 'three'
+import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchors } from './field-anchor'
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
+import { isObject3DBall } from './objects3d'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -27,6 +28,58 @@ const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
 // phase of the spec. The CAMERA flight optionally eases ("Easy Ease" in the
 // animation settings).
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+
+/** CSS cubic-bezier(x1, y1, x2, y2) evaluated as ease(progress) — binary
+ *  search on the parametric x, then the matching y. */
+function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
+  const coord = (a: number, b: number) => (u: number) => 3 * u * (1 - u) * (1 - u) * a + 3 * u * u * (1 - u) * b + u * u * u
+  const ax = coord(x1, x2)
+  const ay = coord(y1, y2)
+  return (t: number) => {
+    if (t <= 0) return 0
+    if (t >= 1) return 1
+    let lo = 0
+    let hi = 1
+    let u = t
+    for (let i = 0; i < 24; i++) {
+      const x = ax(u)
+      if (Math.abs(x - t) < 1e-4) break
+      if (x < t) lo = u
+      else hi = u
+      u = (lo + hi) / 2
+    }
+    return ay(u)
+  }
+}
+
+/** A circle of ground points around (gx, gz) projected to board coords — the
+ *  perspective-following sonar ring. */
+function groundRing(cam: THREE.Camera, gx: number, gz: number, rM: number, n = 28): PathPoint[] {
+  const pts: PathPoint[] = []
+  for (let i = 0; i < n; i++) {
+    const ang = (i / n) * Math.PI * 2
+    pts.push(projectGround(cam, gx + Math.cos(ang) * rM, gz + Math.sin(ang) * rM))
+  }
+  return pts
+}
+
+/** The two expanding pulse rings (half a phase apart) at a ground spot. */
+function pulseRingsFor(cam: THREE.Camera, gx: number, gz: number, baseR: number, phase: number): Array<{ points: PathPoint[]; opacity: number }> {
+  return [0, 0.5].map((shift) => {
+    const ph = (phase + shift) % 1
+    return { points: groundRing(cam, gx, gz, baseR * (0.9 + 1.8 * ph)), opacity: (1 - ph) * 0.4 }
+  })
+}
+
+/** The BALL's Easy-Easing curve: a sharp kick that glides out — like a real
+ *  pass (cubic-bezier(0.16, 1, 0.3, 1)). Other elements keep ease-in-out. */
+const BALL_EASE = cubicBezier(0.16, 1, 0.3, 1)
+
+/** The element's Easy-Easing curve (identity when the switch is off). */
+function easeOf(el: BoardElement): (s: number) => number {
+  if (!el.effectEase) return (s) => s
+  return el.type === 'object3d' && isObject3DBall(el.objectId) ? BALL_EASE : easeInOutCubic
+}
 
 /** Parse a hex CSS color (#rgb / #rgba / #rrggbb / #rrggbbaa) to RGBA channels. */
 function parseHexColor(s: string): [number, number, number, number] | null {
@@ -97,6 +150,26 @@ const FLOAT_DELTA = 0.15
 const SLIDE_DELTA = 0.75
 const ZOOM_SCALE = 0.01
 const DROP_SCALE = 4
+
+// On a 3D field the VERTICAL effects act in world space (metres of height off
+// the pitch) instead of screen offsets: drop/lift fall from / rise to
+// DROP_H; float/slide up/down travel FLOAT_H / SLIDE_H. Negative heights
+// emerge from / sink into the pitch (the "up" enters, "down" exits).
+const DROP_H = 15
+const FLOAT_H = 6
+const SLIDE_H = 25
+const VERT_IN: Record<string, number> = { drop: DROP_H, float_down: FLOAT_H, slide_down: SLIDE_H, float_up: -FLOAT_H, slide_up: -SLIDE_H }
+const VERT_OUT: Record<string, number> = { lift: DROP_H, float_up: FLOAT_H, slide_up: SLIDE_H, float_down: -FLOAT_H, slide_down: -SLIDE_H }
+
+/** Project a WORLD point (x, y, z — y = height) to board units (w-clamped like
+ *  projectGround). */
+function projectWorld(cam: THREE.Camera, x: number, y: number, z: number): [number, number] {
+  const v = new THREE.Vector4(x, y, z, 1)
+  v.applyMatrix4(cam.matrixWorldInverse)
+  v.applyMatrix4(cam.projectionMatrix)
+  const w = v.w > 1e-4 ? v.w : 1e-4
+  return [((v.x / w + 1) * BOARD_WIDTH) / 2, ((1 - v.y / w) * BOARD_HEIGHT) / 2]
+}
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
 
@@ -263,6 +336,10 @@ function applyObject3DEffect(el: Extract<BoardElement, { type: 'object3d' }>, p:
   const e = easeOutCubic(p)
   const f = dir === 'in' ? e : 1 - e
   const fadedEl = { ...el, opacity: (el.opacity ?? 1) * f }
+  // Vertical effects lift the MESH itself (world metres) — a player really
+  // drops onto the pitch / floats off it.
+  const H = dir === 'in' ? VERT_IN[name] : VERT_OUT[name]
+  if (H !== undefined) return { ...fadedEl, elevation: H * (dir === 'in' ? 1 - e : e) }
   if (name === 'zoom' || name === 'drop' || name === 'lift') {
     const s =
       name === 'zoom'
@@ -314,7 +391,14 @@ function applyTextEffect(el: BoardElement, p: number, dir: 'in' | 'out'): BoardE
  *  visible border AND fill split into a fill copy + a border copy, each with
  *  its own effect (e.g. the border forms while the fill fades in). The split
  *  is transient — playback output only; the copies' ids never persist. */
-function enterExitParts(el: BoardElement, p: number, dir: 'in' | 'out', cam?: THREE.Camera | null): BoardElement[] {
+function enterExitParts(el: BoardElement, p: number, dir: 'in' | 'out', cam?: THREE.Camera | null, tokens3d?: boolean): BoardElement[] {
+  // Strip pitch pins from entering/leaving 2D elements: reprojection would
+  // otherwise reposition (and rescale) them from the STORED pin every step,
+  // clobbering the effect's transform — zoom/float/slide read as plain fades
+  // under a camera flight. Without the pin the ground anchors derive from the
+  // live, effect-modified coords each step, so the element stays glued to the
+  // pitch AND animates. 3D texts keep theirs (their effects act on it).
+  if (!(el.type === 'text' && el.text3d)) el = stripGround(el)
   if (isClosedShape(el)) {
     const borderFx = (dir === 'in' ? el.effectIn : el.effectOut) ?? 'fade'
     const fillFx = (dir === 'in' ? el.fillEffectIn : el.fillEffectOut) ?? 'fade'
@@ -330,12 +414,12 @@ function enterExitParts(el: BoardElement, p: number, dir: 'in' | 'out', cam?: TH
   }
   if (el.type === 'text') return [applyTextEffect(applyEffect(el, p, dir, undefined, cam), p, dir)]
   if (el.type === 'arrow3d') return [applyArrowLengthEffect(applyEffect(el, p, dir, undefined, cam), p, dir)]
-  return [applyEffect(el, p, dir, undefined, cam)]
+  return [applyEffect(el, p, dir, undefined, cam, tokens3d)]
 }
 
 /** Apply an element's enter/exit effect at transition progress p (0‥1).
  *  arrow3d supports fade only; object3d pops (no transform/opacity). */
-function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out', nameOverride?: string, cam?: THREE.Camera | null): BoardElement {
+function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out', nameOverride?: string, cam?: THREE.Camera | null, tokens3d?: boolean): BoardElement {
   const name = nameOverride ?? (dir === 'in' ? el.effectIn : el.effectOut) ?? 'fade'
   if (name === 'none') return el
   // A pitch-pinned 3D text ignores the SVG transform (the overlay renders from
@@ -362,6 +446,24 @@ function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out', nameOverrid
     }
   }
   const t = el.transform
+  // TRUE 3D vertical motion on a 3D field: drop/lift and the up/down
+  // floats/slides move along the world's vertical axis. Disc tokens lift
+  // their mesh (transient elevation); SVG-rendered elements take the
+  // PROJECTED screen offset of that height at their spot on the pitch.
+  const H = dir === 'in' ? VERT_IN[name] : VERT_OUT[name]
+  if (cam && H !== undefined) {
+    const h = H * (dir === 'in' ? 1 - e : e)
+    if (el.type === 'token' && tokens3d && el.shape === 'token') {
+      return { ...el, elevation: h, transform: { ...t, opacity: t.opacity * f } }
+    }
+    const c = elementCenter(el)
+    const g = c ? boardToGround(c[0], c[1], cam) : null
+    if (g) {
+      const [bx, by] = projectWorld(cam, g.x, h, g.z)
+      const [b0x, b0y] = projectWorld(cam, g.x, 0, g.z)
+      return { ...el, transform: { ...t, x: t.x + (bx - b0x), y: t.y + (by - b0y), opacity: t.opacity * f } }
+    }
+  }
   // Tokens rendered as 3D discs size from their metric sizeM — scale it too.
   const scaled = (scale: number): BoardElement =>
     el.type === 'token' && el.sizeM
@@ -391,7 +493,24 @@ function applyEffect(el: BoardElement, p: number, dir: 'in' | 'out', nameOverrid
  *  they keep painting until gone). Output order follows b. An element with a
  *  movement path INTO frame b travels along that spline (arc-length pace)
  *  instead of the straight line — all other properties still interpolate. */
-function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths'], liveCam?: FieldView | null): BoardElement[] {
+/** An element with its per-TURN movement-effect override (if any) merged over
+ *  the animation-wide fields — everything downstream (easing, tail, pulse,
+ *  their colors) reads the merged values. */
+function withTurnEffects(el: BoardElement, overrides?: AnimationFrame['effects']): BoardElement {
+  const ov = overrides?.[el.id]
+  if (!ov) return el
+  return {
+    ...el,
+    ...(ov.tail !== undefined ? { effectTail: ov.tail } : {}),
+    ...(ov.tailColor !== undefined ? { effectTailColor: ov.tailColor } : {}),
+    ...(ov.pulse !== undefined ? { effectPulse: ov.pulse } : {}),
+    ...(ov.pulseColor !== undefined ? { effectPulseColor: ov.pulseColor } : {}),
+    ...(ov.ease !== undefined ? { effectEase: ov.ease } : {}),
+    ...(ov.parabolic !== undefined ? { effectParabolic: ov.parabolic } : {}),
+  } as BoardElement
+}
+
+function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths'], liveCam?: FieldView | null, tokens3d?: boolean, speed = 1, objMult = 1, overrides?: AnimationFrame['effects']): BoardElement[] {
   const byId = new Map(a.map((e) => [e.id, e]))
   // Pitch-pinned 3D texts translate their effects into ground metres — build
   // the (lazy) calibrated camera once per pass.
@@ -413,8 +532,10 @@ function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: A
       const keepGround = !mids?.length && compatibleGround(ea, eb)
       const [na, nb] = keepGround ? [ea, eb] : [stripGround(ea), stripGround(eb)]
       // Per-element "Easy Easing": this element's OWN transition progress is
-      // eased instead of the default linear pace.
-      const te = eb.effectEase ? easeInOutCubic(t) : t
+      // eased instead of the default linear pace (the ball gets its kick-and-
+      // glide curve). Per-turn overrides win for THIS transition.
+      const ebm = withTurnEffects(eb, overrides)
+      const te = easeOf(ebm)(t)
       let el = lerpValue(na, nb, te) as BoardElement
       // Point paths whose point COUNT changed between the frames (a vertex was
       // added/removed): lerpValue can only snap mismatched arrays, so guess the
@@ -423,13 +544,21 @@ function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: A
         el = { ...el, points: morphPoints(ea.points, eb.points, te) } as BoardElement
       }
       if (mids?.length) el = alongPath(ea, eb, el, mids, te)
+      if (overrides?.[eb.id]) el = withTurnEffects(el, overrides)
+      // 3D objects: follow the movement path on the pitch (the spline is board
+      // coords — sample it and drop each point back onto the grass), and the
+      // BALL rolls while it travels (2 rotations per second of wall time).
+      if (eb.type === 'object3d' && ea.type === 'object3d') el = applyObject3DMove(ea, ebm, el as Extract<BoardElement, { type: 'object3d' }>, mids, te, t, speed, objMult, cam())
       // Token "between" effects: motion tail and/or sonar pulse while it MOVES.
-      if (eb.type === 'token' && ea.type === 'token') el = applyBetweenEffect(ea, eb, el, mids, t, eb.effectEase ? easeInOutCubic : (s) => s)
+      // Pinned tokens travel a GROUND-space lerp (reprojection positions them
+      // from the lerped pin), so their tail must sample that same trajectory —
+      // hence the camera when the pins are kept.
+      if (eb.type === 'token' && ea.type === 'token') el = applyBetweenEffect(ea, ebm, el, mids, t, easeOf(ebm), cam(), keepGround)
       out.push(el)
-    } else out.push(...enterExitParts(eb, t, 'in', cam()))
+    } else out.push(...enterExitParts(eb, t, 'in', cam(), tokens3d))
   }
   const bIds = new Set(b.map((e) => e.id))
-  for (const ea of a) if (!bIds.has(ea.id)) out.push(...enterExitParts(ea, t, 'out', cam()))
+  for (const ea of a) if (!bIds.has(ea.id)) out.push(...enterExitParts(ea, t, 'out', cam(), tokens3d))
   return out
 }
 
@@ -456,23 +585,138 @@ function samePose(a: FieldView, b: FieldView): boolean {
   return a.position.every((v, i) => v === b.position[i]) && a.target.every((v, i) => v === b.target[i]) && a.fov === b.fov
 }
 
+/** A moving 3D object: movement-path following (board-space spline dropped
+ *  back onto the ground plane) and, for the BALL, a physically-derived rolling
+ *  rotation — spin angle = run distance / rendered radius (so a longer pass
+ *  spins more, a big ball spins less), rate-capped at 4 rev/s of wall time. */
+const BALL_RADIUS_M = 0.11 // the ball GLB's real-size radius
+const MAX_ROLL_REV_PER_S = 4
+
+function applyObject3DMove(
+  ea: BoardElement,
+  eb: BoardElement,
+  lerped: Extract<BoardElement, { type: 'object3d' }>,
+  mids: PathPoint[] | undefined,
+  te: number,
+  t: number,
+  speed: number,
+  objMult: number,
+  cam?: THREE.Camera | null,
+): BoardElement {
+  const a = ea as Extract<BoardElement, { type: 'object3d' }>
+  const b = eb as Extract<BoardElement, { type: 'object3d' }>
+  const dist = Math.hypot(b.x - a.x, b.z - a.z)
+  let el = lerped
+  // Ground position at eased time q — along the path spline when one exists.
+  const posAt = (q: number): { x: number; z: number } | null => {
+    if (!mids?.length || !cam) return { x: a.x + (b.x - a.x) * q, z: a.z + (b.z - a.z) * q }
+    const ca = projectGround(cam, a.x, a.z)
+    const cb = projectGround(cam, b.x, b.z)
+    const [bx, by] = pointAlongPath([ca, ...mids, cb], q)
+    return boardToGround(bx, by, cam)
+  }
+  if (mids?.length && cam) {
+    const g = posAt(te)
+    if (g) el = { ...el, x: g.x, z: g.z }
+  }
+  // Parabolic shot (ball): the flight height follows a parabola peaking
+  // mid-move — a lofted pass. Peak scales with the run (capped).
+  const parabolic = isObject3DBall(b.objectId) && b.effectParabolic && dist > 0.5
+  const peakH = parabolic ? Math.min(12, Math.max(1.5, dist * 0.25)) : 0
+  const heightAt = (q: number) => (parabolic ? peakH * 4 * q * (1 - q) : 0)
+  if (parabolic) el = { ...el, elevation: (el.elevation ?? 0) + heightAt(te) }
+  if (isObject3DBall(b.objectId) && dist > 0.5) {
+    // Run distance in ground metres (spline paths: sampled arc length).
+    let run = dist
+    if (mids?.length && cam) {
+      run = 0
+      let prev = posAt(0)
+      for (let k = 1; k <= 24; k++) {
+        const cur = posAt(k / 24)
+        if (prev && cur) run += Math.hypot(cur.x - prev.x, cur.z - prev.z)
+        prev = cur
+      }
+    }
+    // Physical spin: angle = distance / rendered radius, capped so a long fast
+    // pass doesn't blur (max revolutions over the transition's wall time).
+    const radius = BALL_RADIUS_M * Math.max(1, (b.useGlobalSize ? 1 : b.size) * objMult)
+    const totalAngle = Math.min(run / radius, MAX_ROLL_REV_PER_S * 2 * Math.PI * (1 / speed))
+    // Roll about the ground axis perpendicular to the CURRENT motion tangent.
+    const g0 = posAt(Math.max(0, te - 0.02))
+    const g1 = posAt(Math.min(1, te + 0.02))
+    if (g0 && g1) {
+      const dx = g1.x - g0.x
+      const dz = g1.z - g0.z
+      const len = Math.hypot(dx, dz)
+      if (len > 1e-6) {
+        // axis = up × dir → (dz, -dx) in the ground plane.
+        el = { ...el, roll: totalAngle * te, rollAxis: [dz / len, -dx / len] }
+      }
+    }
+  }
+  // Movement effects (same semantics as tokens): the motion TAIL samples the
+  // real trajectory in BOARD coords (an SVG overlay draws it under the WebGL
+  // object); the sonar PULSE carries its phase. Both only while moving.
+  if ((b.effectTail || b.effectPulse) && dist > 0.5 && cam) {
+    if (b.effectPulse) {
+      // Base ring radius from the RENDERED size (incl. the global/ball scale),
+      // so the ping clears the mesh instead of hiding under it.
+      const baseR = (isObject3DBall(b.objectId) ? 0.4 : 0.7) * Math.max(1, (b.useGlobalSize ? 1 : b.size) * objMult)
+      el = { ...el, pulseRings: pulseRingsFor(cam, el.x, el.z, baseR, (t / 0.4375) % 1) }
+    }
+    if (b.effectTail) {
+      const ease = easeOf(b)
+      const span = Math.min(t, 14 * 0.028)
+      const s0 = t - span
+      const trail: PathPoint[] = []
+      for (let k = 0; k <= 13; k++) {
+        const q = ease(s0 + (span * k) / 13)
+        const g = posAt(q)
+        // A parabolic ball's tail follows it through the AIR.
+        if (g) trail.push(projectWorld(cam, g.x, heightAt(q), g.z))
+      }
+      if (trail.length >= 2) el = { ...el, trail }
+    }
+  }
+  return el
+}
+
+
+
 /** The BETWEEN effect for a moving token ('tail' / 'pulse'): transient render
  *  hints attached to the interpolated element while its centre travels. The
  *  tail samples the SAME trajectory the token follows (movement-path spline or
  *  the straight line) at recent parameter values, so it always trails the true
  *  motion. */
-function applyBetweenEffect(ea: BoardElement, eb: BoardElement, lerped: BoardElement, mids: PathPoint[] | undefined, t: number, ease: (s: number) => number): BoardElement {
+function applyBetweenEffect(ea: BoardElement, eb: BoardElement, lerped: BoardElement, mids: PathPoint[] | undefined, t: number, ease: (s: number) => number, cam?: THREE.Camera | null, keepGround?: boolean): BoardElement {
   if (!eb.effectTail && !eb.effectPulse) return lerped
   const ca = elementCenter(ea)
   const cb = elementCenter(eb)
   if (!ca || !cb || Math.hypot(cb[0] - ca[0], cb[1] - ca[1]) < 4) return lerped // not moving
   let el = lerped
-  if (eb.effectPulse) el = { ...el, pulse: (t / 0.4375) % 1 } as BoardElement
+  if (eb.effectPulse) {
+    const phase = (t / 0.4375) % 1
+    // On a 3D field the ping lies ON the pitch: ground rings at the token's
+    // CURRENT spot, projected through the resting camera.
+    const cl = elementCenter(el)
+    const g = cam && cl ? boardToGround(cl[0], cl[1], cam) : null
+    if (cam && g) {
+      const baseR = ((eb as { sizeM?: number }).sizeM ?? 5) / 2
+      el = { ...el, pulseRings: pulseRingsFor(cam, g.x, g.z, baseR, phase) } as BoardElement
+    } else el = { ...el, pulse: phase } as BoardElement
+  }
   if (eb.effectTail) {
     const ctrl: PathPoint[] = mids?.length ? [ca, ...mids, cb] : [ca, cb]
-    // The token's actual position at raw time s (its own easing applied).
+    const ga = (ea as { ground?: [number, number] }).ground
+    const gb = (eb as { ground?: [number, number] }).ground
+    const groundCam = keepGround ? cam : null
+    const groundLerp = !mids?.length && groundCam && ga && gb && typeof ga[0] === 'number' && typeof gb[0] === 'number'
+    // The token's actual position at raw time s (its own easing applied):
+    // pinned tokens lerp their GROUND anchor (metres) and project; unpinned
+    // ones lerp/spline in board space.
     const pos = (s: number): PathPoint => {
       const q = ease(s)
+      if (groundLerp) return projectGround(groundCam!, ga![0] + (gb![0] - ga![0]) * q, ga![1] + (gb![1] - ga![1]) * q)
       return ctrl.length > 2 ? pointAlongPath(ctrl, q) : [ca[0] + (cb[0] - ca[0]) * q, ca[1] + (cb[1] - ca[1]) * q]
     }
     // Sample uniformly over the AVAILABLE span (never clamping several samples
@@ -547,6 +791,18 @@ export function startPlayback(store: EditorStore): void {
     if (pose && from && !samePose(pose, from)) {
       const changes = reprojectChanges(withGroundAnchors(els, from), from, pose)
       if (changes.length) els = applyOperation({ ...doc, elements: els }, { kind: 'update', changes }).elements
+      // Transient motion-tail samples are free board points in the RESTING
+      // (pre-play) camera space — remap them to the in-flight pose too, or the
+      // tail detaches from its token during a camera flight.
+      els = els.map((e) => {
+        const fx = e as { trail?: Array<[number, number]>; pulseRings?: Array<{ points: Array<[number, number]>; opacity: number }> }
+        if (!fx.trail && !fx.pulseRings) return e
+        return {
+          ...e,
+          ...(fx.trail ? { trail: reprojectBoardPoints(fx.trail, from, pose) } : {}),
+          ...(fx.pulseRings ? { pulseRings: fx.pulseRings.map((r) => ({ ...r, points: reprojectBoardPoints(r.points, from, pose) })) } : {}),
+        } as BoardElement
+      })
     }
     store.setState({ playhead, doc: { ...doc, elements: els, background: { ...doc.background, field3d: pose ?? doc.background.field3d } } })
   }
@@ -575,7 +831,7 @@ export function startPlayback(store: EditorStore): void {
     const t = Math.min(1, ((now - segStart) * Math.min(2, Math.max(0.25, anim.speed))) / TRANSITION_MS)
     const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
     const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
-    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera), pose, seg + t)
+    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, store.getState().doc.background.tokens3d, Math.min(2, Math.max(0.25, anim.speed)), store.getState().doc.background.objectScale, fr[seg + 1].effects), pose, seg + t)
     if (t >= 1) {
       if (seg + 1 >= fr.length - 1) {
         // Reached the last frame. Loop wraps (hard cut back to frame 1);

@@ -11,6 +11,7 @@ export type {
   BoardBackground,
   BoardAnimation,
   AnimationFrame,
+  FrameEffectOverride,
   LogoPosition,
   FieldBands,
   FieldType,
