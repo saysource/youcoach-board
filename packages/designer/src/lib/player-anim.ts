@@ -91,9 +91,11 @@ export const GK_CATCH: Record<string, GkCatchMeta> = {
   // points sit ~3 m from the keeper origin.)
   catch_diving_left: { clip: 'Goalkeeper Diving Save', loop: false, contactTime: 33 / 30, reach: 3.5, hand: [-2.75, 0.9, 1.38] },
   catch_diving_right: { clip: 'Goalkeeper Diving Save (1)', loop: false, contactTime: 33 / 30, reach: 3.5, hand: [1.9, 0.68, 1.9] },
-  body_block: { clip: 'Goalkeeper Body Block', loop: false, contactTime: 1.77, reach: 2.0, hand: [0, 1.0, 0.4] },
-  // Placeholder (shares side-low's clip) — awaiting the user's measurement.
-  body_block_2: { clip: 'Goalkeeper Body Block (1)', loop: false, contactTime: 1.07, reach: 2.0, hand: [0, 1.0, 0.4] },
+  // Measured frame 39, hand (2.1, -0.1, 0.28) — unpinned, raw mapping. Body
+  // Block 2's static pose is just another frame of the SAME animation, so the
+  // save data is identical.
+  body_block: { clip: 'Goalkeeper Body Block', loop: false, contactTime: 39 / 30, reach: 2.5, hand: [2.1, 0.28, 0.1] },
+  body_block_2: { clip: 'Goalkeeper Body Block', loop: false, contactTime: 39 / 30, reach: 2.5, hand: [2.1, 0.28, 0.1] },
 }
 
 /** GK players are the pose_gk_* catalog entries — the pose IS the save type. */
