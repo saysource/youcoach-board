@@ -86,11 +86,13 @@ export const GK_CATCH: Record<string, GkCatchMeta> = {
   catch_middle_low: { clip: 'Goalkeeper Catch (3)', loop: false, contactTime: 19 / 30, reach: 1.5, hand: [-0.05, 0.72, 0.4] },
   // Measured frame 29, hand (-1.5, -0.9, 0.3) — unpinned clip, raw mapping.
   catch_side_low: { clip: 'Goalkeeper Body Block (1)', loop: false, contactTime: 29 / 30, reach: 2.0, hand: [-1.5, 0.3, 0.9] },
-  // Measured at frame 33 both sides: left hand (-2.75, -1.38, 0.9), right
-  // hand (1.9, -1.9, 0.68) — unpinned, raw mapping. (Reach 3.5: the glove
-  // points sit ~3 m from the keeper origin.)
-  catch_diving_left: { clip: 'Goalkeeper Diving Save', loop: false, contactTime: 33 / 30, reach: 3.5, hand: [-2.75, 0.9, 1.38] },
-  catch_diving_right: { clip: 'Goalkeeper Diving Save (1)', loop: false, contactTime: 33 / 30, reach: 3.5, hand: [1.9, 0.68, 1.9] },
+  // Measured at frame 33 both sides — unpinned, raw mapping. (Reach 3.5:
+  // the glove points sit ~3 m from the keeper origin.) NOTE: the static pose
+  // GLBs are named OPPOSITE to the clips' dive directions, so the 'right'
+  // pose plays 'Goalkeeper Diving Save' (hand (-2.75, -1.38, 0.9)) and the
+  // 'left' pose plays '(1)' (hand (1.9, -1.9, 0.68)).
+  catch_diving_left: { clip: 'Goalkeeper Diving Save (1)', loop: false, contactTime: 33 / 30, reach: 3.5, hand: [1.9, 0.68, 1.9] },
+  catch_diving_right: { clip: 'Goalkeeper Diving Save', loop: false, contactTime: 33 / 30, reach: 3.5, hand: [-2.75, 0.9, 1.38] },
   // Measured frame 39, hand (2.1, -0.1, 0.28) — unpinned, raw mapping. Body
   // Block 2's static pose is just another frame of the SAME animation, so the
   // save data is identical.
