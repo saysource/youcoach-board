@@ -620,11 +620,12 @@ const GAIT_RAMP_S = 0.3 // idle↔locomotion envelope: ramp in from rest / out t
 const FACE_BLEND = 0.15 // transition fraction blending authored ↔ path tangent
 
 /** How close a ball must land to this player to count as an interaction:
- *  INTERACT_R for field players, the authored pose's catch reach for
- *  goalkeepers, null for non-players. Used by the editor's drag highlight. */
+ *  the authored pose's catch reach for goalkeeper CATCH poses, the standard
+ *  INTERACT_R for every other player pose (field players, GK deep kicks,
+ *  idle keepers …), null for non-players. Used by the drag highlight. */
 export function interactionReach(objectId: string): number | null {
   if (!isObject3DPlayer(objectId)) return null
-  if (isGoalkeeper(objectId)) return gkCatchFor(objectId)?.reach ?? null
+  if (isGoalkeeper(objectId)) return gkCatchFor(objectId)?.reach ?? INTERACT_R
   return INTERACT_R
 }
 
