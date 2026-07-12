@@ -38,6 +38,8 @@ import {
   AlignVerticalDistributeCenter,
   Boxes,
   Scale3d,
+  ArrowRightToLine,
+  TimerReset,
 } from 'lucide-react'
 import { type ArrowTip, type BoardElement, type Arrow3DElement, type TokenShape, type TokenFill, type TextAlign, ElementView, IDENTITY_TRANSFORM, WAVE_LENGTH_MIN, WAVE_LENGTH_MAX, WAVE_AMPLITUDE_MAX, LINES_OFFSET_MIN, LINES_OFFSET_MAX, TEXT_MIN_FONT, TEXT_MAX_FONT, BOARD_FONTS, boardFont, textFontStack } from '@youcoach-board/core'
 import { Button } from '../ui/button'
@@ -951,6 +953,10 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
   const pasteStyle = useEditorStore((s) => s.pasteStyle)
   const deleteSelected = useEditorStore((s) => s.deleteSelected)
   const hasStyle = useEditorStore((s) => s.styleClipboard !== null)
+  const framesCount = useEditorStore((s) => s.doc.animation.frames.length)
+  const currentFrame = useEditorStore((s) => s.currentFrame)
+  const applyToAllFrames = useEditorStore((s) => s.applyToAllFrames)
+  const resetFrameChanges = useEditorStore((s) => s.resetFrameChanges)
   return (
     <DropdownMenu>
       <Tooltip>
@@ -1040,6 +1046,22 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
         <DropdownMenuItem disabled={!hasStyle} onSelect={pasteStyle}>
           <ClipboardPaste /> Paste style
         </DropdownMenuItem>
+        {/* Animation frame sync: stamp the element's current state into EVERY
+            frame (as if it had just been placed — all its per-frame positions
+            discarded), or revert this frame's changes back to the inherited
+            (previous frame) state. Only offered while an animation exists. */}
+        {framesCount > 1 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Animation</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={applyToAllFrames}>
+              <ArrowRightToLine /> Apply to all frames
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={currentFrame === 0} onSelect={resetFrameChanges}>
+              <TimerReset /> Reset changes in this frame
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={deleteSelected}>
           <Trash2 /> Delete

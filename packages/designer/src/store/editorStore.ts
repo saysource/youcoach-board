@@ -274,6 +274,17 @@ export interface EditorState {
   /** Set (merge) or clear an element's per-TURN movement-effect override for
    *  the transition INTO frame k. Off-stack, like setFramePath. */
   setFrameEffects: (k: number, elementId: string, patch: Partial<import('@youcoach-board/core').FrameEffectOverride> | null) => void
+  /** Stamp the selected elements' CURRENT (edited) state into EVERY other
+   *  frame — as if the object had just been placed (uniform in the whole
+   *  animation, all its per-frame positions, entry paths and per-turn
+   *  overrides discarded). Cross-frame rewrite → clears the undo history,
+   *  like the frame-structure ops. */
+  applyToAllFrames: () => void
+  /** Revert the selected elements IN THE CURRENT FRAME to the previous frame's
+   *  state — as if this frame had just been created (drops their entry path +
+   *  per-turn override into this frame). Skips elements absent in the previous
+   *  frame; no-op on frame 1. Clears the undo history. */
+  resetFrameChanges: () => void
 }
 
 /** Keep only the selected ids whose elements still exist in `doc` (used after
@@ -353,7 +364,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
     // interpolable geometry/colors (incl. wave freq/amp and the double-line
     // offset, which the spec lists as animatable) which stay per frame.
     // Mirrored on undo/redo like propagatePresence.
-    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'effectTail', 'effectTailColor', 'effectPulse', 'effectPulseColor', 'effectEase', 'effectParabolic', 'strokeStyle', 'curve', 'zigzag', 'double', 'startTip', 'endTip', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
+    const OBJECT_KEYS = ['effectIn', 'effectOut', 'fillEffectIn', 'fillEffectOut', 'textEffectIn', 'textEffectOut', 'lengthEffectIn', 'lengthEffectOut', 'effectTail', 'effectTailColor', 'effectPulse', 'effectPulseColor', 'effectEase', 'effectPower', 'effectParabolic', 'strokeStyle', 'curve', 'zigzag', 'double', 'startTip', 'endTip', 'text3d', 'splineLength', 'thickness', 'stickWidth', 'tipWidth', 'tipLength'] as const
     function propagateEffects(prevElements: BoardElement[], doc: BoardDoc): BoardDoc {
       const a = doc.animation
       if (a.frames.length < 2) return doc
@@ -1158,6 +1169,63 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         frames[k] = { ...frames[k], ...(Object.keys(paths).length ? { paths } : { paths: undefined }) }
         const nextDoc = { ...doc, animation: { ...a, frames } }
         set({ doc: nextDoc })
+        onChange?.(nextDoc)
+      },
+
+      applyToAllFrames: () => {
+        get().commitTransaction()
+        const { doc, selectedIds } = get()
+        const a = doc.animation
+        if (a.frames.length < 2 || selectedIds.length === 0) return
+        const ids = new Set(selectedIds)
+        const frames = a.frames.slice()
+        // Sync the live edits into the current frame, then stamp EVERY other
+        // frame (any stray position, whichever frame it was set on, is gone).
+        frames[a.current] = { ...frames[a.current], elements: doc.elements }
+        const source = new Map(doc.elements.filter((e) => ids.has(e.id)).map((e) => [e.id, e]))
+        // Drop the entry path/override of a reset element in a frame's record.
+        const strip = <T,>(rec: Record<string, T> | undefined): Record<string, T> | undefined => {
+          if (!rec) return undefined
+          const kept = Object.fromEntries(Object.entries(rec).filter(([id]) => !ids.has(id)))
+          return Object.keys(kept).length ? kept : undefined
+        }
+        for (let k = 0; k < frames.length; k++) {
+          const f = frames[k]
+          if (k === a.current) {
+            frames[k] = { ...f, paths: strip(f.paths), effects: strip(f.effects) }
+            continue
+          }
+          const present = new Set(f.elements.map((e) => e.id))
+          let els = f.elements.map((e) => (source.has(e.id) ? (structuredClone(source.get(e.id)!) as BoardElement) : e))
+          const missing = [...source.values()].filter((e) => !present.has(e.id))
+          if (missing.length) els = [...els, ...missing.map((e) => structuredClone(e) as BoardElement)]
+          frames[k] = { ...f, elements: els, paths: strip(f.paths), effects: strip(f.effects) }
+        }
+        const nextDoc = { ...doc, animation: { ...a, frames } }
+        set({ doc: nextDoc, stack: [], pointer: -1 })
+        onChange?.(nextDoc)
+      },
+
+      resetFrameChanges: () => {
+        get().commitTransaction()
+        const { doc, selectedIds } = get()
+        const a = doc.animation
+        if (a.frames.length < 2 || a.current === 0 || selectedIds.length === 0) return
+        const ids = new Set(selectedIds)
+        // The inherited state: the element as the PREVIOUS frame has it (a new
+        // frame starts as a copy). Elements absent there are left untouched.
+        const prev = new Map(a.frames[a.current - 1].elements.filter((e) => ids.has(e.id)).map((e) => [e.id, e]))
+        const els = doc.elements.map((e) => (prev.has(e.id) ? (structuredClone(prev.get(e.id)!) as BoardElement) : e))
+        const frames = a.frames.slice()
+        const f = frames[a.current]
+        const strip = <T,>(rec: Record<string, T> | undefined): Record<string, T> | undefined => {
+          if (!rec) return undefined
+          const kept = Object.fromEntries(Object.entries(rec).filter(([id]) => !ids.has(id)))
+          return Object.keys(kept).length ? kept : undefined
+        }
+        frames[a.current] = { ...f, elements: els, paths: strip(f.paths), effects: strip(f.effects) }
+        const nextDoc = { ...doc, elements: els, animation: { ...a, frames } }
+        set({ doc: nextDoc, stack: [], pointer: -1 })
         onChange?.(nextDoc)
       },
     }
