@@ -10,6 +10,7 @@ import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/
 import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, buildGoalsOverlay } from '../lib/field3d'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildObject3D, buildTokenDisc, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots, setTokenDiscFace, type TokenFaceStyle } from '../lib/objects3d'
+import { applySkinnedPose, buildSkinnedPlayer, ensurePlayerAnimLoaded, playerAnimReady, setSkinnedPlayerKit, wantsSkinnedPlayer } from '../lib/player-anim'
 
 
 /** Imperative API to hit-test 3D objects (they aren't SVG, so InteractiveBoard
@@ -235,20 +236,33 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       // Free geometry + material of every descendant (Group has no geometry of
       // its own, so we can't rely on obj.geometry). Shared/singleton textures
       // (the toon ramp) aren't touched by Material.dispose(), so they survive.
+      // Skinned player instances SHARE their geometry with the loaded template
+      // (SkeletonUtils.clone) — dispose only their per-instance materials and
+      // skeleton bone texture.
+      const shared = !!obj.userData.skinned
       obj.traverse((o) => {
         const m = o as Partial<THREE.Mesh>
-        m.geometry?.dispose()
+        if (!shared) m.geometry?.dispose()
         const mat = (o as THREE.Mesh).material
         if (mat) (Array.isArray(mat) ? mat : [mat]).forEach((x) => x.dispose())
+        if ((o as THREE.SkinnedMesh).isSkinnedMesh) (o as THREE.SkinnedMesh).skeleton.dispose()
       })
     }
     const seen = new Set<string>()
     for (const e of elements) {
       seen.add(e.id)
       let obj = ctx.meshes.get(e.id)
-      if (!obj || obj.userData.objectId !== e.objectId) {
+      // A player element carrying the transient `anim` hint renders as its
+      // SKINNED twin (lazy 4 MB parse — static until ready, the asset-ready
+      // notification re-renders us).
+      const wantSkinned = wantsSkinnedPlayer(e)
+      if (wantSkinned && !playerAnimReady()) ensurePlayerAnimLoaded()
+      const useSkinned = wantSkinned && playerAnimReady()
+      if (!obj || obj.userData.objectId !== e.objectId || !!obj.userData.skinned !== useSkinned) {
         if (obj) dispose(obj)
-        obj = buildObject3D(e.objectId)
+        const skinnedObj = useSkinned ? buildSkinnedPlayer(e.objectId) : null
+        obj = skinnedObj ?? buildObject3D(e.objectId)
+        obj.userData.skinned = !!skinnedObj
         // Local-space bounds (object is untransformed here): used to lift it onto
         // the ground and to size a Group's selection box.
         obj.updateMatrixWorld(true)
@@ -327,15 +341,22 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       // while the base images still decode this returns the plain-atlas stand-in
       // (the asset-ready re-render then lands the real one).
       if (isObject3DPlayer(e.objectId)) {
-        const m = (obj as THREE.Mesh).material
-        if (m instanceof THREE.MeshToonMaterial) {
-          const kit = playerKitTexture(e.objectId, e.colors)
-          if (m.map !== kit) {
-            m.map = kit
-            m.needsUpdate = true
+        if (obj.userData.skinned) {
+          setSkinnedPlayerKit(obj, e.objectId, e.colors)
+        } else {
+          const m = (obj as THREE.Mesh).material
+          if (m instanceof THREE.MeshToonMaterial) {
+            const kit = playerKitTexture(e.objectId, e.colors)
+            if (m.map !== kit) {
+              m.map = kit
+              m.needsUpdate = true
+            }
           }
         }
       }
+      // Skinned playback pose: clip + absolute time from the transient hint,
+      // evaluated deterministically (mixer.update(0)).
+      if (obj.userData.skinned && e.anim) applySkinnedPose(obj, e.anim)
     }
     for (const [id, mesh] of ctx.meshes) {
       if (seen.has(id)) continue

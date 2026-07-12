@@ -16,7 +16,7 @@ import { isObject3DPlayer } from '../lib/objects3d'
 import { topViewForField, fieldsCategoryIdFor } from '../lib/field-zones'
 import { orbitStep, panStep, dollyStep, type PitchType } from '../lib/field-camera'
 import { animateFieldTo as tweenFieldTo, cancelFieldAnimation } from '../lib/field-anim'
-import { stopPlayback } from '../lib/animation-playback'
+import { startPlayback, stopPlayback } from '../lib/animation-playback'
 import { applyOpenedBoard, loadBoard, openBoardFromFile, saveBoardToFile } from '../lib/board-file'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { useDesignerHotkeys } from '../lib/use-designer-hotkeys'
@@ -114,6 +114,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
       loadDoc: (json: unknown) => loadBoard(store, json),
       openText: (text: string) => applyOpenedBoard(store, text),
       getState: () => store.getState(),
+      play: () => startPlayback(store),
+      stop: () => stopPlayback(store),
     }
     return () => {
       delete w.__ycbE2E

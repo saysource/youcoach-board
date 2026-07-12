@@ -18,7 +18,8 @@ import * as THREE from 'three'
 import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchors } from './field-anchor'
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
-import { isObject3DBall } from './objects3d'
+import { isObject3DBall, isObject3DPlayer } from './objects3d'
+import { clipDuration, ensurePlayerAnimLoaded, PLAYER_CLIPS, playerIdleClip } from './player-anim'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -75,10 +76,12 @@ function pulseRingsFor(cam: THREE.Camera, gx: number, gz: number, baseR: number,
  *  pass (cubic-bezier(0.16, 1, 0.3, 1)). Other elements keep ease-in-out. */
 const BALL_EASE = cubicBezier(0.16, 1, 0.3, 1)
 
-/** The element's Easy-Easing curve (identity when the switch is off). */
+/** The element's transition easing: Power Shot (ball, the kick-and-glide
+ *  bezier) wins over Easy Easing (ease-in-out, any element); identity when
+ *  both are off. */
 function easeOf(el: BoardElement): (s: number) => number {
-  if (!el.effectEase) return (s) => s
-  return el.type === 'object3d' && isObject3DBall(el.objectId) ? BALL_EASE : easeInOutCubic
+  if (el.effectPower && el.type === 'object3d' && isObject3DBall(el.objectId)) return BALL_EASE
+  return el.effectEase ? easeInOutCubic : (s) => s
 }
 
 /** Parse a hex CSS color (#rgb / #rgba / #rrggbb / #rrggbbaa) to RGBA channels. */
@@ -506,16 +509,19 @@ function withTurnEffects(el: BoardElement, overrides?: AnimationFrame['effects']
     ...(ov.pulse !== undefined ? { effectPulse: ov.pulse } : {}),
     ...(ov.pulseColor !== undefined ? { effectPulseColor: ov.pulseColor } : {}),
     ...(ov.ease !== undefined ? { effectEase: ov.ease } : {}),
+    ...(ov.power !== undefined ? { effectPower: ov.power } : {}),
     ...(ov.parabolic !== undefined ? { effectParabolic: ov.parabolic } : {}),
   } as BoardElement
 }
 
-function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths'], liveCam?: FieldView | null, tokens3d?: boolean, speed = 1, objMult = 1, overrides?: AnimationFrame['effects']): BoardElement[] {
+function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths'], liveCam?: FieldView | null, tokens3d?: boolean, segD = 1, objMult = 1, overrides?: AnimationFrame['effects'], elapsedS = 0, prevSeg?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }, nextSeg?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }): BoardElement[] {
   const byId = new Map(a.map((e) => [e.id, e]))
   // Pitch-pinned 3D texts translate their effects into ground metres — build
   // the (lazy) calibrated camera once per pass.
   let cam3: THREE.Camera | null | undefined
   const cam = () => (cam3 === undefined ? (cam3 = liveCam ? makeCalibratedCamera(liveCam) : null) : cam3)
+  // 3D player rules for this transition (ball events, previous gaits).
+  const rules = buildPlayerRules(a, b, paths, cam, segD, prevSeg, nextSeg)
   const out: BoardElement[] = []
   for (const eb of b) {
     const ea = byId.get(eb.id)
@@ -548,7 +554,7 @@ function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: A
       // 3D objects: follow the movement path on the pitch (the spline is board
       // coords — sample it and drop each point back onto the grass), and the
       // BALL rolls while it travels (2 rotations per second of wall time).
-      if (eb.type === 'object3d' && ea.type === 'object3d') el = applyObject3DMove(ea, ebm, el as Extract<BoardElement, { type: 'object3d' }>, mids, te, t, speed, objMult, cam())
+      if (eb.type === 'object3d' && ea.type === 'object3d') el = applyObject3DMove(ea, ebm, el as Extract<BoardElement, { type: 'object3d' }>, mids, te, t, segD, objMult, cam(), elapsedS, rules)
       // Token "between" effects: motion tail and/or sonar pulse while it MOVES.
       // Pinned tokens travel a GROUND-space lerp (reprojection positions them
       // from the lerped pin), so their tail must sample that same trajectory —
@@ -592,6 +598,244 @@ function samePose(a: FieldView, b: FieldView): boolean {
 const BALL_RADIUS_M = 0.11 // the ball GLB's real-size radius
 const MAX_ROLL_REV_PER_S = 4
 
+// ── 3D player animation rules (specs/animation.md "3D players") ─────────────
+// Per transition, each player's clip is chosen from what happens around it:
+// its own ground speed picks the gait, a ball glued to its run means dribbling,
+// a ball departing from its feet plays a pass (toward a teammate) or a kick,
+// and the ball arriving at a player plays a receive. All thresholds in ground
+// metres / m/s.
+const IDLE_SPEED = 0.25 // below: standing (idle)
+const RUN_SPEED = 3.5 // above: Standard Run instead of Jog Forward
+const RATE_MIN = 0.6 // stride-match playback-rate clamp
+const RATE_MAX = 1.6
+const DRIBBLE_R = 1.8 // ball stays within this of the runner → Dribble
+// Player↔ball interaction reach: a strike/receive is assumed ONLY when the
+// ball sits within 1 m of the player (ground metres) — the author must place
+// the ball at the player's feet to mean an interaction.
+const INTERACT_R = 1.0
+const KICK_MIN_RUN = 3 // the ball must depart at least this far
+const KICK_PRE_S = 0.25 // one-shot starts this long before its ball contact
+const GAIT_FADE_S = 0.25 // cross-fade into this segment's gait
+const FACE_BLEND = 0.15 // transition fraction blending authored ↔ path tangent
+
+/** Ground position along a straight or spline run at eased time q (spline =
+ *  the movement path in board coords, sampled and dropped back onto grass). */
+function groundPosAt(a: { x: number; z: number }, b: { x: number; z: number }, mids: PathPoint[] | undefined, cam: THREE.Camera | null | undefined): (q: number) => { x: number; z: number } | null {
+  return (q: number) => {
+    if (!mids?.length || !cam) return { x: a.x + (b.x - a.x) * q, z: a.z + (b.z - a.z) * q }
+    const ca = projectGround(cam, a.x, a.z)
+    const cb = projectGround(cam, b.x, b.z)
+    const [bx, by] = pointAlongPath([ca, ...mids, cb], q)
+    return boardToGround(bx, by, cam)
+  }
+}
+
+/** Arc length of a run in ground metres (splines sampled at 24 points). */
+function groundRun(a: { x: number; z: number }, b: { x: number; z: number }, mids: PathPoint[] | undefined, cam: THREE.Camera | null | undefined): number {
+  if (!mids?.length || !cam) return Math.hypot(b.x - a.x, b.z - a.z)
+  const posAt = groundPosAt(a, b, mids, cam)
+  let run = 0
+  let prev = posAt(0)
+  for (let k = 1; k <= 24; k++) {
+    const cur = posAt(k / 24)
+    if (prev && cur) run += Math.hypot(cur.x - prev.x, cur.z - prev.z)
+    prev = cur
+  }
+  return run
+}
+
+type Obj3D = Extract<BoardElement, { type: 'object3d' }>
+
+/** What EVERY ball does this transition + each player's PREVIOUS gait (for
+ *  the segment-boundary cross-fade). Computed once per tick in lerpElements.
+ *  Drills routinely run several balls at once (one per station/pair), so all
+ *  interactions are evaluated per ball. */
+interface PlayerRules {
+  /** Every moving ball's trajectory (for the dribble glue-check). */
+  balls: Array<{ posAt: (q: number) => { x: number; z: number } | null; run: number }>
+  /** playerId → the strike it performs this transition (pass vs kick). */
+  kickerOf: Map<string, { pass: boolean }>
+  /** playerIds a ball ARRIVES at this transition. */
+  receiverOf: Set<string>
+  /** Lookahead: playerId → the strike it performs in the NEXT transition —
+   *  outranks a receive this turn (the arrival tail plays the strike's
+   *  wind-up instead of a trap). */
+  nextKickerOf: Map<string, { pass: boolean }>
+  prevGait?: Map<string, { clip: string; rate: number }>
+}
+
+/** Who strikes which ball in the transition a→b (and whether it's a pass):
+ *  per BALL, the player within reach of its start whom the ball then LEAVES. */
+function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null): Array<{ kickerId: string; receiverId?: string }> {
+  const playersB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DPlayer(e.objectId))
+  const ballsB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DBall(e.objectId))
+  if (!playersB.length || !ballsB.length) return []
+  const byIdA = new Map(a.map((e) => [e.id, e]))
+  const out: Array<{ kickerId: string; receiverId?: string }> = []
+  for (const ballB of ballsB) {
+    const ballA = byIdA.get(ballB.id) as Obj3D | undefined
+    if (!ballA || ballA.type !== 'object3d') continue
+    const mids = paths?.[ballB.id]
+    const run = groundRun(ballA, ballB, mids, mids?.length ? cam() : null)
+    if (run < KICK_MIN_RUN) continue
+    let best: { id: string; d: number } | null = null
+    for (const p of playersB) {
+      const pa = byIdA.get(p.id) as Obj3D | undefined
+      if (!pa || pa.type !== 'object3d') continue
+      const d = Math.hypot(pa.x - ballA.x, pa.z - ballA.z)
+      const sep = Math.hypot(p.x - ballB.x, p.z - ballB.z)
+      if (d <= INTERACT_R && sep > DRIBBLE_R && (!best || d < best.d)) best = { id: p.id, d }
+    }
+    if (!best) continue
+    let recv: { id: string; d: number } | null = null
+    for (const p of playersB) {
+      if (p.id === best.id) continue
+      const d = Math.hypot(p.x - ballB.x, p.z - ballB.z)
+      if (d <= INTERACT_R && (!recv || d < recv.d)) recv = { id: p.id, d }
+    }
+    out.push({ kickerId: best.id, receiverId: recv?.id })
+  }
+  return out
+}
+
+/** The speed-based locomotion gait (idle / jog / run) + its stride rate. */
+function gaitFor(v: number): { clip: string; rate: number; moving: boolean } {
+  if (v < IDLE_SPEED) return { clip: PLAYER_CLIPS.idle.clip, rate: 1, moving: false }
+  const meta = v < RUN_SPEED ? PLAYER_CLIPS.jog : PLAYER_CLIPS.run
+  return { clip: meta.clip, rate: Math.min(RATE_MAX, Math.max(RATE_MIN, v / (meta.nominalSpeed ?? v))), moving: true }
+}
+
+function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null, D: number, prev?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }, next?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }): PlayerRules | undefined {
+  const playersB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DPlayer(e.objectId))
+  if (playersB.length === 0) return undefined
+  const byIdA = new Map(a.map((e) => [e.id, e]))
+  const rules: PlayerRules = { balls: [], kickerOf: new Map(), receiverOf: new Set(), nextKickerOf: new Map() }
+  for (const ballB of b) {
+    if (ballB.type !== 'object3d' || !isObject3DBall(ballB.objectId)) continue
+    const ballA = byIdA.get(ballB.id) as Obj3D | undefined
+    if (!ballA || ballA.type !== 'object3d') continue
+    const mids = paths?.[ballB.id]
+    const c = mids?.length ? cam() : null
+    rules.balls.push({ posAt: groundPosAt(ballA, ballB, mids, c), run: groundRun(ballA, ballB, mids, c) })
+  }
+  for (const s of detectStrikes(a, b, paths, cam)) {
+    rules.kickerOf.set(s.kickerId, { pass: !!s.receiverId })
+    if (s.receiverId) rules.receiverOf.add(s.receiverId)
+  }
+  // Lookahead: a ball leaving a player again in the NEXT transition outranks
+  // a receive this turn (a first-time shot, not a trap).
+  if (next) {
+    for (const s of detectStrikes(b, next.elements, next.paths, cam)) rules.nextKickerOf.set(s.kickerId, { pass: !!s.receiverId })
+  }
+  // Previous segment's gaits (straight-line speeds are enough for a fade).
+  if (prev) {
+    const prevById = new Map(prev.elements.map((e) => [e.id, e]))
+    const gaits = new Map<string, { clip: string; rate: number }>()
+    for (const p of playersB) {
+      const p1 = byIdA.get(p.id) as Obj3D | undefined // player at the shared frame
+      const p0 = prevById.get(p.id) as Obj3D | undefined
+      if (!p0 || !p1 || p0.type !== 'object3d' || p1.type !== 'object3d') continue
+      const g = gaitFor(Math.hypot(p1.x - p0.x, p1.z - p0.z) / D)
+      gaits.set(p.id, { clip: g.clip, rate: g.rate })
+    }
+    rules.prevGait = gaits
+  }
+  return rules
+}
+
+/** Shortest-arc angle interpolation (radians). */
+function angleLerp(a: number, b: number, t: number): number {
+  let d = (b - a) % (2 * Math.PI)
+  if (d > Math.PI) d -= 2 * Math.PI
+  if (d < -Math.PI) d += 2 * Math.PI
+  return a + d * t
+}
+
+/** The player's transient pose for this tick: clip + time from the rules
+ *  (gait by speed, dribble when the ball travels with the run, pass/kick when
+ *  the ball departs from its feet, receive when it arrives), plus facing along
+ *  the path tangent while moving. */
+function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x: number; z: number } | null, te: number, t: number, D: number, elapsedS: number, rules?: PlayerRules): Obj3D {
+  const run = groundRun(a, b, undefined, null) // straight part; splines below
+  const idleClip = playerIdleClip(b.objectId)
+  // Facing: while moving, look along the instantaneous tangent; blend from the
+  // frame-a authored rotation at the start and back to frame-b's at the end.
+  let moved = run
+  if (posAt) {
+    const g0 = posAt(Math.max(0, te - 0.02))
+    const g1 = posAt(Math.min(1, te + 0.02))
+    if (g0 && g1) {
+      const dx = g1.x - g0.x
+      const dz = g1.z - g0.z
+      if (Math.hypot(dx, dz) > 1e-4 && moved > 0.3) {
+        const tangent = Math.atan2(dx, dz)
+        const rot = t < FACE_BLEND ? angleLerp(a.rotation, tangent, t / FACE_BLEND) : t > 1 - FACE_BLEND ? angleLerp(tangent, b.rotation, (t - (1 - FACE_BLEND)) / FACE_BLEND) : tangent
+        el = { ...el, rotation: rot }
+      }
+    }
+  }
+  // Speed from the true arc when following a spline.
+  if (rules && posAt) {
+    let arc = 0
+    let prev = posAt(0)
+    for (let k = 1; k <= 12; k++) {
+      const cur = posAt(k / 12)
+      if (prev && cur) arc += Math.hypot(cur.x - prev.x, cur.z - prev.z)
+      prev = cur
+    }
+    moved = arc
+  }
+  const v = moved / D
+  let gait = gaitFor(v)
+  // Dribble: ANY ball travels WITH the run (stays within reach at every sample).
+  if (rules && gait.moving && posAt) {
+    const dribbling = rules.balls.some((ball) => {
+      if (ball.run < 1) return false
+      for (const q of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+        const pp = posAt(q)
+        const bp = ball.posAt(q)
+        if (!pp || !bp || Math.hypot(pp.x - bp.x, pp.z - bp.z) > DRIBBLE_R) return false
+      }
+      return true
+    })
+    if (dribbling) gait = { clip: PLAYER_CLIPS.dribble.clip, rate: Math.min(RATE_MAX, Math.max(RATE_MIN, v / (PLAYER_CLIPS.dribble.nominalSpeed ?? v))), moving: true }
+  }
+  const gaitClip = gait.moving ? gait.clip : idleClip
+  let anim: NonNullable<Obj3D['anim']> = { clip: gaitClip, time: elapsedS * gait.rate }
+  const wall = t * D
+  // One-shots override the gait. The kicker's clip starts just before its
+  // ball-contact moment (the ball departs at t = 0); the receiver's is timed
+  // to END with the ball's arrival at the segment end.
+  const kicks = rules?.kickerOf.get(b.id)
+  const receives = !!rules?.receiverOf.has(b.id)
+  const nextKicks = rules?.nextKickerOf.get(b.id)
+  if (kicks) {
+    const meta = kicks.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
+    const start = Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S)
+    const ct = start + wall
+    if (ct < clipDuration(meta.clip)) anim = { clip: meta.clip, time: ct }
+  } else if (receives && !nextKicks && !gait.moving) {
+    // An interaction animation (pass / kick / receive) plays exactly ONCE, in
+    // its own turn — never split or echoed across a frame boundary. So a
+    // player whose arriving ball goes OUT again next turn plays NOTHING here
+    // (no receive, no anticipation): the strike renders once, next turn.
+    // Receive plays only for a STATIONARY player whose ball settles (a moving
+    // player keeps its gait — a trap pose mid-run reads wrong). Timed so the
+    // clip's contact (trap) moment lands at the segment END, with the ball:
+    // time = contact − (remaining wall time).
+    const meta = PLAYER_CLIPS.receive
+    const dur = clipDuration(meta.clip)
+    const rt = wall - D + (meta.contactTime ?? Math.min(dur, D))
+    if (rt >= 0) anim = { clip: meta.clip, time: Math.min(rt, dur - 1e-3) }
+  }
+  // Cross-fade in from the previous segment's gait at the boundary.
+  const prev = rules?.prevGait?.get(b.id)
+  if (prev && wall < GAIT_FADE_S && prev.clip !== anim.clip) {
+    anim = { ...anim, prev: { clip: prev.clip, time: elapsedS * prev.rate }, fade: wall / GAIT_FADE_S }
+  }
+  return { ...el, anim }
+}
+
 function applyObject3DMove(
   ea: BoardElement,
   eb: BoardElement,
@@ -599,22 +843,24 @@ function applyObject3DMove(
   mids: PathPoint[] | undefined,
   te: number,
   t: number,
-  speed: number,
+  /** Wall-clock seconds this transition lasts (variable frame length). */
+  segD: number,
   objMult: number,
   cam?: THREE.Camera | null,
+  elapsedS = 0,
+  rules?: PlayerRules,
 ): BoardElement {
   const a = ea as Extract<BoardElement, { type: 'object3d' }>
   const b = eb as Extract<BoardElement, { type: 'object3d' }>
   const dist = Math.hypot(b.x - a.x, b.z - a.z)
   let el = lerped
   // Ground position at eased time q — along the path spline when one exists.
-  const posAt = (q: number): { x: number; z: number } | null => {
-    if (!mids?.length || !cam) return { x: a.x + (b.x - a.x) * q, z: a.z + (b.z - a.z) * q }
-    const ca = projectGround(cam, a.x, a.z)
-    const cb = projectGround(cam, b.x, b.z)
-    const [bx, by] = pointAlongPath([ca, ...mids, cb], q)
-    return boardToGround(bx, by, cam)
-  }
+  const posAt = groundPosAt(a, b, mids, cam)
+  // 3D players play their skeletal clips while the animation runs: the rules
+  // pick the gait (speed), dribble/pass/kick/receive (ball), and the facing
+  // (path tangent). Clip time derives from the ABSOLUTE animation time, so
+  // loops stay phase-continuous across segments and scrubbing is deterministic.
+  if (isObject3DPlayer(b.objectId)) el = playerAnimFor(a, b, el, posAt, te, t, segD, elapsedS, rules) as typeof el
   if (mids?.length && cam) {
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
@@ -640,7 +886,7 @@ function applyObject3DMove(
     // Physical spin: angle = distance / rendered radius, capped so a long fast
     // pass doesn't blur (max revolutions over the transition's wall time).
     const radius = BALL_RADIUS_M * Math.max(1, (b.useGlobalSize ? 1 : b.size) * objMult)
-    const totalAngle = Math.min(run / radius, MAX_ROLL_REV_PER_S * 2 * Math.PI * (1 / speed))
+    const totalAngle = Math.min(run / radius, MAX_ROLL_REV_PER_S * 2 * Math.PI * segD)
     // Roll about the ground axis perpendicular to the CURRENT motion tangent.
     const g0 = posAt(Math.max(0, te - 0.02))
     const g1 = posAt(Math.min(1, te + 0.02))
@@ -776,6 +1022,9 @@ export function startPlayback(store: EditorStore): void {
   const pb: Playback = { raf: 0, preElements: doc0.elements, preCamera: doc0.background.field3d, stopped: false }
   players.set(store, pb)
   store.setState({ playing: true, playhead: 0 })
+  // Warm the skinned-players asset (async 4 MB parse) as soon as a play with
+  // 3D players starts — they stay static meshes until it lands.
+  if (frames.some((f) => f.elements.some((e) => e.type === 'object3d' && isObject3DPlayer(e.objectId)))) ensurePlayerAnimLoaded()
 
   // Effective per-frame cameras: null poses inherit the previous frame's; the
   // whole chain seeds from the pose playback starts at (null on 2D boards —
@@ -815,6 +1064,12 @@ export function startPlayback(store: EditorStore): void {
   let seg = s.currentFrame < frames.length - 1 ? s.currentFrame : 0
   let first = true
   let segStart: number | null = null
+  // Variable frame length: the current segment's 1×-speed duration (base 1 s,
+  // stretched when a triggered one-shot player clip needs longer), plus the
+  // 1×-seconds accumulated over the segments already completed THIS loop
+  // (the players' clip clock; resets on wrap).
+  let curD = TRANSITION_MS / 1000
+  let elapsedBase = 0
   const step = (now: number) => {
     if (players.get(store) !== pb || pb.stopped) return
     const fr = store.getState().doc.animation.frames
@@ -822,19 +1077,25 @@ export function startPlayback(store: EditorStore): void {
       stopPlayback(store)
       return
     }
+    // Settings are read live so speed/easing changes apply immediately.
+    const anim = store.getState().doc.animation
+    const spd = Math.min(2, Math.max(0.25, anim.speed))
     if (segStart === null) {
+      curD = segmentDuration(fr[seg], fr[seg + 1], pb.preCamera)
       // Starting (from the edited frame) or wrapping the loop: hard cut to the
-      // segment's start frame — its camera applies instantly (per spec).
-      if (first || seg === 0) apply(fr[seg].elements, effCam[seg], seg)
+      // segment's start frame — its camera applies instantly (per spec). 3D
+      // players keep their idle pose through the cut (no static flash).
+      if (first || seg === 0) apply(withPlayerIdles(fr[seg].elements, elapsedBase / spd), effCam[seg], seg)
       first = false
       segStart = now
     }
-    // Settings are read live so speed/easing changes apply immediately.
-    const anim = store.getState().doc.animation
-    const t = Math.min(1, ((now - segStart) * Math.min(2, Math.max(0.25, anim.speed))) / TRANSITION_MS)
+    const t = Math.min(1, ((now - segStart) * spd) / (curD * 1000))
+    // Wall-clock seconds into this loop — the players' clip time
+    // (phase-continuous across segments).
+    const elapsedS = (elapsedBase + t * curD) / spd
     const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
     const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
-    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, store.getState().doc.background.tokens3d, Math.min(2, Math.max(0.25, anim.speed)), store.getState().doc.background.objectScale, fr[seg + 1].effects), pose, seg + t)
+    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, store.getState().doc.background.tokens3d, curD / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, elapsedS, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths } : undefined), pose, seg + t)
     if (t >= 1) {
       if (seg + 1 >= fr.length - 1) {
         // Reached the last frame. Loop wraps (hard cut back to frame 1);
@@ -844,12 +1105,41 @@ export function startPlayback(store: EditorStore): void {
           return
         }
         seg = 0
-      } else seg += 1
+        elapsedBase = 0
+      } else {
+        seg += 1
+        elapsedBase += curD
+      }
       segStart = null
     }
     pb.raf = requestAnimationFrame(step)
   }
   pb.raf = requestAnimationFrame(step)
+}
+
+/** How long the transition INTO frame i+1 lasts at 1× speed, in seconds: the
+ *  base 1 s, extended when a triggered one-shot needs longer to complete (the
+ *  spec's variable frame length — e.g. a long receive extends its move so the
+ *  trap lands with the ball). Cheap; computed fresh at each segment start so
+ *  the lazily-parsed clip durations are picked up. */
+function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView | null): number {
+  const base = TRANSITION_MS / 1000
+  const cam = () => (preCam ? makeCalibratedCamera(preCam) : null)
+  const rules = buildPlayerRules(a.elements, b.elements, b.paths, cam, base)
+  if (!rules) return base
+  let d = base
+  for (const [, k] of rules.kickerOf) {
+    const meta = k.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
+    d = Math.max(d, clipDuration(meta.clip) - Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S))
+  }
+  if (rules.receiverOf.size) d = Math.max(d, PLAYER_CLIPS.receive.contactTime ?? base)
+  return d
+}
+
+/** 3D players in a raw frame snapshot get their idle pose (hard cuts at play
+ *  start / loop wraps — keeps the skinned mesh mounted, no static flash). */
+function withPlayerIdles(elements: BoardElement[], atS: number): BoardElement[] {
+  return elements.map((e) => (e.type === 'object3d' && isObject3DPlayer(e.objectId) ? { ...e, anim: { clip: playerIdleClip(e.objectId), time: atS } } : e))
 }
 
 /** Loop-off end of playback: stop, then land on FRAME 1 (like clicking its

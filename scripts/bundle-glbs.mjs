@@ -41,6 +41,9 @@ const MODELS = [
   ['../players3d/static/player_woman_a.glb', 'player_woman_a.glb', 'PLAYER_WOMAN_A_GLB_BASE64', 'player-woman-a-glb.ts'],
   ['../players3d/static/player_woman_b.glb', 'player_woman_b.glb', 'PLAYER_WOMAN_B_GLB_BASE64', 'player-woman-b-glb.ts'],
   ['../players3d/static/player_woman_c.glb', 'player_woman_c.glb', 'PLAYER_WOMAN_C_GLB_BASE64', 'player-woman-c-glb.ts'],
+  // The SKINNED players + animation clips (6 characters on Mixamo rigs, all
+  // clips) — used during animation playback (lib/player-anim.ts).
+  ['../players3d/players3d_mixamo.glb', 'players3d_mixamo.glb', 'PLAYERS3D_MIXAMO_GLB_BASE64', 'players3d-mixamo-glb.ts'],
   // 3D-player static POSES (Mixamo clip frames baked on Man B / Woman B; see specs/positions.md)
   ['../players3d/static/pose_man_idle.glb', 'pose_man_idle.glb', 'POSE_MAN_IDLE_GLB_BASE64', 'pose-man-idle-glb.ts'],
   ['../players3d/static/pose_man_jog.glb', 'pose_man_jog.glb', 'POSE_MAN_JOG_GLB_BASE64', 'pose-man-jog-glb.ts'],

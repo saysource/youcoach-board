@@ -725,6 +725,11 @@ export function onObject3DAssetReady(cb: () => void): () => void {
 function notifyAssetReady() {
   for (const cb of assetReadyCbs) cb()
 }
+/** Fire the asset-ready notification from OUTSIDE this module (the skinned
+ *  players GLB in player-anim.ts finishes its async parse). */
+export function notifyObject3DAssetReady(): void {
+  notifyAssetReady()
+}
 
 // Decoded base images: character atlases + the print overlay, keyed by id.
 const kitImages = new Map<string, HTMLImageElement>()
