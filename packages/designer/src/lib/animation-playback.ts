@@ -19,7 +19,7 @@ import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchor
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { isObject3DBall, isObject3DPlayer } from './objects3d'
-import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, kickStyleFor, PLAYER_CLIPS, playerIdleClip, type GkCatchMeta, type PlayerClipMeta } from './player-anim'
+import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, isScissorPose, kickStyleFor, PLAYER_CLIPS, playerIdleClip, SCISSOR_KICK, type GkCatchMeta, type PlayerClipMeta } from './player-anim'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -689,6 +689,14 @@ interface PlayerRules {
    *  from his feet, and the previous turn was NOT his save — then the
    *  outbound ball is just the save's bounce). */
   gkKickOf?: Set<string>
+  /** Scissor-pose players whose inbound ball departs again NEXT turn: the
+   *  bicycle kick plays with its strike frame landing on the segment end, and
+   *  the ball's arrival retargets to the in-air strike point (via caughtBy). */
+  scissorOf?: Map<string, GkCatchMeta>
+  /** The PREVIOUS transition's scissor kicks: the player finishes the clip
+   *  (follow-through) and the struck ball departs from the in-air point (via
+   *  prevCaughtBy) — with no second kick animation or departure delay. */
+  prevScissorOf?: Map<string, GkCatchMeta>
   prevGait?: Map<string, { clip: string; rate: number; moving: boolean }>
   /** The NEXT transition's speed-based gaits — a player coming to REST next
    *  turn ramps its locomotion out toward idle before the boundary. */
@@ -781,7 +789,17 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
     const c = mids?.length ? cam() : null
     rules.balls.push({ posAt: groundPosAt(ballA, ballB, mids, c), run: groundRun(ballA, ballB, mids, c) })
   }
-  for (const s of detectStrikes(a, b, paths, cam, effects)) {
+  // Whether `ballId` ARRIVES at the player over the transition x→y: a real run
+  // that ends within the standard interaction radius of the player's spot.
+  const ballArrives = (x: BoardElement[], y: BoardElement[], xyPaths: AnimationFrame['paths'], ballId: string, py: Obj3D): boolean => {
+    const ballY = y.find((e) => e.id === ballId) as Obj3D | undefined
+    const ballX = x.find((e) => e.id === ballId) as Obj3D | undefined
+    if (!ballX || !ballY || ballX.type !== 'object3d' || ballY.type !== 'object3d') return false
+    const run = groundRun(ballX, ballY, xyPaths?.[ballId], xyPaths?.[ballId]?.length ? cam() : null)
+    return run >= KICK_MIN_RUN && Math.hypot(py.x - ballY.x, py.z - ballY.z) <= (SCISSOR_KICK.reach ?? INTERACT_R)
+  }
+  const thisStrikes = detectStrikes(a, b, paths, cam, effects)
+  for (const s of thisStrikes) {
     const style = kickStyleFor(s.kickerObjectId)
     rules.kickerOf.set(s.kickerId, { pass: s.pass, meta: style.meta })
     // A KICKED ball waits at the kicker's feet until the clip's foot-contact
@@ -793,7 +811,35 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
   // a receive this turn — and a SHOT next turn (kick, not pass) plays its
   // strike anticipation in THIS turn's tail (see playerAnimFor).
   if (next) {
-    for (const s of detectStrikes(b, next.elements, next.paths, cam, next.effects)) rules.nextKickerOf.set(s.kickerId, { pass: s.pass })
+    for (const s of detectStrikes(b, next.elements, next.paths, cam, next.effects)) {
+      rules.nextKickerOf.set(s.kickerId, { pass: s.pass })
+      // SCISSOR KICK (this turn): the pose's inbound ball departs again next
+      // turn — play the bicycle kick with its strike frame at the boundary,
+      // and retarget the ball's arrival to the in-air strike point.
+      const p = b.find((e) => e.id === s.kickerId) as Obj3D | undefined
+      if (p?.type === 'object3d' && isScissorPose(p.objectId) && ballArrives(a, b, paths, s.ballId, p)) {
+        ;(rules.scissorOf = rules.scissorOf ?? new Map()).set(p.id, SCISSOR_KICK)
+        rules.caughtBy = rules.caughtBy ?? new Map()
+        if (!rules.caughtBy.has(s.ballId)) rules.caughtBy.set(s.ballId, { gk: p, meta: SCISSOR_KICK })
+      }
+    }
+  }
+  // SCISSOR KICK (the turn after): the strike happened ON the boundary — the
+  // struck ball flies out FROM the in-air point while the player finishes the
+  // clip. His departure is the scissor itself: drop the regular kick (and the
+  // kicked-ball departure delay) detected for this transition.
+  if (prev) {
+    for (const s of thisStrikes) {
+      const p = b.find((e) => e.id === s.kickerId) as Obj3D | undefined
+      const pA = a.find((e) => e.id === s.kickerId) as Obj3D | undefined
+      if (!p || p.type !== 'object3d' || !isScissorPose(p.objectId) || !pA || pA.type !== 'object3d') continue
+      if (!ballArrives(prev.elements, a, prev.paths, s.ballId, pA)) continue
+      ;(rules.prevScissorOf = rules.prevScissorOf ?? new Map()).set(p.id, SCISSOR_KICK)
+      rules.prevCaughtBy = rules.prevCaughtBy ?? new Map()
+      if (!rules.prevCaughtBy.has(s.ballId)) rules.prevCaughtBy.set(s.ballId, { gk: pA, meta: SCISSOR_KICK })
+      rules.kickerOf.delete(s.kickerId)
+      rules.kickDelayOf?.delete(s.ballId)
+    }
   }
   // Goalkeeper SAVES this transition, and the PREVIOUS transition's (the
   // keeper then finishes the catch and returns to his spot; a held ball
@@ -801,13 +847,16 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
   const sv = detectSaves(a, b, paths, cam)
   if (sv) {
     rules.saveOf = sv.saves
-    rules.caughtBy = sv.caught
+    // Merge (a scissor retarget may already claim a ball — first wins).
+    rules.caughtBy = rules.caughtBy ?? new Map()
+    for (const [k, v] of sv.caught) if (!rules.caughtBy.has(k)) rules.caughtBy.set(k, v)
   }
   if (prev) {
     const pv = detectSaves(prev.elements, a, prev.paths, cam)
     if (pv) {
       rules.prevSaveOf = pv.saves
-      rules.prevCaughtBy = pv.caught
+      rules.prevCaughtBy = rules.prevCaughtBy ?? new Map()
+      for (const [k, v] of pv.caught) if (!rules.prevCaughtBy.has(k)) rules.prevCaughtBy.set(k, v)
     }
   }
   // Goalkeeper DEEP KICK: a deep-kick-pose keeper with a ball departing from
@@ -929,7 +978,20 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
   const nextKicks = rules?.nextKickerOf.get(b.id)
   const save = rules?.saveOf?.get(b.id)
   const prevSave = rules?.prevSaveOf?.get(b.id)
-  if (save) {
+  const scissor = rules?.scissorOf?.get(b.id)
+  const prevScissor = rules?.prevScissorOf?.get(b.id)
+  if (scissor) {
+    // Scissor kick: timed like the save — the in-air strike frame lands
+    // exactly ON the segment end, where the retargeted ball arrives.
+    const dur = clipDuration(scissor.clip)
+    const rt = wall - D + (scissor.contactTime ?? Math.min(dur, D))
+    if (rt >= 0) anim = { clip: scissor.clip, time: Math.min(rt, dur - 1e-3) }
+  } else if (prevScissor) {
+    // The turn after: finish the bicycle kick (follow-through from the strike
+    // frame) while the struck ball flies out; back to the gait when it ends.
+    const ct = (prevScissor.contactTime ?? 0) + wall
+    if (ct < clipDuration(prevScissor.clip)) anim = { clip: prevScissor.clip, time: ct }
+  } else if (save) {
     // Goalkeeper SAVE: the catch clip of the authored pose, timed like the
     // receive — its catch moment lands at the segment END, with the ball.
     const dur = clipDuration(save.clip)

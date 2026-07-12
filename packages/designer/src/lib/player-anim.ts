@@ -109,6 +109,19 @@ export const GK_CATCH: Record<string, GkCatchMeta> = {
 // window and marks the moment the ball departs.
 export const GK_KICK: PlayerClipMeta = { clip: 'Goalkeeper Drop Kick', loop: false, contactTime: 0.6, window: [1.9, 3.2], inPlace: true }
 
+// SCISSOR (bicycle) KICK: a scissor-pose player whose inbound ball departs
+// again next turn strikes it IN THE AIR — the foot meets the ball at frame 26,
+// timed to land exactly on the frame boundary. The ball's arrival retargets to
+// the strike point (user-measured in Blender: (0.47, 0, 1.7) → local
+// [side, height, front], same convention as the GK hands) and next turn it
+// flies out FROM that point while the player finishes the clip.
+export const SCISSOR_KICK: GkCatchMeta = { clip: 'Scissor Kick', loop: false, contactTime: 26 / 30, reach: 1.0, hand: [0.47, 1.7, 0] }
+
+/** Whether this pose is the scissor kick. */
+export function isScissorPose(objectId: string): boolean {
+  return /^pose_(?:man|woman)_scissor$/.test(objectId)
+}
+
 /** Whether this goalkeeper pose is one of the deep kicks. */
 export function isGkDeepKick(objectId: string): boolean {
   return /^pose_gk_(?:man|woman)_deep_kick(?:_2|_3)?$/.test(objectId)
@@ -140,7 +153,7 @@ export function gkCatchFor(objectId: string): GkCatchMeta | null {
   return (m && GK_CATCH[m[1]]) || null
 }
 
-const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK].map((m) => [m.clip, m]))
+const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK, SCISSOR_KICK].map((m) => [m.clip, m]))
 
 // ── Character lookup ─────────────────────────────────────────────────────────
 // Which skinned character a player objectId animates as. Base players map to
