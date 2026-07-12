@@ -54,6 +54,10 @@ export const PLAYER_CLIPS: Record<string, PlayerClipMeta> = {
   // contactTime just inside the window's end: the whole selected range plays
   // and finishes as the ball arrives.
   receive: { clip: 'Receive Soccerball', loop: false, contactTime: 0.65, window: [25 / 30, 45 / 30], inPlace: true },
+  // Goalkeeper RETURN after a displacing save: stepping in place while the
+  // playback decays the world offset back to the authored spot.
+  gkSidestep: { clip: 'Goalkeeper Sidestep', loop: true, inPlace: true },
+  jogBack: { clip: 'Jog Backward', loop: true },
 }
 
 // ── Goalkeeper saves ─────────────────────────────────────────────────────────
@@ -244,6 +248,25 @@ export function ensurePlayerAnimLoaded(): void {
 
 export function playerAnimReady(): boolean {
   return templates !== null
+}
+
+/** The clip's ROOT (hips) ground offset at `time`, relative to its first
+ *  frame, in the rig's LOCAL ground axes [x = side, y = forward] — how far
+ *  the clip's root motion has carried the body (0,0 for pinned clips). */
+export function clipRootOffset(clipName: string, time: number): [number, number] {
+  const clip = clips.find((c) => c.name === clipName)
+  if (!clip) return [0, 0]
+  const tr = clip.tracks.find((t) => t.name.includes('Hips') && t.name.endsWith('.position'))
+  if (!tr || tr.getValueSize() !== 3) return [0, 0]
+  const times = tr.times
+  const values = tr.values
+  const t = Math.max(times[0], Math.min(time, times[times.length - 1]))
+  let i = 0
+  while (i < times.length - 1 && times[i + 1] < t) i++
+  const j = Math.min(i + 1, times.length - 1)
+  const f = times[j] > times[i] ? (t - times[i]) / (times[j] - times[i]) : 0
+  const at = (k: number) => values[i * 3 + k] + (values[j * 3 + k] - values[i * 3 + k]) * f
+  return [at(0) - values[0], at(1) - values[1]]
 }
 
 /** A clip's duration in seconds (fallback before the asset is parsed). */

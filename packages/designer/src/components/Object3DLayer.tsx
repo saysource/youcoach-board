@@ -306,7 +306,9 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
       // Airborne poses (diving catches) float by their authored lift.
       const lift = (obj.userData.groundLift as number) ?? 0
-      obj.position.set(e.x, (-baseMinY + lift) * scale + (e.elevation ?? 0), e.z)
+      // Transient playback ground offset (e.g. a keeper returning to his spot).
+      const aoff = e.animOffset ?? [0, 0]
+      obj.position.set(e.x + aoff[0], (-baseMinY + lift) * scale + (e.elevation ?? 0), e.z + aoff[1])
       obj.rotation.set(0, e.rotation, 0)
       // Rolling (playback): world-space rotation about the ground axis
       // perpendicular to the motion, PIVOTED AT THE MESH CENTRE (the ball's

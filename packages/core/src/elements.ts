@@ -378,6 +378,10 @@ export interface Object3DElement extends BaseElement {
    *  clip (`fade` 0‥1 = weight toward `clip`). Applied deterministically by the
    *  WebGL layer (no wall clock), never persisted. */
   anim?: { clip: string; time: number; prev?: { clip: string; time: number }; fade?: number }
+  /** TRANSIENT (playback, 3D players): a world-space ground offset [dx, dz]
+   *  added to the mesh position — e.g. a goalkeeper returning to his spot
+   *  after a displacing save. Never persisted. */
+  animOffset?: [number, number]
 }
 
 export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement | Object3DElement

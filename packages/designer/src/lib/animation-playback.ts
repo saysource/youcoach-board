@@ -19,7 +19,7 @@ import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchor
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { isObject3DBall, isObject3DPlayer } from './objects3d'
-import { clipDuration, ensurePlayerAnimLoaded, gkCatchFor, isGoalkeeper, PLAYER_CLIPS, playerIdleClip, type GkCatchMeta } from './player-anim'
+import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, isGoalkeeper, PLAYER_CLIPS, playerIdleClip, type GkCatchMeta } from './player-anim'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -667,6 +667,10 @@ interface PlayerRules {
   saveOf?: Map<string, GkCatchMeta>
   /** ballId → the keeper catching it (the ball's end retargets to his hands). */
   caughtBy?: Map<string, { gk: Obj3D; meta: GkCatchMeta }>
+  /** The PREVIOUS transition's saves: the keeper plays the catch follow-through
+   *  and then RETURNS to his authored spot; a held ball starts from his hands. */
+  prevSaveOf?: Map<string, GkCatchMeta>
+  prevCaughtBy?: Map<string, { gk: Obj3D; meta: GkCatchMeta }>
   prevGait?: Map<string, { clip: string; rate: number; moving: boolean }>
   /** The NEXT transition's speed-based gaits — a player coming to REST next
    *  turn ramps its locomotion out toward idle before the boundary. */
@@ -712,6 +716,33 @@ function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFra
   return out
 }
 
+/** Goalkeeper saves in the transition a→b: per keeper, a ball whose
+ *  destination lands within the authored pose's reach (the keeper's own
+ *  reach, not the field INTERACT_R). Returns both directions of the match. */
+function detectSaves(aEls: BoardElement[], bEls: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null): { saves: Map<string, GkCatchMeta>; caught: Map<string, { gk: Obj3D; meta: GkCatchMeta }> } | null {
+  const byIdA = new Map(aEls.map((e) => [e.id, e]))
+  const saves = new Map<string, GkCatchMeta>()
+  const caught = new Map<string, { gk: Obj3D; meta: GkCatchMeta }>()
+  for (const gk of bEls) {
+    if (gk.type !== 'object3d' || !isGoalkeeper(gk.objectId)) continue
+    const meta = gkCatchFor(gk.objectId)
+    if (!meta) continue
+    for (const ballB of bEls) {
+      if (ballB.type !== 'object3d' || !isObject3DBall(ballB.objectId)) continue
+      const ballA = byIdA.get(ballB.id) as Obj3D | undefined
+      if (!ballA || ballA.type !== 'object3d') continue
+      const run = groundRun(ballA, ballB, paths?.[ballB.id], paths?.[ballB.id]?.length ? cam() : null)
+      if (run < KICK_MIN_RUN) continue
+      if (Math.hypot(gk.x - ballB.x, gk.z - ballB.z) <= meta.reach) {
+        saves.set(gk.id, meta)
+        if (!caught.has(ballB.id)) caught.set(ballB.id, { gk, meta })
+        break
+      }
+    }
+  }
+  return saves.size ? { saves, caught } : null
+}
+
 /** The speed-based locomotion gait (idle / jog / run) + its stride rate. */
 function gaitFor(v: number): { clip: string; rate: number; moving: boolean } {
   if (v < IDLE_SPEED) return { clip: PLAYER_CLIPS.idle.clip, rate: 1, moving: false }
@@ -742,26 +773,19 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
   if (next) {
     for (const s of detectStrikes(b, next.elements, next.paths, cam, next.effects)) rules.nextKickerOf.set(s.kickerId, { pass: s.pass })
   }
-  // Goalkeeper SAVES: a ball whose destination lands within a keeper's reach
-  // (per its authored catch pose) is his save — the catch clip plays timed to
-  // the arrival. Uses the keeper's own reach, not the field INTERACT_R.
-  for (const gk of playersB) {
-    if (!isGoalkeeper(gk.objectId)) continue
-    const meta = gkCatchFor(gk.objectId)
-    if (!meta) continue
-    for (const ballB of b) {
-      if (ballB.type !== 'object3d' || !isObject3DBall(ballB.objectId)) continue
-      const ballA = byIdA.get(ballB.id) as Obj3D | undefined
-      if (!ballA || ballA.type !== 'object3d') continue
-      const run = groundRun(ballA, ballB, paths?.[ballB.id], paths?.[ballB.id]?.length ? cam() : null)
-      if (run < KICK_MIN_RUN) continue
-      if (Math.hypot(gk.x - ballB.x, gk.z - ballB.z) <= meta.reach) {
-        rules.saveOf = rules.saveOf ?? new Map()
-        rules.saveOf.set(gk.id, meta)
-        rules.caughtBy = rules.caughtBy ?? new Map()
-        if (!rules.caughtBy.has(ballB.id)) rules.caughtBy.set(ballB.id, { gk, meta })
-        break
-      }
+  // Goalkeeper SAVES this transition, and the PREVIOUS transition's (the
+  // keeper then finishes the catch and returns to his spot; a held ball
+  // starts from his hands).
+  const sv = detectSaves(a, b, paths, cam)
+  if (sv) {
+    rules.saveOf = sv.saves
+    rules.caughtBy = sv.caught
+  }
+  if (prev) {
+    const pv = detectSaves(prev.elements, a, prev.paths, cam)
+    if (pv) {
+      rules.prevSaveOf = pv.saves
+      rules.prevCaughtBy = pv.caught
     }
   }
   // Neighbour segments' gaits (straight-line speeds are enough for fades /
@@ -859,12 +883,33 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
   const receives = !!rules?.receiverOf.has(b.id)
   const nextKicks = rules?.nextKickerOf.get(b.id)
   const save = rules?.saveOf?.get(b.id)
+  const prevSave = rules?.prevSaveOf?.get(b.id)
   if (save) {
     // Goalkeeper SAVE: the catch clip of the authored pose, timed like the
     // receive — its catch moment lands at the segment END, with the ball.
     const dur = clipDuration(save.clip)
     const rt = wall - D + (save.contactTime ?? Math.min(dur, D))
     if (rt >= 0) anim = { clip: save.clip, time: Math.min(rt, dur - 1e-3) }
+  } else if (prevSave) {
+    // The turn AFTER a save: finish the catch (follow-through — the clip's own
+    // root motion keeps the displacement), then RETURN to the authored spot —
+    // stepping in place (sidestep for lateral saves, jog backward otherwise)
+    // while a transient world offset decays the displacement to zero.
+    const dur = clipDuration(prevSave.clip)
+    const contact = prevSave.contactTime ?? 0
+    const follow = Math.min(dur - contact, 0.4 * D)
+    if (wall < follow) {
+      anim = { clip: prevSave.clip, time: Math.min(contact + wall, dur - 1e-3) }
+    } else {
+      const [lx, ly] = clipRootOffset(prevSave.clip, contact + follow)
+      const r = b.rotation
+      const ox = Math.sin(r) * ly + Math.cos(r) * lx
+      const oz = Math.cos(r) * ly - Math.sin(r) * lx
+      const meta = Math.abs(lx) >= Math.abs(ly) ? PLAYER_CLIPS.gkSidestep : PLAYER_CLIPS.jogBack
+      const p = Math.min(1, (wall - follow) / Math.max(0.2, D - follow))
+      anim = { clip: meta.clip, time: wall - follow }
+      if (Math.hypot(ox, oz) > 0.05 && p < 1) el = { ...el, animOffset: [ox * (1 - p), oz * (1 - p)] }
+    }
   } else if (kicks) {
     const meta = kicks.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
     // A SHOT (kick — Power Shot or not landing at a player) plays the WHOLE
@@ -930,7 +975,7 @@ function applyObject3DMove(
   elapsedS = 0,
   rules?: PlayerRules,
 ): BoardElement {
-  const a = ea as Extract<BoardElement, { type: 'object3d' }>
+  let a = ea as Extract<BoardElement, { type: 'object3d' }>
   let b = eb as Extract<BoardElement, { type: 'object3d' }>
   let el = lerped
   // A ball being CAUGHT (goalkeeper save): its END retargets to the keeper's
@@ -943,10 +988,18 @@ function applyObject3DMove(
     const r = caught.gk.rotation
     b = { ...b, x: caught.gk.x + Math.sin(r) * front + Math.cos(r) * side, z: caught.gk.z + Math.cos(r) * front - Math.sin(r) * side }
   }
+  // A ball caught LAST turn starts from the keeper's hands (whether held —
+  // gliding down to its authored spot — or distributed onward).
+  const handoff = isObject3DBall(b.objectId) && !caught ? rules?.prevCaughtBy?.get(b.id) : undefined
+  if (handoff) {
+    const [side, , front] = handoff.meta.hand
+    const r = handoff.gk.rotation
+    a = { ...a, x: handoff.gk.x + Math.sin(r) * front + Math.cos(r) * side, z: handoff.gk.z + Math.cos(r) * front - Math.sin(r) * side }
+  }
   const dist = Math.hypot(b.x - a.x, b.z - a.z)
   // Ground position at eased time q — along the path spline when one exists.
   const posAt = groundPosAt(a, b, mids, cam)
-  if (caught && !mids?.length) {
+  if ((caught || handoff) && !mids?.length) {
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
   }
@@ -966,10 +1019,13 @@ function applyObject3DMove(
   const heightAt = (q: number) => (parabolic ? peakH * 4 * q * (1 - q) : 0)
   if (parabolic) el = { ...el, elevation: (el.elevation ?? 0) + heightAt(te) }
   // A caught ball RISES into the hands over the last stretch of its arrival
-  // (blended over whatever trajectory it had — roll or lofted shot).
+  // (blended over whatever trajectory it had — roll or lofted shot); a ball
+  // caught LAST turn descends from the hand height as it's put down / played.
   if (caught) {
     const k = Math.max(0, Math.min(1, (te - 0.7) / 0.3))
     el = { ...el, elevation: (el.elevation ?? 0) * (1 - k) + caught.meta.hand[1] * k }
+  } else if (handoff) {
+    el = { ...el, elevation: Math.max(el.elevation ?? 0, handoff.meta.hand[1] * (1 - te)) }
   }
   if (isObject3DBall(b.objectId) && dist > 0.5) {
     // Run distance in ground metres (spline paths: sampled arc length).
