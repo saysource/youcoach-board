@@ -705,13 +705,14 @@ interface PlayerRules {
   /** Players whose run bends SHARPLY at the coming boundary (both legs real
    *  runs, direction change ≥ 45° — corner angle ≤ 135°, down to a full
    *  reversal): the plant-and-turn clip smooths the brutal corner. The player
-   *  STOPS where the clip starts (no skating), turns on the spot, and the
-   *  next leg's travel restarts from that point when the clip ends. */
+   *  runs the FULL leg (compressed to arrive at the destination as the clip
+   *  starts), turns AT the corner, and the new leg's run waits for the clip
+   *  to end before covering its path in the remaining time. */
   turnOf?: Set<string>
   /** …and at the boundary just passed (the turn's exit plays into this leg). */
   prevTurnOf?: Set<string>
-  /** playerId → where his turn froze him (the clip-start point on the
-   *  PREVIOUS leg) — the new leg's travel restarts from here. */
+  /** playerId → the clip-start point on the PREVIOUS leg — only used to face
+   *  the OLD run direction while the clip finishes on the new leg. */
   turnFreezeOf?: Map<string, { x: number; z: number }>
 }
 
@@ -966,11 +967,16 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
     // (~150° of authored body rotation) — hold the OLD leg's direction while
     // it plays, and come out already facing the new one (no re-turn after).
     const turnContact = PLAYER_CLIPS.changeDir.contactTime ?? 0.833
-    const turningOut = !!rules?.turnOf?.has(b.id) && t * D > D - turnContact
+    const turningOut = !!rules?.turnOf?.has(b.id)
     const afterTurn = !!rules?.prevTurnOf?.has(b.id)
     const fp = afterTurn ? rules?.turnFreezeOf?.get(b.id) : undefined
-    const turningIn = afterTurn && t * D < clipDuration(PLAYER_CLIPS.changeDir.clip) - turnContact
-    const qs = turningOut ? Math.max(0, (D - turnContact) / D) : te
+    const exitT = Math.min(1, (clipDuration(PLAYER_CLIPS.changeDir.clip) - turnContact) / D)
+    const turningIn = afterTurn && t < exitT
+    // Turn players sample the tangent at their REMAPPED travel (compressed
+    // outgoing leg / corner-hold then delayed new leg).
+    let qs = te
+    if (turningOut) qs = easeOf(b)(Math.min(1, t / Math.max(1e-3, (D - turnContact) / D)))
+    else if (afterTurn) qs = easeOf(b)(Math.min(1, Math.max(0, (t - exitT) / Math.max(0.1, 1 - exitT))))
     const g0 = posAt(Math.max(0, qs - 0.02))
     const g1 = posAt(Math.min(1, qs + 0.02))
     if (turningIn && fp) {
@@ -1207,34 +1213,22 @@ function applyObject3DMove(
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
   }
-  // Sharp-turn plant: the player STOPS where the turn clip starts and dances
-  // the turn on the spot (no skating under the plant) — then the NEW leg's
-  // travel restarts from that freeze point once the clip ends, covering the
-  // leg in the remaining time.
+  // Sharp-turn plant: the player runs the FULL leg — compressed so he ARRIVES
+  // at the destination point just as the clip starts — and dances the turn AT
+  // the corner (no skating, no shortened path). The new leg then holds the
+  // corner while the clip finishes and covers its run in the remaining time.
   if (isObject3DPlayer(b.objectId) && rules) {
     const turnMeta = PLAYER_CLIPS.changeDir
     const contact = turnMeta.contactTime ?? 0.833
     if (rules.turnOf?.has(b.id)) {
-      const startT = Math.max(0, (segD - contact) / segD)
-      if (t > startT) {
-        const g = posAt(easeOf(b)(startT))
-        if (g) el = { ...el, x: g.x, z: g.z }
-      }
+      const startT = Math.max(1e-3, (segD - contact) / segD)
+      const g = posAt(easeOf(b)(Math.min(1, t / startT)))
+      if (g) el = { ...el, x: g.x, z: g.z }
     } else if (rules.prevTurnOf?.has(b.id)) {
-      const fp = rules.turnFreezeOf?.get(b.id)
-      if (fp) {
-        const exit = clipDuration(turnMeta.clip) - contact
-        const wall = t * segD
-        if (wall < exit) {
-          el = { ...el, x: fp.x, z: fp.z }
-        } else {
-          // Restart from the freeze point: blend into the authored path so the
-          // leg still ENDS exactly at frame-b's spot.
-          const q2 = Math.min(1, (wall - exit) / Math.max(0.2, segD - exit))
-          const g = posAt(easeOf(b)(q2))
-          if (g) el = { ...el, x: fp.x * (1 - q2) + g.x * q2, z: fp.z * (1 - q2) + g.z * q2 }
-        }
-      }
+      const exit = clipDuration(turnMeta.clip) - contact
+      const q2 = Math.min(1, Math.max(0, (t * segD - exit) / Math.max(0.2, segD - exit)))
+      const g = posAt(easeOf(b)(q2))
+      if (g) el = { ...el, x: g.x, z: g.z }
     }
   }
   // Parabolic shot (ball): the flight height follows a parabola peaking
