@@ -949,7 +949,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
               // sweep the 4 footprint corners for the axis-aligned bounds.
               const fp = object3dGroundBounds(e.objectId)
               const rel = e.useGlobalSize ? 1 : e.size
-              const s = (isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(minScale, rel * objectScale))
+              const s = Math.max(isObject3DGoal(e.objectId) ? 0.05 : minScale, rel * objectScale)
               const cos = Math.cos(e.rotation)
               const sin = Math.sin(e.rotation)
               let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity

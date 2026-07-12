@@ -296,12 +296,12 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       // mesh, floored at minScale (×1 on a 3D field — never smaller than real;
       // relaxed on legacy 2D backgrounds to allow figure-size parity).
       const rel = e.useGlobalSize ? 1 : e.size
-      // Goals are real-metric structural objects (ignore the global scale). 3D
-      // players scale with the same materials multiplier as cones/hurdles/etc., so
-      // players and materials stay the same relative size (aligned defaults).
+      // Everything — players, materials AND goals — follows the global objects
+      // multiplier, so the whole 3D kit stays the same relative size. Goals keep
+      // a relaxed floor (they may shrink below real size even on a 3D field).
       const mult = objectScale
       // Playback enter/exit effects: transient extra scale + opacity hints.
-      const scale = (isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(minScale, rel * mult)) * Math.max(0.001, e.effectScale ?? 1)
+      const scale = Math.max(isObject3DGoal(e.objectId) ? 0.05 : minScale, rel * mult) * Math.max(0.001, e.effectScale ?? 1)
       obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
       // Airborne poses (diving catches) float by their authored lift.
