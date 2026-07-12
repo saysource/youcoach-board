@@ -2356,6 +2356,13 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         ? resolveAnchorDrag(gesture).guides
         : []
   const alignGuides = [...(fieldMoveSnap?.guides ?? []), ...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides, ...object3dSnapGuides]
+  // A circle ON THE PITCH around ground point (x, z), projected to board coords.
+  const groundRingPoints = (x: number, z: number, r: number): string =>
+    Array.from({ length: 36 }, (_, i) => {
+      const ang = (i / 36) * 2 * Math.PI
+      const pt = object3dToBoard(x + Math.cos(ang) * r, 0, z + Math.sin(ang) * r)
+      return `${pt.x},${pt.y}`
+    }).join(' ')
   // While DRAGGING a ball: a yellow ground ring around every player the ball
   // is in interaction proximity of (field players 1 m; keepers their pose's
   // catch reach) — the drop would read as a pass/shot/save to that player.
@@ -2370,15 +2377,24 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const reach = interactionReach(e.objectId)
       if (reach == null) continue
       if (!balls.some((bl) => Math.hypot(bl.x - e.x, bl.z - e.z) <= reach)) continue
-      rings.push(
-        Array.from({ length: 36 }, (_, i) => {
-          const ang = (i / 36) * 2 * Math.PI
-          const pt = object3dToBoard(e.x + Math.cos(ang) * reach, 0, e.z + Math.sin(ang) * reach)
-          return `${pt.x},${pt.y}`
-        }).join(' '),
-      )
+      rings.push(groundRingPoints(e.x, e.z, reach))
     }
     return rings
+  })()
+  // While MOVING any 3D object: a gray disc at its GROUND spot, so the drag
+  // clearly reads as placing it on the pitch (perspective can make an object
+  // look like it floats in the air).
+  const groundMarkers = ((): string[] => {
+    if (!object3dGesture || object3dGesture.kind !== 'move') return []
+    const ids = new Set(object3dGesture.moving.map((m) => m.id))
+    const out: string[] = []
+    for (const e of doc.elements) {
+      if (e.type !== 'object3d' || !ids.has(e.id)) continue
+      const mult = Math.max(1, (e.useGlobalSize ? 1 : e.size) * (doc.background.objectScale ?? 1))
+      const r = (isObject3DBall(e.objectId) ? 0.3 : 0.6) * mult
+      out.push(groundRingPoints(e.x, e.z, r))
+    }
+    return out
   })()
   const gapGuides = objectSnap?.gaps ?? []
 
@@ -2681,6 +2697,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 pointerEvents="none"
               />
             )}
+            {/* Ground marker under each 3D object being moved: the drag places
+                it on the pitch, not in the air. */}
+            {groundMarkers.map((pts, i) => (
+              <polygon key={`gm-${i}`} points={pts} fill="#6b7280" fillOpacity={0.3} stroke="#6b7280" strokeOpacity={0.6} strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+            ))}
             {/* Ball-drag interaction proximity: a yellow ground ring around
                 each player the dragged ball would interact with. */}
             {interactionRings.map((pts, i) => (
