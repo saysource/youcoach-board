@@ -86,8 +86,10 @@ export const GK_CATCH: Record<string, GkCatchMeta> = {
   catch_middle_low: { clip: 'Goalkeeper Catch (3)', loop: false, contactTime: 19 / 30, reach: 1.5, hand: [-0.05, 0.72, 0.4] },
   // Measured frame 29, hand (-1.5, -0.9, 0.3) — unpinned clip, raw mapping.
   catch_side_low: { clip: 'Goalkeeper Body Block (1)', loop: false, contactTime: 29 / 30, reach: 2.0, hand: [-1.5, 0.3, 0.9] },
-  catch_diving_left: { clip: 'Goalkeeper Diving Save', loop: false, contactTime: 1.5, reach: 3.0, hand: [-2.0, 0.7, 0.3] },
-  catch_diving_right: { clip: 'Goalkeeper Diving Save (1)', loop: false, contactTime: 1.77, reach: 3.0, hand: [2.0, 0.7, 0.3] },
+  // Measured frame 14, hand (-2.75, -1.38, 0.9) — unpinned, raw mapping.
+  // (Reach 3.5: the glove point itself sits 3.1 m from the keeper origin.)
+  catch_diving_left: { clip: 'Goalkeeper Diving Save', loop: false, contactTime: 14 / 30, reach: 3.5, hand: [-2.75, 0.9, 1.38] },
+  catch_diving_right: { clip: 'Goalkeeper Diving Save (1)', loop: false, contactTime: 1.77, reach: 3.5, hand: [2.0, 0.7, 0.3] },
   body_block: { clip: 'Goalkeeper Body Block', loop: false, contactTime: 1.77, reach: 2.0, hand: [0, 1.0, 0.4] },
   // Placeholder (shares side-low's clip) — awaiting the user's measurement.
   body_block_2: { clip: 'Goalkeeper Body Block (1)', loop: false, contactTime: 1.07, reach: 2.0, hand: [0, 1.0, 0.4] },
