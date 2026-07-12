@@ -82,8 +82,10 @@ export const GK_CATCH: Record<string, GkCatchMeta> = {
   // that frame (0.177, -2.626) — the clip is pinned, so its root motion is
   // stripped from the render.
   catch_jumping: { clip: 'Goalkeeper Catch (2)', loop: false, contactTime: 15 / 30, reach: 1.8, hand: [0.051, 2.182, 0.463], inPlace: true },
-  catch_middle_low: { clip: 'Goalkeeper Catch (1)', loop: false, contactTime: 1.43, reach: 1.5, hand: [0, 0.4, 0.5], inPlace: true },
-  catch_side_low: { clip: 'Goalkeeper Catch (3)', loop: false, contactTime: 1.1, reach: 2.0, hand: [0.8, 0.35, 0.3] },
+  // Measured frame 19, hand (-0.05, -0.4, 0.72) — unpinned clip, raw mapping.
+  catch_middle_low: { clip: 'Goalkeeper Catch (3)', loop: false, contactTime: 19 / 30, reach: 1.5, hand: [-0.05, 0.72, 0.4] },
+  // Placeholder clip + guessed values — awaiting the user's measurement.
+  catch_side_low: { clip: 'Goalkeeper Catch (1)', loop: false, contactTime: 1.43, reach: 2.0, hand: [0.8, 0.35, 0.3] },
   catch_diving_left: { clip: 'Goalkeeper Diving Save', loop: false, contactTime: 1.5, reach: 3.0, hand: [-2.0, 0.7, 0.3] },
   catch_diving_right: { clip: 'Goalkeeper Diving Save (1)', loop: false, contactTime: 1.77, reach: 3.0, hand: [2.0, 0.7, 0.3] },
   body_block: { clip: 'Goalkeeper Body Block', loop: false, contactTime: 1.77, reach: 2.0, hand: [0, 1.0, 0.4] },
