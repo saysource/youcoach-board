@@ -129,6 +129,7 @@ export interface FrameEffectOverride {
   pulse?: boolean
   pulseColor?: string
   ease?: boolean
+  power?: boolean
   parabolic?: boolean
 }
 
@@ -304,6 +305,7 @@ function parseAnimation(raw: unknown): BoardAnimation {
                 ...(typeof o2.pulse === 'boolean' ? { pulse: o2.pulse } : {}),
                 ...(typeof o2.pulseColor === 'string' ? { pulseColor: o2.pulseColor } : {}),
                 ...(typeof o2.ease === 'boolean' ? { ease: o2.ease } : {}),
+                ...(typeof o2.power === 'boolean' ? { power: o2.power } : {}),
                 ...(typeof o2.parabolic === 'boolean' ? { parabolic: o2.parabolic } : {}),
               }
               if (Object.keys(ov).length) effects[id] = ov

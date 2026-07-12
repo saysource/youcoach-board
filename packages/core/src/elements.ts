@@ -79,6 +79,9 @@ interface BaseElement {
   effectPulse?: boolean
   effectPulseColor?: string
   effectEase?: boolean
+  /** BALL only: the Power-Shot easing (sharp kick that glides out) — an
+   *  ALTERNATIVE to effectEase, mutually exclusive in the UI. */
+  effectPower?: boolean
   /** Ball only: the move's height follows a parabolic trajectory (a lofted
    *  pass — up mid-flight, landing at the destination). */
   effectParabolic?: boolean
@@ -370,6 +373,11 @@ export interface Object3DElement extends BaseElement {
   pulse?: number
   /** TRANSIENT: projected ground rings for the pulse (see TokenElement). */
   pulseRings?: Array<{ points: Array<[number, number]>; opacity: number }>
+  /** TRANSIENT (playback, 3D players only): the skeletal pose — a named clip at
+   *  an absolute clip time (seconds), optionally cross-fading FROM a previous
+   *  clip (`fade` 0‥1 = weight toward `clip`). Applied deterministically by the
+   *  WebGL layer (no wall clock), never persisted. */
+  anim?: { clip: string; time: number; prev?: { clip: string; time: number }; fade?: number }
 }
 
 export type BoardElement = RectElement | EllipseElement | PolylineElement | DrawElement | FigureElement | TokenElement | TextElement | Arrow3DElement | Object3DElement
@@ -963,6 +971,7 @@ export function parseElement(raw: unknown): BoardElement | null {
     ...(o.effectPulse === true ? { effectPulse: true } : {}),
     ...(typeof o.effectPulseColor === 'string' ? { effectPulseColor: o.effectPulseColor } : {}),
     ...(o.effectEase === true ? { effectEase: true } : {}),
+    ...(o.effectPower === true ? { effectPower: true } : {}),
     ...(o.effectParabolic === true ? { effectParabolic: true } : {}),
     transform: parseTransform(o.transform),
     stroke: str(o.stroke, '#000000'),
