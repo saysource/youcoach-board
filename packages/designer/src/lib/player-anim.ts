@@ -61,6 +61,11 @@ export const PLAYER_CLIPS: Record<string, PlayerClipMeta> = {
   // playback decays the world offset back to the authored spot.
   gkSidestep: { clip: 'Goalkeeper Sidestep', loop: true, inPlace: true },
   jogBack: { clip: 'Jog Backward', loop: true },
+  // A runner whose path bends sharply at a frame boundary (turn ≥ 45°, up to
+  // a full reversal) plants and turns with this clip — the plant (frame 25,
+  // user-picked) lands ON the boundary, the exit plays into the next leg.
+  // Authored running out-and-back (~1 m): pinned, the path moves the player.
+  changeDir: { clip: 'Change Direction', loop: false, contactTime: 25 / 30, inPlace: true },
 }
 
 // ── Goalkeeper saves ─────────────────────────────────────────────────────────

@@ -616,6 +616,7 @@ const INTERACT_R = 1.0
 const KICK_MIN_RUN = 3 // the ball must depart at least this far
 const KICK_PRE_S = 0.25 // one-shot starts this long before its ball contact
 const GAIT_FADE_S = 0.25 // clip-to-clip cross-fade (jog↔run, into one-shots)
+const TURN_MIN_RAD = Math.PI / 4 // sharp corner: direction change ≥ 45° (interior ≤ 135°)
 const GAIT_RAMP_S = 0.3 // idle↔locomotion envelope: ramp in from rest / out to rest
 const FACE_BLEND = 0.15 // transition fraction blending authored ↔ path tangent
 
@@ -701,6 +702,12 @@ interface PlayerRules {
   /** The NEXT transition's speed-based gaits — a player coming to REST next
    *  turn ramps its locomotion out toward idle before the boundary. */
   nextGait?: Map<string, { clip: string; rate: number; moving: boolean }>
+  /** Players whose run bends SHARPLY at the coming boundary (both legs real
+   *  runs, direction change ≥ 45° — corner angle ≤ 135°, down to a full
+   *  reversal): the plant-and-turn clip smooths the brutal corner. */
+  turnOf?: Set<string>
+  /** …and at the boundary just passed (the turn's exit plays into this leg). */
+  prevTurnOf?: Set<string>
 }
 
 /** Who strikes which ball in the transition a→b, and whether it's a PASS
@@ -882,8 +889,16 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       }
     }
   }
+  // A SHARP path corner between two real runs (direction change ≥ 45° — the
+  // corner's interior angle ≤ 135°, all the way down to a full reversal).
+  const sharpTurn = (v1x: number, v1z: number, v2x: number, v2z: number): boolean => {
+    const l1 = Math.hypot(v1x, v1z)
+    const l2 = Math.hypot(v2x, v2z)
+    if (l1 / D < IDLE_SPEED || l2 / D < IDLE_SPEED) return false
+    return (v1x * v2x + v1z * v2z) / (l1 * l2) <= Math.cos(TURN_MIN_RAD)
+  }
   // Neighbour segments' gaits (straight-line speeds are enough for fades /
-  // the idle↔locomotion envelope).
+  // the idle↔locomotion envelope) + the sharp-turn boundaries around this leg.
   if (prev) {
     const prevById = new Map(prev.elements.map((e) => [e.id, e]))
     const gaits = new Map<string, { clip: string; rate: number; moving: boolean }>()
@@ -893,6 +908,7 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       if (!p0 || !p1 || p0.type !== 'object3d' || p1.type !== 'object3d') continue
       const g = gaitFor(Math.hypot(p1.x - p0.x, p1.z - p0.z) / D)
       gaits.set(p.id, { clip: g.clip, rate: g.rate, moving: g.moving })
+      if (!isGoalkeeper(p.objectId) && sharpTurn(p1.x - p0.x, p1.z - p0.z, p.x - p1.x, p.z - p1.z)) (rules.prevTurnOf = rules.prevTurnOf ?? new Set()).add(p.id)
     }
     rules.prevGait = gaits
   }
@@ -904,6 +920,8 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       if (!p2 || p2.type !== 'object3d') continue
       const g = gaitFor(Math.hypot(p2.x - p.x, p2.z - p.z) / D)
       gaits.set(p.id, { clip: g.clip, rate: g.rate, moving: g.moving })
+      const pA = byIdA.get(p.id) as Obj3D | undefined
+      if (pA?.type === 'object3d' && !isGoalkeeper(p.objectId) && sharpTurn(p.x - pA.x, p.z - pA.z, p2.x - p.x, p2.z - p.z)) (rules.turnOf = rules.turnOf ?? new Set()).add(p.id)
     }
     rules.nextGait = gaits
   }
@@ -1048,6 +1066,23 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
     const dur = clipDuration(meta.clip)
     const rt = wall - D + (meta.contactTime ?? Math.min(dur, D))
     if (rt >= 0) anim = { clip: meta.clip, time: Math.min(rt, dur - 1e-3) }
+  } else if (rules?.turnOf?.has(b.id) && gait.moving) {
+    // SHARP direction change at the coming boundary: the plant-and-turn clip,
+    // its plant frame landing exactly ON the segment end (fading in from the
+    // gait) — it smooths the brutal path corner.
+    const meta = PLAYER_CLIPS.changeDir
+    const rt = wall - D + (meta.contactTime ?? 0.833)
+    if (rt >= 0) {
+      anim = { clip: meta.clip, time: Math.min(rt, clipDuration(meta.clip) - 1e-3) }
+      if (rt < GAIT_FADE_S) anim = { ...anim, prev: { clip: gaitClip, time: elapsedS * gait.rate }, fade: rt / GAIT_FADE_S }
+    }
+  } else if (rules?.prevTurnOf?.has(b.id) && gait.moving) {
+    // …and the turn's EXIT plays into the new leg, then fades to the gait.
+    const meta = PLAYER_CLIPS.changeDir
+    const dur = clipDuration(meta.clip)
+    const ct = (meta.contactTime ?? 0.833) + wall
+    if (ct < dur) anim = { clip: meta.clip, time: ct }
+    else if (ct < dur + GAIT_FADE_S) anim = { ...anim, prev: { clip: meta.clip, time: dur - 1e-3 }, fade: (ct - dur) / GAIT_FADE_S }
   }
   // Blending. A LOCOMOTION segment gets an idle↔motion ENVELOPE: starting
   // from rest ramps the gait in against idle, and coming to rest next turn
@@ -1068,7 +1103,7 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
     } else if (prevG && prevG.moving && prevG.clip !== anim.clip && wall < GAIT_FADE_S) {
       anim = { ...anim, prev: { clip: prevG.clip, time: elapsedS * prevG.rate }, fade: wall / GAIT_FADE_S }
     }
-  } else if (anim.clip !== gaitClip && prevG && wall < GAIT_FADE_S && prevG.clip !== anim.clip && anim.time < GAIT_FADE_S) {
+  } else if (anim.clip !== gaitClip && !anim.prev && prevG && wall < GAIT_FADE_S && prevG.clip !== anim.clip && anim.time < GAIT_FADE_S) {
     // One-shots fade in from the previous gait. (An IDLE gait segment never
     // head-fades: the previous segment's ramp-out already landed on idle —
     // re-fading would pop the old gait back in.)
