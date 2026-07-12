@@ -828,7 +828,7 @@ function angleLerp(a: number, b: number, t: number): number {
  *  (gait by speed, dribble when the ball travels with the run, pass/kick when
  *  the ball departs from its feet, receive when it arrives), plus facing along
  *  the path tangent while moving. */
-function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x: number; z: number } | null, te: number, t: number, D: number, elapsedS: number, rules?: PlayerRules): Obj3D {
+function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x: number; z: number } | null, te: number, t: number, D: number, elapsedS: number, rules?: PlayerRules, objMult = 1): Obj3D {
   const run = groundRun(a, b, undefined, null) // straight part; splines below
   const idleClip = playerIdleClip(b.objectId)
   // Facing: while moving, look along the instantaneous tangent; blend from the
@@ -902,9 +902,12 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
       anim = { clip: prevSave.clip, time: Math.min(contact + wall, dur - 1e-3) }
     } else {
       const [lx, ly] = clipRootOffset(prevSave.clip, contact + follow)
+      // The rendered mesh (and so its root-motion travel) scales with the
+      // global object scale — the return offset must match.
+      const s = Math.max(1, (b.useGlobalSize ? 1 : b.size) * objMult)
       const r = b.rotation
-      const ox = Math.sin(r) * ly + Math.cos(r) * lx
-      const oz = Math.cos(r) * ly - Math.sin(r) * lx
+      const ox = (Math.sin(r) * ly + Math.cos(r) * lx) * s
+      const oz = (Math.cos(r) * ly - Math.sin(r) * lx) * s
       const meta = Math.abs(lx) >= Math.abs(ly) ? PLAYER_CLIPS.gkSidestep : PLAYER_CLIPS.jogBack
       const p = Math.min(1, (wall - follow) / Math.max(0.2, D - follow))
       anim = { clip: meta.clip, time: wall - follow }
@@ -982,20 +985,21 @@ function applyObject3DMove(
   // hand point — [side, height, front] in his local frame — so it lands in
   // his hands whatever the authored spot. Transient; the frames stay the
   // coach's. (side + = the clips' local +x, e.g. the right-dive direction.)
-  const caught = isObject3DBall(b.objectId) ? rules?.caughtBy?.get(b.id) : undefined
-  if (caught) {
-    const [side, , front] = caught.meta.hand
-    const r = caught.gk.rotation
-    b = { ...b, x: caught.gk.x + Math.sin(r) * front + Math.cos(r) * side, z: caught.gk.z + Math.cos(r) * front - Math.sin(r) * side }
+  // Hand points are authored in REAL metres; the rendered keeper is scaled by
+  // the global object scale, so the offsets scale with him.
+  const gkScale = (gk: Obj3D) => Math.max(1, (gk.useGlobalSize ? 1 : gk.size) * objMult)
+  const handPoint = (gk: Obj3D, hand: [number, number, number]): { x: number; z: number } => {
+    const s = gkScale(gk)
+    const [side, , front] = hand
+    const r = gk.rotation
+    return { x: gk.x + (Math.sin(r) * front + Math.cos(r) * side) * s, z: gk.z + (Math.cos(r) * front - Math.sin(r) * side) * s }
   }
+  const caught = isObject3DBall(b.objectId) ? rules?.caughtBy?.get(b.id) : undefined
+  if (caught) b = { ...b, ...handPoint(caught.gk, caught.meta.hand) }
   // A ball caught LAST turn starts from the keeper's hands (whether held —
   // gliding down to its authored spot — or distributed onward).
   const handoff = isObject3DBall(b.objectId) && !caught ? rules?.prevCaughtBy?.get(b.id) : undefined
-  if (handoff) {
-    const [side, , front] = handoff.meta.hand
-    const r = handoff.gk.rotation
-    a = { ...a, x: handoff.gk.x + Math.sin(r) * front + Math.cos(r) * side, z: handoff.gk.z + Math.cos(r) * front - Math.sin(r) * side }
-  }
+  if (handoff) a = { ...a, ...handPoint(handoff.gk, handoff.meta.hand) }
   const dist = Math.hypot(b.x - a.x, b.z - a.z)
   // Ground position at eased time q — along the path spline when one exists.
   const posAt = groundPosAt(a, b, mids, cam)
@@ -1007,7 +1011,7 @@ function applyObject3DMove(
   // pick the gait (speed), dribble/pass/kick/receive (ball), and the facing
   // (path tangent). Clip time derives from the ABSOLUTE animation time, so
   // loops stay phase-continuous across segments and scrubbing is deterministic.
-  if (isObject3DPlayer(b.objectId)) el = playerAnimFor(a, b, el, posAt, te, t, segD, elapsedS, rules) as typeof el
+  if (isObject3DPlayer(b.objectId)) el = playerAnimFor(a, b, el, posAt, te, t, segD, elapsedS, rules, objMult) as typeof el
   if (mids?.length && cam) {
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
@@ -1023,9 +1027,9 @@ function applyObject3DMove(
   // caught LAST turn descends from the hand height as it's put down / played.
   if (caught) {
     const k = Math.max(0, Math.min(1, (te - 0.7) / 0.3))
-    el = { ...el, elevation: (el.elevation ?? 0) * (1 - k) + caught.meta.hand[1] * k }
+    el = { ...el, elevation: (el.elevation ?? 0) * (1 - k) + caught.meta.hand[1] * gkScale(caught.gk) * k }
   } else if (handoff) {
-    el = { ...el, elevation: Math.max(el.elevation ?? 0, handoff.meta.hand[1] * (1 - te)) }
+    el = { ...el, elevation: Math.max(el.elevation ?? 0, handoff.meta.hand[1] * gkScale(handoff.gk) * (1 - te)) }
   }
   if (isObject3DBall(b.objectId) && dist > 0.5) {
     // Run distance in ground metres (spline paths: sampled arc length).

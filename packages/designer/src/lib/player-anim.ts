@@ -64,8 +64,10 @@ export const PLAYER_CLIPS: Record<string, PlayerClipMeta> = {
 // The catch animation is chosen by the POSE the coach placed (the objectId's
 // suffix). `reach` = how far from the keeper the ball may land to count as his
 // save (dives stretch farther); `hand` = where the ball ends up, in the
-// keeper's local frame [side, height, front] metres (side = his left).
-// contactTimes verified visually against the static baked poses.
+// keeper's local frame [side, height, front] metres.
+// User-measured values from Blender (specs/positions.md): scrub the Mx action
+// to the catch frame, cursor-to-hand, then contactTime = frame / 30 and
+// hand = [X, Z, −Y] (the rig faces −Y in Blender; Z is up).
 
 export interface GkCatchMeta extends PlayerClipMeta {
   reach: number
@@ -73,7 +75,7 @@ export interface GkCatchMeta extends PlayerClipMeta {
 }
 
 export const GK_CATCH: Record<string, GkCatchMeta> = {
-  catch_middle: { clip: 'Goalkeeper Catch', loop: false, contactTime: 0.9, reach: 1.5, hand: [0, 1.2, 0.35] },
+  catch_middle: { clip: 'Goalkeeper Catch', loop: false, contactTime: 15 / 30, reach: 1.5, hand: [-0.182, 1.367, 0.678] }, // frame 15, (-0.182227, -0.678233, 1.36687)
   // ('Catch (2)' is the JUMP, 'Catch (1)' the low gather — verified visually;
   // both authored creeping forward, pinned to the spot.)
   catch_jumping: { clip: 'Goalkeeper Catch (2)', loop: false, contactTime: 0.6, reach: 1.8, hand: [0, 2.1, 0.3], inPlace: true },
