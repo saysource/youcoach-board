@@ -683,10 +683,8 @@ interface PlayerRules {
   prevCaughtBy?: Map<string, { gk: Obj3D; meta: GkCatchMeta }>
   /** Goalkeeper DEEP KICKS this transition (deep-kick pose + ball departing
    *  from his feet, and the previous turn was NOT his save — then the
-   *  outbound ball is just the save's bounce). The ball HOLDS at his feet
-   *  until the punt's contact, then departs. */
+   *  outbound ball is just the save's bounce). */
   gkKickOf?: Set<string>
-  gkKickBall?: Set<string>
   prevGait?: Map<string, { clip: string; rate: number; moving: boolean }>
   /** The NEXT transition's speed-based gaits — a player coming to REST next
    *  turn ramps its locomotion out toward idle before the boundary. */
@@ -823,8 +821,6 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       if (d0 <= INTERACT_R && sep > DRIBBLE_R) {
         rules.gkKickOf = rules.gkKickOf ?? new Set()
         rules.gkKickOf.add(gk.id)
-        rules.gkKickBall = rules.gkKickBall ?? new Set()
-        rules.gkKickBall.add(ballB.id)
         break
       }
     }
@@ -955,9 +951,11 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
       if (Math.hypot(ox, oz) > 0.05 && p < 1) el = { ...el, animOffset: [ox * (1 - p), oz * (1 - p)] }
     }
   } else if (rules?.gkKickOf?.has(b.id)) {
-    // GK deep kick: the whole (windowed) punt from the frame start — the ball
-    // holds at his feet until the contact (see applyObject3DMove).
-    anim = { clip: GK_KICK.clip, time: Math.min(wall, clipDuration(GK_KICK.clip) - 1e-3) }
+    // GK deep kick: like a field kick, the punt starts slightly PRE-contact
+    // so the foot lands on the ball just after it departs — no ball hold.
+    const start = Math.max(0, (GK_KICK.contactTime ?? 0.4) - KICK_PRE_S)
+    const ct = start + wall
+    if (ct < clipDuration(GK_KICK.clip)) anim = { clip: GK_KICK.clip, time: ct }
   } else if (kicks) {
     const meta = kicks.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
     // A SHOT (kick — Power Shot or not landing at a player) plays the WHOLE
@@ -1052,16 +1050,6 @@ function applyObject3DMove(
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
   }
-  // A GK-deep-kicked ball HOLDS at the keeper's feet until the punt's contact,
-  // then departs over the remaining wall time. `bq` = the ball's ACTUAL
-  // progress (drives position and roll — a waiting ball must not spin).
-  const gkKicked = isObject3DBall(b.objectId) && !!rules?.gkKickBall?.has(b.id)
-  const kickF = gkKicked ? Math.min(0.9, (GK_KICK.contactTime ?? 0) / Math.max(0.1, segD)) : 0
-  const bq = gkKicked ? (t <= kickF ? 0 : easeOf(b)((t - kickF) / (1 - kickF))) : te
-  if (gkKicked) {
-    const g = posAt(bq)
-    if (g) el = { ...el, x: g.x, z: g.z }
-  }
   // 3D players play their skeletal clips while the animation runs: the rules
   // pick the gait (speed), dribble/pass/kick/receive (ball), and the facing
   // (path tangent). Clip time derives from the ABSOLUTE animation time, so
@@ -1103,15 +1091,15 @@ function applyObject3DMove(
     const radius = BALL_RADIUS_M * Math.max(1, (b.useGlobalSize ? 1 : b.size) * objMult)
     const totalAngle = Math.min(run / radius, MAX_ROLL_REV_PER_S * 2 * Math.PI * segD)
     // Roll about the ground axis perpendicular to the CURRENT motion tangent.
-    const g0 = posAt(Math.max(0, bq - 0.02))
-    const g1 = posAt(Math.min(1, bq + 0.02))
+    const g0 = posAt(Math.max(0, te - 0.02))
+    const g1 = posAt(Math.min(1, te + 0.02))
     if (g0 && g1) {
       const dx = g1.x - g0.x
       const dz = g1.z - g0.z
       const len = Math.hypot(dx, dz)
       if (len > 1e-6) {
         // axis = up × dir → (dz, -dx) in the ground plane.
-        el = { ...el, roll: totalAngle * bq, rollAxis: [dz / len, -dx / len] }
+        el = { ...el, roll: totalAngle * te, rollAxis: [dz / len, -dx / len] }
       }
     }
   }
@@ -1350,7 +1338,7 @@ function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView
   }
   if (rules.receiverOf.size) d = Math.max(d, PLAYER_CLIPS.receive.contactTime ?? base)
   if (rules.saveOf) for (const [, m] of rules.saveOf) d = Math.max(d, m.contactTime ?? base)
-  if (rules.gkKickOf?.size) d = Math.max(d, clipDuration(GK_KICK.clip))
+  if (rules.gkKickOf?.size) d = Math.max(d, clipDuration(GK_KICK.clip) - Math.max(0, (GK_KICK.contactTime ?? 0.4) - KICK_PRE_S))
   return d
 }
 
