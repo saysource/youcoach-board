@@ -1064,6 +1064,22 @@ export function setTokenDiscFace(mesh: THREE.Mesh, style: TokenFaceStyle): void 
  *  real-size Mesh (base on the ground); goals are a real-size Group. `userData
  *  .outlineOffset` is the ink thickness in world metres, so the layer can lift
  *  the object by it. Object3DLayer handles either. */
+// Local-space ground-plane bounds (metres, unit scale) per objectId, from a
+// throwaway build of the mesh — memoized, never added to a scene (so nothing
+// touches the GPU). Used by align/distribute to know each object's footprint.
+const groundBoundsCache = new Map<string, { minX: number; maxX: number; minZ: number; maxZ: number }>()
+export function object3dGroundBounds(objectId: string): { minX: number; maxX: number; minZ: number; maxZ: number } {
+  let fp = groundBoundsCache.get(objectId)
+  if (!fp) {
+    const obj = buildObject3D(objectId)
+    obj.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(obj)
+    fp = box.isEmpty() ? { minX: 0, maxX: 0, minZ: 0, maxZ: 0 } : { minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z }
+    groundBoundsCache.set(objectId, fp)
+  }
+  return fp
+}
+
 export function buildObject3D(objectId: string): THREE.Object3D {
   const goal = GOALS[objectId]
   if (goal) {

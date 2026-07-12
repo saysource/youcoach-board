@@ -17,7 +17,10 @@ import {
 import type { ToolId } from '../components/Toolbar'
 import defaultFieldImage from '../assets/field0.jpg'
 import { type FigureStyle, type TokenDefaults, type TextDefaults, DEFAULT_FIGURE_STYLE, DEFAULT_TOKEN_DEFAULTS, DEFAULT_TEXT_DEFAULTS, figureStyleOf, isShapeTool, isLineTool, rectToPolyline, measureTextBox, nextTokenText } from '../lib/draw'
-import { reprojectChanges, reprojectBoardPoints, withGroundAnchors, pinNewShape, groundNudgeDelta, tokenSizeChanges, TOKEN_DEFAULT_SIZE_M } from '../lib/field-anchor'
+import { reprojectChanges, reprojectBoardPoints, withGroundAnchors, pinNewShape, groundNudgeDelta, tokenSizeChanges, TOKEN_DEFAULT_SIZE_M, isText3d, projectGround, referencePPM } from '../lib/field-anchor'
+import { makeCalibratedCamera } from '../lib/field-camera'
+import { dirFor } from '../lib/text3d'
+import { object3dGroundBounds, isObject3DGoal } from '../lib/objects3d'
 import { type PlayerKit, KIT_HISTORY_SIZE, kitKey } from '../lib/player-kit'
 
 /** Tools that put the editor in figure-creation mode (crosshair cursor,
@@ -929,10 +932,67 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         const { doc, selectedIds } = get()
         const els = doc.elements.filter((e) => selectedIds.includes(e.id))
         if (els.length < 2) return
-        const items = els.map((e) => ({ e, b: getElementBounds(e) }))
         const changes: ElementChange[] = []
-        const move = (e: BoardElement, dx: number, dy: number) => {
-          if (dx || dy) changes.push({ id: e.id, before: { transform: e.transform }, after: { transform: { ...e.transform, x: e.transform.x + dx, y: e.transform.y + dy } } })
+        // A selection made ENTIRELY of pitch elements (3D objects / 3D texts)
+        // aligns in GROUND space: horizontal = the field's X axis, vertical =
+        // its Y (our z), each element bounded by its ground-plane bbox.
+        const ground3d = els.every((e) => e.type === 'object3d' || (isText3d(e) && !!e.ground))
+        let items: Array<{ e: BoardElement; b: { x: number; y: number; width: number; height: number } }>
+        let move: (e: BoardElement, dx: number, dy: number) => void
+        if (ground3d) {
+          const objectScale = doc.background.objectScale ?? 1
+          const minScale = doc.background.field3d ? 1 : 0.05
+          const cam = doc.background.field3d ? makeCalibratedCamera(doc.background.field3d) : null
+          const groundBox = (e: BoardElement): { x: number; y: number; width: number; height: number } => {
+            if (e.type === 'object3d') {
+              // The mesh footprint at its rendered scale, rotated about Y —
+              // sweep the 4 footprint corners for the axis-aligned bounds.
+              const fp = object3dGroundBounds(e.objectId)
+              const rel = e.useGlobalSize ? 1 : e.size
+              const s = (isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(minScale, rel * objectScale))
+              const cos = Math.cos(e.rotation)
+              const sin = Math.sin(e.rotation)
+              let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+              for (const [cx, cz] of [[fp.minX, fp.minZ], [fp.maxX, fp.minZ], [fp.maxX, fp.maxZ], [fp.minX, fp.maxZ]] as const) {
+                const wx = e.x + (cx * cos + cz * sin) * s
+                const wz = e.z + (-cx * sin + cz * cos) * s
+                minX = Math.min(minX, wx); maxX = Math.max(maxX, wx)
+                minZ = Math.min(minZ, wz); maxZ = Math.max(maxZ, wz)
+              }
+              return { x: minX, y: minZ, width: maxX - minX, height: maxZ - minZ }
+            }
+            // 3D text: the box's ground bbox follows the reading orientation
+            // (0/180 → width along X; 90/270 → width along the field's Y).
+            const t = e as Extract<BoardElement, { type: 'text' }>
+            const k = 1 / referencePPM()
+            const [dx, dz] = dirFor(t.orientation ?? 0)
+            const hw = (t.width / 2) * k
+            const hh = (t.height / 2) * k
+            const ex = Math.abs(dx) * hw + Math.abs(dz) * hh
+            const ez = Math.abs(dz) * hw + Math.abs(dx) * hh
+            const [gx, gz] = t.ground!
+            return { x: gx - ex, y: gz - ez, width: 2 * ex, height: 2 * ez }
+          }
+          items = els.map((e) => ({ e, b: groundBox(e) }))
+          move = (e, dx, dz) => {
+            if (!dx && !dz) return
+            if (e.type === 'object3d') {
+              changes.push({ id: e.id, before: { x: e.x, z: e.z }, after: { x: e.x + dx, z: e.z + dz } })
+            } else if (isText3d(e) && e.ground && cam) {
+              // Shift the pin and slide the board coords by the projected delta
+              // (same recipe as a ground drag).
+              const g = e.ground
+              const ng: [number, number] = [g[0] + dx, g[1] + dz]
+              const ob = projectGround(cam, g[0], g[1])
+              const nb = projectGround(cam, ng[0], ng[1])
+              changes.push({ id: e.id, before: { ground: g, transform: e.transform }, after: { ground: ng, transform: { ...e.transform, x: e.transform.x + nb[0] - ob[0], y: e.transform.y + nb[1] - ob[1] } } })
+            }
+          }
+        } else {
+          items = els.map((e) => ({ e, b: getElementBounds(e) }))
+          move = (e: BoardElement, dx: number, dy: number) => {
+            if (dx || dy) changes.push({ id: e.id, before: { transform: e.transform }, after: { transform: { ...e.transform, x: e.transform.x + dx, y: e.transform.y + dy } } })
+          }
         }
         const minX = Math.min(...items.map((i) => i.b.x))
         const maxX = Math.max(...items.map((i) => i.b.x + i.b.width))
