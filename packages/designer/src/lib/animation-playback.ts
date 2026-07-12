@@ -1022,12 +1022,12 @@ function applyObject3DMove(
   const peakH = parabolic ? Math.min(12, Math.max(1.5, dist * 0.25)) : 0
   const heightAt = (q: number) => (parabolic ? peakH * 4 * q * (1 - q) : 0)
   if (parabolic) el = { ...el, elevation: (el.elevation ?? 0) + heightAt(te) }
-  // A caught ball RISES into the hands over the last stretch of its arrival
-  // (blended over whatever trajectory it had — roll or lofted shot); a ball
-  // caught LAST turn descends from the hand height as it's put down / played.
+  // A caught ball RISES steadily from the start of its flight up to the
+  // hands (blended over whatever trajectory it had — a flat shot climbs a
+  // straight line, a lofted one morphs its parabola into the catch height);
+  // a ball caught LAST turn descends from the hands as it's put down/played.
   if (caught) {
-    const k = Math.max(0, Math.min(1, (te - 0.7) / 0.3))
-    el = { ...el, elevation: (el.elevation ?? 0) * (1 - k) + caught.meta.hand[1] * gkScale(caught.gk) * k }
+    el = { ...el, elevation: (el.elevation ?? 0) * (1 - te) + caught.meta.hand[1] * gkScale(caught.gk) * te }
   } else if (handoff) {
     el = { ...el, elevation: Math.max(el.elevation ?? 0, handoff.meta.hand[1] * gkScale(handoff.gk) * (1 - te)) }
   }
