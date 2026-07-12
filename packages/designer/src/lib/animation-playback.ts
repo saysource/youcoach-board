@@ -19,7 +19,7 @@ import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchor
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { isObject3DBall, isObject3DPlayer } from './objects3d'
-import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, isGoalkeeper, PLAYER_CLIPS, playerIdleClip, type GkCatchMeta } from './player-anim'
+import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, PLAYER_CLIPS, playerIdleClip, type GkCatchMeta } from './player-anim'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -680,6 +680,12 @@ interface PlayerRules {
    *  and then RETURNS to his authored spot; a held ball starts from his hands. */
   prevSaveOf?: Map<string, GkCatchMeta>
   prevCaughtBy?: Map<string, { gk: Obj3D; meta: GkCatchMeta }>
+  /** Goalkeeper DEEP KICKS this transition (deep-kick pose + ball departing
+   *  from his feet, and the previous turn was NOT his save — then the
+   *  outbound ball is just the save's bounce). The ball HOLDS at his feet
+   *  until the punt's contact, then departs. */
+  gkKickOf?: Set<string>
+  gkKickBall?: Set<string>
   prevGait?: Map<string, { clip: string; rate: number; moving: boolean }>
   /** The NEXT transition's speed-based gaits — a player coming to REST next
    *  turn ramps its locomotion out toward idle before the boundary. */
@@ -795,6 +801,31 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
     if (pv) {
       rules.prevSaveOf = pv.saves
       rules.prevCaughtBy = pv.caught
+    }
+  }
+  // Goalkeeper DEEP KICK: a deep-kick-pose keeper with a ball departing from
+  // his feet (the standard interaction radius) KICKS it — unless the previous
+  // turn was HIS save (then the outbound ball is just the save's bounce and
+  // the keeper plays his follow-through/return instead).
+  for (const gk of playersB) {
+    if (!isGkDeepKick(gk.objectId) || rules.prevSaveOf?.has(gk.id)) continue
+    const gkA = byIdA.get(gk.id) as Obj3D | undefined
+    if (!gkA || gkA.type !== 'object3d') continue
+    for (const ballB of b) {
+      if (ballB.type !== 'object3d' || !isObject3DBall(ballB.objectId)) continue
+      const ballA = byIdA.get(ballB.id) as Obj3D | undefined
+      if (!ballA || ballA.type !== 'object3d') continue
+      const run = groundRun(ballA, ballB, paths?.[ballB.id], paths?.[ballB.id]?.length ? cam() : null)
+      if (run < KICK_MIN_RUN) continue
+      const d0 = Math.hypot(gkA.x - ballA.x, gkA.z - ballA.z)
+      const sep = Math.hypot(gk.x - ballB.x, gk.z - ballB.z)
+      if (d0 <= INTERACT_R && sep > DRIBBLE_R) {
+        rules.gkKickOf = rules.gkKickOf ?? new Set()
+        rules.gkKickOf.add(gk.id)
+        rules.gkKickBall = rules.gkKickBall ?? new Set()
+        rules.gkKickBall.add(ballB.id)
+        break
+      }
     }
   }
   // Neighbour segments' gaits (straight-line speeds are enough for fades /
@@ -922,6 +953,10 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
       anim = { clip: meta.clip, time: wall - follow }
       if (Math.hypot(ox, oz) > 0.05 && p < 1) el = { ...el, animOffset: [ox * (1 - p), oz * (1 - p)] }
     }
+  } else if (rules?.gkKickOf?.has(b.id)) {
+    // GK deep kick: the whole (windowed) punt from the frame start — the ball
+    // holds at his feet until the contact (see applyObject3DMove).
+    anim = { clip: GK_KICK.clip, time: Math.min(wall, clipDuration(GK_KICK.clip) - 1e-3) }
   } else if (kicks) {
     const meta = kicks.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
     // A SHOT (kick — Power Shot or not landing at a player) plays the WHOLE
@@ -1016,6 +1051,16 @@ function applyObject3DMove(
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
   }
+  // A GK-deep-kicked ball HOLDS at the keeper's feet until the punt's contact,
+  // then departs over the remaining wall time. `bq` = the ball's ACTUAL
+  // progress (drives position and roll — a waiting ball must not spin).
+  const gkKicked = isObject3DBall(b.objectId) && !!rules?.gkKickBall?.has(b.id)
+  const kickF = gkKicked ? Math.min(0.9, (GK_KICK.contactTime ?? 0) / Math.max(0.1, segD)) : 0
+  const bq = gkKicked ? (t <= kickF ? 0 : easeOf(b)((t - kickF) / (1 - kickF))) : te
+  if (gkKicked) {
+    const g = posAt(bq)
+    if (g) el = { ...el, x: g.x, z: g.z }
+  }
   // 3D players play their skeletal clips while the animation runs: the rules
   // pick the gait (speed), dribble/pass/kick/receive (ball), and the facing
   // (path tangent). Clip time derives from the ABSOLUTE animation time, so
@@ -1057,15 +1102,15 @@ function applyObject3DMove(
     const radius = BALL_RADIUS_M * Math.max(1, (b.useGlobalSize ? 1 : b.size) * objMult)
     const totalAngle = Math.min(run / radius, MAX_ROLL_REV_PER_S * 2 * Math.PI * segD)
     // Roll about the ground axis perpendicular to the CURRENT motion tangent.
-    const g0 = posAt(Math.max(0, te - 0.02))
-    const g1 = posAt(Math.min(1, te + 0.02))
+    const g0 = posAt(Math.max(0, bq - 0.02))
+    const g1 = posAt(Math.min(1, bq + 0.02))
     if (g0 && g1) {
       const dx = g1.x - g0.x
       const dz = g1.z - g0.z
       const len = Math.hypot(dx, dz)
       if (len > 1e-6) {
         // axis = up × dir → (dz, -dx) in the ground plane.
-        el = { ...el, roll: totalAngle * te, rollAxis: [dz / len, -dx / len] }
+        el = { ...el, roll: totalAngle * bq, rollAxis: [dz / len, -dx / len] }
       }
     }
   }
@@ -1250,7 +1295,7 @@ export function startPlayback(store: EditorStore): void {
     const anim = store.getState().doc.animation
     const spd = Math.min(2, Math.max(0.25, anim.speed))
     if (segStart === null) {
-      curD = segmentDuration(fr[seg], fr[seg + 1], pb.preCamera)
+      curD = segmentDuration(fr[seg], fr[seg + 1], pb.preCamera, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined)
       // Starting (from the edited frame) or wrapping the loop: hard cut to the
       // segment's start frame — its camera applies instantly (per spec). 3D
       // players keep their idle pose through the cut (no static flash).
@@ -1291,10 +1336,10 @@ export function startPlayback(store: EditorStore): void {
  *  spec's variable frame length — e.g. a long receive extends its move so the
  *  trap lands with the ball). Cheap; computed fresh at each segment start so
  *  the lazily-parsed clip durations are picked up. */
-function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView | null): number {
+function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView | null, prev?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }): number {
   const base = TRANSITION_MS / 1000
   const cam = () => (preCam ? makeCalibratedCamera(preCam) : null)
-  const rules = buildPlayerRules(a.elements, b.elements, b.paths, cam, base, undefined, undefined, b.effects)
+  const rules = buildPlayerRules(a.elements, b.elements, b.paths, cam, base, prev, undefined, b.effects)
   if (!rules) return base
   let d = base
   for (const [, k] of rules.kickerOf) {
@@ -1304,6 +1349,7 @@ function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView
   }
   if (rules.receiverOf.size) d = Math.max(d, PLAYER_CLIPS.receive.contactTime ?? base)
   if (rules.saveOf) for (const [, m] of rules.saveOf) d = Math.max(d, m.contactTime ?? base)
+  if (rules.gkKickOf?.size) d = Math.max(d, clipDuration(GK_KICK.clip))
   return d
 }
 

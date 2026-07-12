@@ -100,6 +100,17 @@ export const GK_CATCH: Record<string, GkCatchMeta> = {
   body_block_2: { clip: 'Goalkeeper Body Block', loop: false, contactTime: 39 / 30, reach: 2.5, hand: [2.1, 0.28, 0.1] },
 }
 
+// Goalkeeper DEEP KICK (distribution): the three deep-kick poses all play the
+// drop-kick clip, windowed to the punt (the authored clip walks ~3 m first;
+// the hips rise into the kick at ~2.4-2.6 s). contactTime is relative to the
+// window and marks the moment the ball departs.
+export const GK_KICK: PlayerClipMeta = { clip: 'Goalkeeper Drop Kick', loop: false, contactTime: 0.6, window: [1.9, 3.2], inPlace: true }
+
+/** Whether this goalkeeper pose is one of the deep kicks. */
+export function isGkDeepKick(objectId: string): boolean {
+  return /^pose_gk_(?:man|woman)_deep_kick(?:_2|_3)?$/.test(objectId)
+}
+
 /** GK players are the pose_gk_* catalog entries — the pose IS the save type. */
 export function isGoalkeeper(objectId: string): boolean {
   return objectId.startsWith('pose_gk_')
@@ -112,7 +123,7 @@ export function gkCatchFor(objectId: string): GkCatchMeta | null {
   return (m && GK_CATCH[m[1]]) || null
 }
 
-const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH)].map((m) => [m.clip, m]))
+const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK].map((m) => [m.clip, m]))
 
 // ── Character lookup ─────────────────────────────────────────────────────────
 // Which skinned character a player objectId animates as. Base players map to
