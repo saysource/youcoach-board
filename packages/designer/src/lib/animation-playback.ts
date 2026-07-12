@@ -704,10 +704,15 @@ interface PlayerRules {
   nextGait?: Map<string, { clip: string; rate: number; moving: boolean }>
   /** Players whose run bends SHARPLY at the coming boundary (both legs real
    *  runs, direction change ≥ 45° — corner angle ≤ 135°, down to a full
-   *  reversal): the plant-and-turn clip smooths the brutal corner. */
+   *  reversal): the plant-and-turn clip smooths the brutal corner. The player
+   *  STOPS where the clip starts (no skating), turns on the spot, and the
+   *  next leg's travel restarts from that point when the clip ends. */
   turnOf?: Set<string>
   /** …and at the boundary just passed (the turn's exit plays into this leg). */
   prevTurnOf?: Set<string>
+  /** playerId → where his turn froze him (the clip-start point on the
+   *  PREVIOUS leg) — the new leg's travel restarts from here. */
+  turnFreezeOf?: Map<string, { x: number; z: number }>
 }
 
 /** Who strikes which ball in the transition a→b, and whether it's a PASS
@@ -897,6 +902,9 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
     if (l1 / D < IDLE_SPEED || l2 / D < IDLE_SPEED) return false
     return (v1x * v2x + v1z * v2z) / (l1 * l2) <= Math.cos(TURN_MIN_RAD)
   }
+  // A player already claimed by an interaction one-shot never turn-plants.
+  const busy = (id: string): boolean =>
+    rules.kickerOf.has(id) || !!rules.saveOf?.has(id) || !!rules.prevSaveOf?.has(id) || !!rules.scissorOf?.has(id) || !!rules.prevScissorOf?.has(id) || !!rules.gkKickOf?.has(id)
   // Neighbour segments' gaits (straight-line speeds are enough for fades /
   // the idle↔locomotion envelope) + the sharp-turn boundaries around this leg.
   if (prev) {
@@ -908,7 +916,14 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       if (!p0 || !p1 || p0.type !== 'object3d' || p1.type !== 'object3d') continue
       const g = gaitFor(Math.hypot(p1.x - p0.x, p1.z - p0.z) / D)
       gaits.set(p.id, { clip: g.clip, rate: g.rate, moving: g.moving })
-      if (!isGoalkeeper(p.objectId) && sharpTurn(p1.x - p0.x, p1.z - p0.z, p.x - p1.x, p.z - p1.z)) (rules.prevTurnOf = rules.prevTurnOf ?? new Set()).add(p.id)
+      if (!isGoalkeeper(p.objectId) && !busy(p.id) && sharpTurn(p1.x - p0.x, p1.z - p0.z, p.x - p1.x, p.z - p1.z)) {
+        ;(rules.prevTurnOf = rules.prevTurnOf ?? new Set()).add(p.id)
+        // Where the turn froze him: the clip-start point on the previous leg.
+        const fq = Math.max(0, (D - (PLAYER_CLIPS.changeDir.contactTime ?? 0.833)) / D)
+        const mids = prev.paths?.[p.id]
+        const fp = groundPosAt(p0, p1, mids, mids?.length ? cam() : null)(fq)
+        if (fp) (rules.turnFreezeOf = rules.turnFreezeOf ?? new Map()).set(p.id, fp)
+      }
     }
     rules.prevGait = gaits
   }
@@ -921,7 +936,7 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       const g = gaitFor(Math.hypot(p2.x - p.x, p2.z - p.z) / D)
       gaits.set(p.id, { clip: g.clip, rate: g.rate, moving: g.moving })
       const pA = byIdA.get(p.id) as Obj3D | undefined
-      if (pA?.type === 'object3d' && !isGoalkeeper(p.objectId) && sharpTurn(p.x - pA.x, p.z - pA.z, p2.x - p.x, p2.z - p.z)) (rules.turnOf = rules.turnOf ?? new Set()).add(p.id)
+      if (pA?.type === 'object3d' && !isGoalkeeper(p.objectId) && !busy(p.id) && sharpTurn(p.x - pA.x, p.z - pA.z, p2.x - p.x, p2.z - p.z)) (rules.turnOf = rules.turnOf ?? new Set()).add(p.id)
     }
     rules.nextGait = gaits
   }
@@ -1176,6 +1191,36 @@ function applyObject3DMove(
   if (mids?.length && cam) {
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
+  }
+  // Sharp-turn plant: the player STOPS where the turn clip starts and dances
+  // the turn on the spot (no skating under the plant) — then the NEW leg's
+  // travel restarts from that freeze point once the clip ends, covering the
+  // leg in the remaining time.
+  if (isObject3DPlayer(b.objectId) && rules) {
+    const turnMeta = PLAYER_CLIPS.changeDir
+    const contact = turnMeta.contactTime ?? 0.833
+    if (rules.turnOf?.has(b.id)) {
+      const startT = Math.max(0, (segD - contact) / segD)
+      if (t > startT) {
+        const g = posAt(easeOf(b)(startT))
+        if (g) el = { ...el, x: g.x, z: g.z }
+      }
+    } else if (rules.prevTurnOf?.has(b.id)) {
+      const fp = rules.turnFreezeOf?.get(b.id)
+      if (fp) {
+        const exit = clipDuration(turnMeta.clip) - contact
+        const wall = t * segD
+        if (wall < exit) {
+          el = { ...el, x: fp.x, z: fp.z }
+        } else {
+          // Restart from the freeze point: blend into the authored path so the
+          // leg still ENDS exactly at frame-b's spot.
+          const q2 = Math.min(1, (wall - exit) / Math.max(0.2, segD - exit))
+          const g = posAt(easeOf(b)(q2))
+          if (g) el = { ...el, x: fp.x * (1 - q2) + g.x * q2, z: fp.z * (1 - q2) + g.z * q2 }
+        }
+      }
+    }
   }
   // Parabolic shot (ball): the flight height follows a parabola peaking
   // mid-move — a lofted pass. Peak scales with the run (capped).
