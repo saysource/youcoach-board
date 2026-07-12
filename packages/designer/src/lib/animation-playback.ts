@@ -815,22 +815,13 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
   const nextKicks = rules?.nextKickerOf.get(b.id)
   if (kicks) {
     const meta = kicks.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
-    const contact = meta.contactTime ?? 0.4
-    // A SHOT's wind-up already played in the PREVIOUS turn's tail (the
-    // anticipation below), with contact exactly at the boundary — CONTINUE
-    // the clip from there (one animation, never restarted). First segment /
-    // loop wrap (no previous turn) → classic slightly-pre-contact start.
-    const start = !kicks.pass && rules?.prevGait ? contact : Math.max(0, contact - KICK_PRE_S)
+    // A SHOT (kick — Power Shot or not landing at a player) plays the WHOLE
+    // strike from the beginning of its own frame (user rule); the previous
+    // turn is untouched (a run finishes cleanly). Passes keep the classic
+    // slightly-pre-contact start so the contact stays near the departure.
+    const start = kicks.pass ? Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S) : 0
     const ct = start + wall
     if (ct < clipDuration(meta.clip)) anim = { clip: meta.clip, time: ct }
-  } else if (nextKicks && !nextKicks.pass) {
-    // Anticipation (user rule): the ball leaves this player as a SHOT next
-    // turn (Power Shot, or not landing at a player) → run the strike in this
-    // turn's tail so its contact lands exactly at the boundary, as the ball
-    // departs. The next turn's kicker branch continues the same clip.
-    const meta = PLAYER_CLIPS.kick
-    const at = wall - D + (meta.contactTime ?? 0.4)
-    if (at >= 0) anim = { clip: meta.clip, time: at }
   } else if (receives && !nextKicks && !gait.moving) {
     // An interaction animation (pass / kick / receive) plays exactly ONCE, in
     // its own turn — never split or echoed across a frame boundary. So a
@@ -1149,7 +1140,8 @@ function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView
   let d = base
   for (const [, k] of rules.kickerOf) {
     const meta = k.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
-    d = Math.max(d, clipDuration(meta.clip) - Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S))
+    // Kicks play the FULL clip from the frame start; passes start pre-contact.
+    d = Math.max(d, clipDuration(meta.clip) - (k.pass ? Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S) : 0))
   }
   if (rules.receiverOf.size) d = Math.max(d, PLAYER_CLIPS.receive.contactTime ?? base)
   return d
