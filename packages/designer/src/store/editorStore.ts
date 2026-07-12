@@ -274,12 +274,12 @@ export interface EditorState {
   /** Set (merge) or clear an element's per-TURN movement-effect override for
    *  the transition INTO frame k. Off-stack, like setFramePath. */
   setFrameEffects: (k: number, elementId: string, patch: Partial<import('@youcoach-board/core').FrameEffectOverride> | null) => void
-  /** Stamp the selected elements' CURRENT (edited) state into EVERY other
-   *  frame — as if the object had just been placed (uniform in the whole
-   *  animation, all its per-frame positions, entry paths and per-turn
-   *  overrides discarded). Cross-frame rewrite → clears the undo history,
-   *  like the frame-structure ops. */
-  applyToAllFrames: () => void
+  /** Stamp the selected elements' CURRENT (edited) state into every frame
+   *  AFTER the current one — as if those frames had just been created from
+   *  this one (their per-frame positions, entry paths and per-turn overrides
+   *  discarded). Frames before the current one are untouched. Cross-frame
+   *  rewrite → clears the undo history, like the frame-structure ops. */
+  applyToFollowingFrames: () => void
   /** Revert the selected elements IN THE CURRENT FRAME to the previous frame's
    *  state — as if this frame had just been created (drops their entry path +
    *  per-turn override into this frame). Skips elements absent in the previous
@@ -1172,15 +1172,15 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
         onChange?.(nextDoc)
       },
 
-      applyToAllFrames: () => {
+      applyToFollowingFrames: () => {
         get().commitTransaction()
         const { doc, selectedIds } = get()
         const a = doc.animation
-        if (a.frames.length < 2 || selectedIds.length === 0) return
+        if (a.frames.length < 2 || a.current >= a.frames.length - 1 || selectedIds.length === 0) return
         const ids = new Set(selectedIds)
         const frames = a.frames.slice()
-        // Sync the live edits into the current frame, then stamp EVERY other
-        // frame (any stray position, whichever frame it was set on, is gone).
+        // Sync the live edits into the current frame, then stamp every frame
+        // AFTER it (earlier frames stay the coach's).
         frames[a.current] = { ...frames[a.current], elements: doc.elements }
         const source = new Map(doc.elements.filter((e) => ids.has(e.id)).map((e) => [e.id, e]))
         // Drop the entry path/override of a reset element in a frame's record.
@@ -1189,12 +1189,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
           const kept = Object.fromEntries(Object.entries(rec).filter(([id]) => !ids.has(id)))
           return Object.keys(kept).length ? kept : undefined
         }
-        for (let k = 0; k < frames.length; k++) {
+        for (let k = a.current + 1; k < frames.length; k++) {
           const f = frames[k]
-          if (k === a.current) {
-            frames[k] = { ...f, paths: strip(f.paths), effects: strip(f.effects) }
-            continue
-          }
           const present = new Set(f.elements.map((e) => e.id))
           let els = f.elements.map((e) => (source.has(e.id) ? (structuredClone(source.get(e.id)!) as BoardElement) : e))
           const missing = [...source.values()].filter((e) => !present.has(e.id))

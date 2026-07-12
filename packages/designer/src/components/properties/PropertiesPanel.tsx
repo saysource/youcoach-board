@@ -955,7 +955,7 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
   const hasStyle = useEditorStore((s) => s.styleClipboard !== null)
   const framesCount = useEditorStore((s) => s.doc.animation.frames.length)
   const currentFrame = useEditorStore((s) => s.currentFrame)
-  const applyToAllFrames = useEditorStore((s) => s.applyToAllFrames)
+  const applyToFollowingFrames = useEditorStore((s) => s.applyToFollowingFrames)
   const resetFrameChanges = useEditorStore((s) => s.resetFrameChanges)
   return (
     <DropdownMenu>
@@ -1046,16 +1046,16 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
         <DropdownMenuItem disabled={!hasStyle} onSelect={pasteStyle}>
           <ClipboardPaste /> Paste style
         </DropdownMenuItem>
-        {/* Animation frame sync: stamp the element's current state into EVERY
-            frame (as if it had just been placed — all its per-frame positions
-            discarded), or revert this frame's changes back to the inherited
-            (previous frame) state. Only offered while an animation exists. */}
+        {/* Animation frame sync: stamp the element's current state into every
+            FOLLOWING frame (as if they'd just been created from this one), or
+            revert this frame's changes back to the inherited (previous frame)
+            state. Only offered while an animation exists. */}
         {framesCount > 1 && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Animation</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={applyToAllFrames}>
-              <ArrowRightToLine /> Apply to all frames
+            <DropdownMenuItem disabled={currentFrame >= framesCount - 1} onSelect={applyToFollowingFrames}>
+              <ArrowRightToLine /> Apply to all following frames
             </DropdownMenuItem>
             <DropdownMenuItem disabled={currentFrame === 0} onSelect={resetFrameChanges}>
               <TimerReset /> Reset changes in this frame
