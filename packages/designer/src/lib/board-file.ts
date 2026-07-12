@@ -10,12 +10,13 @@ import { stopPlayback } from './animation-playback'
 import { convertV2Board, isV1Board, isV2Board } from './v2-convert'
 
 /** Load a (raw, already JSON-parsed) document into the editor: stop playback,
- *  parse defensively, reset history/selection/frame — the same semantics as
- *  the dev automation hook. */
+ *  parse defensively, reset history/selection — and always land on the FIRST
+ *  frame (the main drawing), whatever frame the file was saved on. */
 export function loadBoard(store: EditorStore, raw: unknown): void {
   stopPlayback(store)
   const doc = parseBoard(raw)
-  store.setState({ doc, selectedIds: [], stack: [], pointer: -1, currentFrame: doc.animation.frames.length > 0 ? doc.animation.current : 0 })
+  doc.animation.current = 0
+  store.setState({ doc, selectedIds: [], stack: [], pointer: -1, currentFrame: 0 })
 }
 
 /** Inspect a parsed file and load it if it's one of ours. Returns an error
