@@ -78,7 +78,10 @@ export const GK_CATCH: Record<string, GkCatchMeta> = {
   catch_middle: { clip: 'Goalkeeper Catch', loop: false, contactTime: 15 / 30, reach: 1.5, hand: [-0.182, 1.367, 0.678] }, // frame 15, (-0.182227, -0.678233, 1.36687)
   // ('Catch (2)' is the JUMP, 'Catch (1)' the low gather — verified visually;
   // both authored creeping forward, pinned to the spot.)
-  catch_jumping: { clip: 'Goalkeeper Catch (2)', loop: false, contactTime: 0.6, reach: 1.8, hand: [0, 2.1, 0.3], inPlace: true },
+  // Measured frame 15, hand (0.228, -3.089, 2.182) MINUS the hips offset at
+  // that frame (0.177, -2.626) — the clip is pinned, so its root motion is
+  // stripped from the render.
+  catch_jumping: { clip: 'Goalkeeper Catch (2)', loop: false, contactTime: 15 / 30, reach: 1.8, hand: [0.051, 2.182, 0.463], inPlace: true },
   catch_middle_low: { clip: 'Goalkeeper Catch (1)', loop: false, contactTime: 1.43, reach: 1.5, hand: [0, 0.4, 0.5], inPlace: true },
   catch_side_low: { clip: 'Goalkeeper Catch (3)', loop: false, contactTime: 1.1, reach: 2.0, hand: [0.8, 0.35, 0.3] },
   catch_diving_left: { clip: 'Goalkeeper Diving Save', loop: false, contactTime: 1.5, reach: 3.0, hand: [-2.0, 0.7, 0.3] },
@@ -195,10 +198,6 @@ function processClip(clip: THREE.AnimationClip): THREE.AnimationClip {
     let times = Array.from(tr.times)
     let values = Array.from(tr.values)
     const stride = tr.getValueSize()
-    // The in-place reference is the clip's FRAME-0 hips position (the rig
-    // origin), captured BEFORE trimming — a window that starts mid-walk would
-    // otherwise pin the player at the walked-to spot (teleported off origin).
-    const ref: [number, number] = [values[0], values[1]]
     if (meta.window) {
       const keep: number[] = []
       for (let i = 0; i < times.length; i++) if (times[i] >= w0 - 1e-3 && times[i] <= w1 + 1e-3) keep.push(i)
@@ -206,10 +205,13 @@ function processClip(clip: THREE.AnimationClip): THREE.AnimationClip {
       times = keep.map((i) => Math.max(0, times[i] - w0))
       values = keep.flatMap((i) => values.slice(i * stride, (i + 1) * stride))
     }
+    // In-place: pin the hips over the RIG ORIGIN (some clips are authored
+    // displaced even at frame 0 — e.g. the jumping catch starts ~1.9 m off),
+    // keeping only the vertical component.
     if (meta.inPlace && stride === 3 && tr.name.includes('Hips') && tr.name.endsWith('.position')) {
       for (let k = 0; k < times.length; k++) {
-        values[k * 3] = ref[0]
-        values[k * 3 + 1] = ref[1]
+        values[k * 3] = 0
+        values[k * 3 + 1] = 0
       }
     }
     const TrackType = Object.getPrototypeOf(tr).constructor as new (name: string, times: number[], values: number[]) => THREE.KeyframeTrack
