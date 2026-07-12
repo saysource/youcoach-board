@@ -173,3 +173,21 @@ Length of the frame: till now, we always assume a frame length (in terms of time
 
 Prepare a plan, then we can implement it step by step.
 
+
+## Goalkeeper animations
+
+Let's work on the goalkeeper movements, in particular we are interested in the save.
+
+The type of catch (and the resulting animation) is driven by the pose in the drawing:
+- middle
+- jumping
+- side low
+- diving
+- middle low
+- block
+
+- The ball final position is derived by the catch animation (it may require adatpation of the final x,y,z value of the ball position)
+
+- We need to sync the goalkeeper movement with the ball trajectory and catch time so that the ball properly ends in the goalkeeper's hands
+
+- the animation may displace the goalkeeper final position, so we need the goalkeeper to return to its original position by either using animation 34 (goalkeeper sidestaps) or 28 (jog backward).
