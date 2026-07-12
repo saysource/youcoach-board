@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import type { BoardElement } from './elements'
 import { textFontStack } from './fonts'
-import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, strokeDash, TOKEN_GEOMETRY, TOKEN_VIEW, TOKEN_STRIPE_PERIOD, TOKEN_SINGLE_STRIPE, TOKEN_CHECKER_SIZE, TOKEN_FONT, TOKEN_FONT_WEIGHT, TOKEN_LABEL_PX, TOKEN_LABEL_GAP_PX, TOKEN_LABEL_PLACEHOLDER, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius } from './elements'
+import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, strokeDash, TOKEN_GEOMETRY, TOKEN_VIEW, TOKEN_STRIPE_PERIOD, TOKEN_SINGLE_STRIPE, TOKEN_CHECKER_SIZE, TOKEN_FONT, TOKEN_FONT_WEIGHT, TOKEN_LABEL_PX, TOKEN_LABEL_GAP_PX, TOKEN_LABEL_PLACEHOLDER, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, textBoxPadding, textBoxRadius } from './elements'
 
 // Renders a single board element to SVG. Presentational and shared: the viewer
 // renders elements through this directly, and the designer wraps it with
@@ -261,7 +261,8 @@ function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, to
     const rx = textBoxRadius(element)
     const hasBg = element.bgColor !== 'transparent' && element.bgColor !== ''
     const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle'
-    const tx = align === 'left' ? x + TEXT_PADDING : align === 'right' ? x + width - TEXT_PADDING : x + width / 2
+    const pad = textBoxPadding(fontSize)
+    const tx = align === 'left' ? x + pad : align === 'right' ? x + width - pad : x + width / 2
     // Text block is vertically centered in the box (which is height = lines·lineH
     // + 2·pad, so the top sits exactly at y + pad).
     const top = y + (height - lines.length * lineH) / 2

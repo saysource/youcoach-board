@@ -1,6 +1,6 @@
 import type * as THREE from 'three'
 import type { TextElement } from '@youcoach-board/core'
-import { textFontStack, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius } from '@youcoach-board/core'
+import { textFontStack, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, textBoxPadding, textBoxRadius } from '@youcoach-board/core'
 import { solveHomography } from '../lib/homography'
 import { text3dCorners } from '../lib/text3d'
 
@@ -76,7 +76,7 @@ function Text3DHtmlItem({ el, cam, boardToPx }: { el: TextElement; cam: THREE.Ca
         flexDirection: 'column',
         justifyContent: 'center',
         boxSizing: 'border-box',
-        padding: `0 ${TEXT_PADDING}px`,
+        padding: `0 ${textBoxPadding(el.fontSize)}px`,
         background: hasBg ? el.bgColor : 'transparent',
         borderRadius: textBoxRadius(el),
         fontFamily: textFontStack(el.fontFamily),

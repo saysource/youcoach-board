@@ -8,7 +8,7 @@
 // approximation of the text's homography (visually exact at ~48 strips).
 
 import type * as THREE from 'three'
-import { BOARD_WIDTH, BOARD_HEIGHT, textFontStack, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, TEXT_PADDING, textBoxRadius, type BoardBackground, type TextElement } from '@youcoach-board/core'
+import { BOARD_WIDTH, BOARD_HEIGHT, textFontStack, TEXT_FONT_WEIGHT, TEXT_FONT_WEIGHT_BOLD, TEXT_LINE_HEIGHT, textBoxPadding, textBoxRadius, type BoardBackground, type TextElement } from '@youcoach-board/core'
 import { fontFaceCssFor, loadBoardFont } from './fonts'
 import { solveHomography } from './homography'
 import { text3dCorners } from './text3d'
@@ -170,7 +170,8 @@ function drawText3d(g: CanvasRenderingContext2D, env: ExportEnv, el: TextElement
   og.font = `${el.italic ? 'italic ' : ''}${el.bold ? TEXT_FONT_WEIGHT_BOLD : TEXT_FONT_WEIGHT} ${el.fontSize}px ${textFontStack(el.fontFamily)}`
   og.textBaseline = 'middle'
   og.textAlign = el.align === 'right' ? 'right' : el.align === 'center' ? 'center' : 'left'
-  const tx = el.align === 'right' ? w - TEXT_PADDING : el.align === 'center' ? w / 2 : TEXT_PADDING
+  const pad = textBoxPadding(el.fontSize)
+  const tx = el.align === 'right' ? w - pad : el.align === 'center' ? w / 2 : pad
   const lines = el.text.split('\n')
   const lh = el.fontSize * TEXT_LINE_HEIGHT
   const y0 = h / 2 - ((lines.length - 1) * lh) / 2 // flex column, centered

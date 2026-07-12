@@ -9,7 +9,7 @@ import {
   TEXT_FONT_WEIGHT,
   TEXT_FONT_WEIGHT_BOLD,
   TEXT_LINE_HEIGHT,
-  TEXT_PADDING,
+  textBoxPadding,
   DEFAULT_TEXT_FONT_SIZE,
   DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_BG,
@@ -375,9 +375,10 @@ export function measureTextBox(text: string, fontSize: number, bold = false, fon
     maxW = Math.max(1, ...lines.map((l) => l.length)) * fontSize * 0.6
   }
   const lineH = fontSize * TEXT_LINE_HEIGHT
+  const pad = textBoxPadding(fontSize)
   return {
-    width: Math.ceil(maxW + 2 * TEXT_PADDING),
-    height: Math.ceil(lines.length * lineH + 2 * TEXT_PADDING),
+    width: Math.ceil(maxW + 2 * pad),
+    height: Math.ceil(lines.length * lineH + 2 * pad),
   }
 }
 

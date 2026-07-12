@@ -18,7 +18,7 @@ import {
   TEXT_FONT_WEIGHT,
   TEXT_FONT_WEIGHT_BOLD,
   TEXT_LINE_HEIGHT,
-  TEXT_PADDING,
+  textBoxPadding,
   TEXT_MIN_FONT,
   TEXT_MAX_FONT,
   type ArrowTip,
@@ -449,7 +449,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const sp = new DOMPoint(el.x + el.transform.x, el.y + el.transform.y).matrixTransform(ctm)
       const r = cont.getBoundingClientRect()
       const sc = el.transform.scale * ctm.a
-      setTextBox({ left: sp.x - r.left, top: sp.y - r.top, width: el.width * sc, height: el.height * sc, font: el.fontSize * sc, pad: TEXT_PADDING * sc, align: el.align, color: el.textColor, bold: el.bold })
+      setTextBox({ left: sp.x - r.left, top: sp.y - r.top, width: el.width * sc, height: el.height * sc, font: el.fontSize * sc, pad: textBoxPadding(el.fontSize) * sc, align: el.align, color: el.textColor, bold: el.bold })
     }
     place()
   }, [editingTextEl, scale])

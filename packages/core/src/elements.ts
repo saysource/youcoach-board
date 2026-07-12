@@ -830,7 +830,9 @@ export const TEXT_FONT_WEIGHT = 400
 export const TEXT_FONT_WEIGHT_BOLD = 800
 /** Line box height as a multiple of the font size. */
 export const TEXT_LINE_HEIGHT = 1.25
-/** Padding (board units) between the text bbox and the background rectangle. */
+/** Padding (board units) between the text bbox and the background rectangle,
+ *  at the DEFAULT font size — the real padding scales with the font (see
+ *  textBoxPadding) so tiny labels keep tight pills. */
 export const TEXT_PADDING = 5
 export const TEXT_MIN_FONT = 2
 export const TEXT_MAX_FONT = 200
@@ -838,6 +840,12 @@ export const DEFAULT_TEXT_FONT_SIZE = 24
 export const DEFAULT_TEXT_COLOR = '#000000'
 /** Default text background: white at 50% opacity (#rrggbbaa). */
 export const DEFAULT_TEXT_BG = '#ffffff80'
+
+/** Padding (board units) between the text bbox and its background rectangle:
+ *  proportional to the font size (TEXT_PADDING at the default size). */
+export function textBoxPadding(fontSize: number): number {
+  return TEXT_PADDING * (fontSize / DEFAULT_TEXT_FONT_SIZE)
+}
 
 /** Corner radius (board units) of a text element's background rectangle. */
 export function textBoxRadius(el: TextElement): number {
