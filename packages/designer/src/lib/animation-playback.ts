@@ -514,14 +514,14 @@ function withTurnEffects(el: BoardElement, overrides?: AnimationFrame['effects']
   } as BoardElement
 }
 
-function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths'], liveCam?: FieldView | null, tokens3d?: boolean, segD = 1, objMult = 1, overrides?: AnimationFrame['effects'], elapsedS = 0, prevSeg?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }, nextSeg?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }): BoardElement[] {
+function lerpElements(a: BoardElement[], b: BoardElement[], t: number, paths?: AnimationFrame['paths'], liveCam?: FieldView | null, tokens3d?: boolean, segD = 1, objMult = 1, overrides?: AnimationFrame['effects'], elapsedS = 0, prevSeg?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }, nextSeg?: { elements: BoardElement[]; paths?: AnimationFrame['paths']; effects?: AnimationFrame['effects'] }): BoardElement[] {
   const byId = new Map(a.map((e) => [e.id, e]))
   // Pitch-pinned 3D texts translate their effects into ground metres — build
   // the (lazy) calibrated camera once per pass.
   let cam3: THREE.Camera | null | undefined
   const cam = () => (cam3 === undefined ? (cam3 = liveCam ? makeCalibratedCamera(liveCam) : null) : cam3)
   // 3D player rules for this transition (ball events, previous gaits).
-  const rules = buildPlayerRules(a, b, paths, cam, segD, prevSeg, nextSeg)
+  const rules = buildPlayerRules(a, b, paths, cam, segD, prevSeg, nextSeg, overrides)
   const out: BoardElement[] = []
   for (const eb of b) {
     const ea = byId.get(eb.id)
@@ -664,14 +664,16 @@ interface PlayerRules {
   prevGait?: Map<string, { clip: string; rate: number }>
 }
 
-/** Who strikes which ball in the transition a→b (and whether it's a pass):
- *  per BALL, the player within reach of its start whom the ball then LEAVES. */
-function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null): Array<{ kickerId: string; receiverId?: string }> {
+/** Who strikes which ball in the transition a→b, and whether it's a PASS
+ *  (lands at a teammate, no Power Shot) or a KICK/shot: per BALL, the player
+ *  within reach of its start whom the ball then LEAVES. `effects` = the
+ *  transition's per-turn overrides (a move-scoped Power Shot counts). */
+function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null, effects?: AnimationFrame['effects']): Array<{ kickerId: string; pass: boolean; receiverId?: string }> {
   const playersB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DPlayer(e.objectId))
   const ballsB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DBall(e.objectId))
   if (!playersB.length || !ballsB.length) return []
   const byIdA = new Map(a.map((e) => [e.id, e]))
-  const out: Array<{ kickerId: string; receiverId?: string }> = []
+  const out: Array<{ kickerId: string; pass: boolean; receiverId?: string }> = []
   for (const ballB of ballsB) {
     const ballA = byIdA.get(ballB.id) as Obj3D | undefined
     if (!ballA || ballA.type !== 'object3d') continue
@@ -693,7 +695,8 @@ function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFra
       const d = Math.hypot(p.x - ballB.x, p.z - ballB.z)
       if (d <= INTERACT_R && (!recv || d < recv.d)) recv = { id: p.id, d }
     }
-    out.push({ kickerId: best.id, receiverId: recv?.id })
+    const power = !!(effects?.[ballB.id]?.power ?? ballB.effectPower)
+    out.push({ kickerId: best.id, pass: !!recv && !power, receiverId: recv?.id })
   }
   return out
 }
@@ -705,7 +708,7 @@ function gaitFor(v: number): { clip: string; rate: number; moving: boolean } {
   return { clip: meta.clip, rate: Math.min(RATE_MAX, Math.max(RATE_MIN, v / (meta.nominalSpeed ?? v))), moving: true }
 }
 
-function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null, D: number, prev?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }, next?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }): PlayerRules | undefined {
+function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null, D: number, prev?: { elements: BoardElement[]; paths?: AnimationFrame['paths'] }, next?: { elements: BoardElement[]; paths?: AnimationFrame['paths']; effects?: AnimationFrame['effects'] }, effects?: AnimationFrame['effects']): PlayerRules | undefined {
   const playersB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DPlayer(e.objectId))
   if (playersB.length === 0) return undefined
   const byIdA = new Map(a.map((e) => [e.id, e]))
@@ -718,14 +721,15 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
     const c = mids?.length ? cam() : null
     rules.balls.push({ posAt: groundPosAt(ballA, ballB, mids, c), run: groundRun(ballA, ballB, mids, c) })
   }
-  for (const s of detectStrikes(a, b, paths, cam)) {
-    rules.kickerOf.set(s.kickerId, { pass: !!s.receiverId })
+  for (const s of detectStrikes(a, b, paths, cam, effects)) {
+    rules.kickerOf.set(s.kickerId, { pass: s.pass })
     if (s.receiverId) rules.receiverOf.add(s.receiverId)
   }
   // Lookahead: a ball leaving a player again in the NEXT transition outranks
-  // a receive this turn (a first-time shot, not a trap).
+  // a receive this turn — and a SHOT next turn (kick, not pass) plays its
+  // strike anticipation in THIS turn's tail (see playerAnimFor).
   if (next) {
-    for (const s of detectStrikes(b, next.elements, next.paths, cam)) rules.nextKickerOf.set(s.kickerId, { pass: !!s.receiverId })
+    for (const s of detectStrikes(b, next.elements, next.paths, cam, next.effects)) rules.nextKickerOf.set(s.kickerId, { pass: s.pass })
   }
   // Previous segment's gaits (straight-line speeds are enough for a fade).
   if (prev) {
@@ -811,9 +815,22 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
   const nextKicks = rules?.nextKickerOf.get(b.id)
   if (kicks) {
     const meta = kicks.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
-    const start = Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S)
+    const contact = meta.contactTime ?? 0.4
+    // A SHOT's wind-up already played in the PREVIOUS turn's tail (the
+    // anticipation below), with contact exactly at the boundary — CONTINUE
+    // the clip from there (one animation, never restarted). First segment /
+    // loop wrap (no previous turn) → classic slightly-pre-contact start.
+    const start = !kicks.pass && rules?.prevGait ? contact : Math.max(0, contact - KICK_PRE_S)
     const ct = start + wall
     if (ct < clipDuration(meta.clip)) anim = { clip: meta.clip, time: ct }
+  } else if (nextKicks && !nextKicks.pass) {
+    // Anticipation (user rule): the ball leaves this player as a SHOT next
+    // turn (Power Shot, or not landing at a player) → run the strike in this
+    // turn's tail so its contact lands exactly at the boundary, as the ball
+    // departs. The next turn's kicker branch continues the same clip.
+    const meta = PLAYER_CLIPS.kick
+    const at = wall - D + (meta.contactTime ?? 0.4)
+    if (at >= 0) anim = { clip: meta.clip, time: at }
   } else if (receives && !nextKicks && !gait.moving) {
     // An interaction animation (pass / kick / receive) plays exactly ONCE, in
     // its own turn — never split or echoed across a frame boundary. So a
@@ -828,9 +845,11 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
     const rt = wall - D + (meta.contactTime ?? Math.min(dur, D))
     if (rt >= 0) anim = { clip: meta.clip, time: Math.min(rt, dur - 1e-3) }
   }
-  // Cross-fade in from the previous segment's gait at the boundary.
+  // Cross-fade in from the previous segment's gait at the boundary — but
+  // never dilute a one-shot that is already mid-flight (a strike continuing
+  // across the boundary must land its contact at full weight).
   const prev = rules?.prevGait?.get(b.id)
-  if (prev && wall < GAIT_FADE_S && prev.clip !== anim.clip) {
+  if (prev && wall < GAIT_FADE_S && prev.clip !== anim.clip && anim.time < GAIT_FADE_S) {
     anim = { ...anim, prev: { clip: prev.clip, time: elapsedS * prev.rate }, fade: wall / GAIT_FADE_S }
   }
   return { ...el, anim }
@@ -1095,7 +1114,7 @@ export function startPlayback(store: EditorStore): void {
     const elapsedS = (elapsedBase + t * curD) / spd
     const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
     const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
-    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, store.getState().doc.background.tokens3d, curD / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, elapsedS, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths } : undefined), pose, seg + t)
+    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, store.getState().doc.background.tokens3d, curD / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, elapsedS, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths, effects: fr[seg + 2].effects } : undefined), pose, seg + t)
     if (t >= 1) {
       if (seg + 1 >= fr.length - 1) {
         // Reached the last frame. Loop wraps (hard cut back to frame 1);
@@ -1125,7 +1144,7 @@ export function startPlayback(store: EditorStore): void {
 function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView | null): number {
   const base = TRANSITION_MS / 1000
   const cam = () => (preCam ? makeCalibratedCamera(preCam) : null)
-  const rules = buildPlayerRules(a.elements, b.elements, b.paths, cam, base)
+  const rules = buildPlayerRules(a.elements, b.elements, b.paths, cam, base, undefined, undefined, b.effects)
   if (!rules) return base
   let d = base
   for (const [, k] of rules.kickerOf) {
