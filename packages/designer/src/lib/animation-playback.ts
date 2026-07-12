@@ -19,7 +19,7 @@ import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchor
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { isObject3DBall, isObject3DPlayer } from './objects3d'
-import { clipDuration, ensurePlayerAnimLoaded, PLAYER_CLIPS, playerIdleClip } from './player-anim'
+import { clipDuration, ensurePlayerAnimLoaded, gkCatchFor, isGoalkeeper, PLAYER_CLIPS, playerIdleClip, type GkCatchMeta } from './player-anim'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -662,6 +662,9 @@ interface PlayerRules {
    *  outranks a receive this turn (the arrival tail plays the strike's
    *  wind-up instead of a trap). */
   nextKickerOf: Map<string, { pass: boolean }>
+  /** goalkeeperId → its SAVE this transition (a ball lands within the pose's
+   *  reach); the catch clip is the keeper's authored pose. */
+  saveOf?: Map<string, GkCatchMeta>
   prevGait?: Map<string, { clip: string; rate: number; moving: boolean }>
   /** The NEXT transition's speed-based gaits — a player coming to REST next
    *  turn ramps its locomotion out toward idle before the boundary. */
@@ -673,7 +676,9 @@ interface PlayerRules {
  *  within reach of its start whom the ball then LEAVES. `effects` = the
  *  transition's per-turn overrides (a move-scoped Power Shot counts). */
 function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null, effects?: AnimationFrame['effects']): Array<{ kickerId: string; pass: boolean; receiverId?: string }> {
-  const playersB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DPlayer(e.objectId))
+  // Goalkeepers never take part in the field-player rules (their save has its
+  // own detection); they can't kick, receive, or be a pass target here.
+  const playersB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DPlayer(e.objectId) && !isGoalkeeper(e.objectId))
   const ballsB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DBall(e.objectId))
   if (!playersB.length || !ballsB.length) return []
   const byIdA = new Map(a.map((e) => [e.id, e]))
@@ -734,6 +739,26 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
   // strike anticipation in THIS turn's tail (see playerAnimFor).
   if (next) {
     for (const s of detectStrikes(b, next.elements, next.paths, cam, next.effects)) rules.nextKickerOf.set(s.kickerId, { pass: s.pass })
+  }
+  // Goalkeeper SAVES: a ball whose destination lands within a keeper's reach
+  // (per its authored catch pose) is his save — the catch clip plays timed to
+  // the arrival. Uses the keeper's own reach, not the field INTERACT_R.
+  for (const gk of playersB) {
+    if (!isGoalkeeper(gk.objectId)) continue
+    const meta = gkCatchFor(gk.objectId)
+    if (!meta) continue
+    for (const ballB of b) {
+      if (ballB.type !== 'object3d' || !isObject3DBall(ballB.objectId)) continue
+      const ballA = byIdA.get(ballB.id) as Obj3D | undefined
+      if (!ballA || ballA.type !== 'object3d') continue
+      const run = groundRun(ballA, ballB, paths?.[ballB.id], paths?.[ballB.id]?.length ? cam() : null)
+      if (run < KICK_MIN_RUN) continue
+      if (Math.hypot(gk.x - ballB.x, gk.z - ballB.z) <= meta.reach) {
+        rules.saveOf = rules.saveOf ?? new Map()
+        rules.saveOf.set(gk.id, meta)
+        break
+      }
+    }
   }
   // Neighbour segments' gaits (straight-line speeds are enough for fades /
   // the idle↔locomotion envelope).
@@ -808,7 +833,7 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
   const v = moved / D
   let gait = gaitFor(v)
   // Dribble: ANY ball travels WITH the run (stays within reach at every sample).
-  if (rules && gait.moving && posAt) {
+  if (rules && gait.moving && posAt && !isGoalkeeper(b.objectId)) {
     const dribbling = rules.balls.some((ball) => {
       if (ball.run < 1) return false
       for (const q of [0.1, 0.3, 0.5, 0.7, 0.9]) {
@@ -829,7 +854,14 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
   const kicks = rules?.kickerOf.get(b.id)
   const receives = !!rules?.receiverOf.has(b.id)
   const nextKicks = rules?.nextKickerOf.get(b.id)
-  if (kicks) {
+  const save = rules?.saveOf?.get(b.id)
+  if (save) {
+    // Goalkeeper SAVE: the catch clip of the authored pose, timed like the
+    // receive — its catch moment lands at the segment END, with the ball.
+    const dur = clipDuration(save.clip)
+    const rt = wall - D + (save.contactTime ?? Math.min(dur, D))
+    if (rt >= 0) anim = { clip: save.clip, time: Math.min(rt, dur - 1e-3) }
+  } else if (kicks) {
     const meta = kicks.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
     // A SHOT (kick — Power Shot or not landing at a player) plays the WHOLE
     // strike from the beginning of its own frame (user rule); the previous
@@ -1178,6 +1210,7 @@ function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView
     d = Math.max(d, clipDuration(meta.clip) - (k.pass ? Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S) : 0))
   }
   if (rules.receiverOf.size) d = Math.max(d, PLAYER_CLIPS.receive.contactTime ?? base)
+  if (rules.saveOf) for (const [, m] of rules.saveOf) d = Math.max(d, m.contactTime ?? base)
   return d
 }
 

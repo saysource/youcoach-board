@@ -56,7 +56,44 @@ export const PLAYER_CLIPS: Record<string, PlayerClipMeta> = {
   receive: { clip: 'Receive Soccerball', loop: false, contactTime: 0.65, window: [25 / 30, 45 / 30], inPlace: true },
 }
 
-const metaByClip = new Map(Object.values(PLAYER_CLIPS).map((m) => [m.clip, m]))
+// ── Goalkeeper saves ─────────────────────────────────────────────────────────
+// The catch animation is chosen by the POSE the coach placed (the objectId's
+// suffix). `reach` = how far from the keeper the ball may land to count as his
+// save (dives stretch farther); `hand` = where the ball ends up, in the
+// keeper's local frame [side, height, front] metres (side = his left).
+// contactTimes verified visually against the static baked poses.
+
+export interface GkCatchMeta extends PlayerClipMeta {
+  reach: number
+  hand: [number, number, number]
+}
+
+export const GK_CATCH: Record<string, GkCatchMeta> = {
+  catch_middle: { clip: 'Goalkeeper Catch', loop: false, contactTime: 0.9, reach: 1.5, hand: [0, 1.2, 0.35] },
+  // ('Catch (2)' is the JUMP, 'Catch (1)' the low gather — verified visually;
+  // both authored creeping forward, pinned to the spot.)
+  catch_jumping: { clip: 'Goalkeeper Catch (2)', loop: false, contactTime: 0.6, reach: 1.8, hand: [0, 2.1, 0.3], inPlace: true },
+  catch_middle_low: { clip: 'Goalkeeper Catch (1)', loop: false, contactTime: 1.43, reach: 1.5, hand: [0, 0.4, 0.5], inPlace: true },
+  catch_side_low: { clip: 'Goalkeeper Catch (3)', loop: false, contactTime: 1.1, reach: 2.0, hand: [0.8, 0.35, 0.3] },
+  catch_diving_left: { clip: 'Goalkeeper Diving Save', loop: false, contactTime: 1.5, reach: 3.0, hand: [-2.0, 0.7, 0.3] },
+  catch_diving_right: { clip: 'Goalkeeper Diving Save (1)', loop: false, contactTime: 1.77, reach: 3.0, hand: [2.0, 0.7, 0.3] },
+  body_block: { clip: 'Goalkeeper Body Block', loop: false, contactTime: 1.77, reach: 2.0, hand: [0, 1.0, 0.4] },
+  body_block_2: { clip: 'Goalkeeper Body Block (1)', loop: false, contactTime: 1.07, reach: 2.0, hand: [0, 1.0, 0.4] },
+}
+
+/** GK players are the pose_gk_* catalog entries — the pose IS the save type. */
+export function isGoalkeeper(objectId: string): boolean {
+  return objectId.startsWith('pose_gk_')
+}
+
+/** The save metadata for a goalkeeper objectId (null for other players or GK
+ *  poses that aren't catches — idle, deep kicks …). */
+export function gkCatchFor(objectId: string): GkCatchMeta | null {
+  const m = /^pose_gk_(?:man|woman)_(.+)$/.exec(objectId)
+  return (m && GK_CATCH[m[1]]) || null
+}
+
+const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH)].map((m) => [m.clip, m]))
 
 // ── Character lookup ─────────────────────────────────────────────────────────
 // Which skinned character a player objectId animates as. Base players map to
