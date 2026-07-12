@@ -665,6 +665,8 @@ interface PlayerRules {
   /** goalkeeperId → its SAVE this transition (a ball lands within the pose's
    *  reach); the catch clip is the keeper's authored pose. */
   saveOf?: Map<string, GkCatchMeta>
+  /** ballId → the keeper catching it (the ball's end retargets to his hands). */
+  caughtBy?: Map<string, { gk: Obj3D; meta: GkCatchMeta }>
   prevGait?: Map<string, { clip: string; rate: number; moving: boolean }>
   /** The NEXT transition's speed-based gaits — a player coming to REST next
    *  turn ramps its locomotion out toward idle before the boundary. */
@@ -756,6 +758,8 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       if (Math.hypot(gk.x - ballB.x, gk.z - ballB.z) <= meta.reach) {
         rules.saveOf = rules.saveOf ?? new Map()
         rules.saveOf.set(gk.id, meta)
+        rules.caughtBy = rules.caughtBy ?? new Map()
+        if (!rules.caughtBy.has(ballB.id)) rules.caughtBy.set(ballB.id, { gk, meta })
         break
       }
     }
@@ -927,11 +931,25 @@ function applyObject3DMove(
   rules?: PlayerRules,
 ): BoardElement {
   const a = ea as Extract<BoardElement, { type: 'object3d' }>
-  const b = eb as Extract<BoardElement, { type: 'object3d' }>
-  const dist = Math.hypot(b.x - a.x, b.z - a.z)
+  let b = eb as Extract<BoardElement, { type: 'object3d' }>
   let el = lerped
+  // A ball being CAUGHT (goalkeeper save): its END retargets to the keeper's
+  // hand point — [side, height, front] in his local frame — so it lands in
+  // his hands whatever the authored spot. Transient; the frames stay the
+  // coach's. (side + = the clips' local +x, e.g. the right-dive direction.)
+  const caught = isObject3DBall(b.objectId) ? rules?.caughtBy?.get(b.id) : undefined
+  if (caught) {
+    const [side, , front] = caught.meta.hand
+    const r = caught.gk.rotation
+    b = { ...b, x: caught.gk.x + Math.sin(r) * front + Math.cos(r) * side, z: caught.gk.z + Math.cos(r) * front - Math.sin(r) * side }
+  }
+  const dist = Math.hypot(b.x - a.x, b.z - a.z)
   // Ground position at eased time q — along the path spline when one exists.
   const posAt = groundPosAt(a, b, mids, cam)
+  if (caught && !mids?.length) {
+    const g = posAt(te)
+    if (g) el = { ...el, x: g.x, z: g.z }
+  }
   // 3D players play their skeletal clips while the animation runs: the rules
   // pick the gait (speed), dribble/pass/kick/receive (ball), and the facing
   // (path tangent). Clip time derives from the ABSOLUTE animation time, so
@@ -947,6 +965,12 @@ function applyObject3DMove(
   const peakH = parabolic ? Math.min(12, Math.max(1.5, dist * 0.25)) : 0
   const heightAt = (q: number) => (parabolic ? peakH * 4 * q * (1 - q) : 0)
   if (parabolic) el = { ...el, elevation: (el.elevation ?? 0) + heightAt(te) }
+  // A caught ball RISES into the hands over the last stretch of its arrival
+  // (blended over whatever trajectory it had — roll or lofted shot).
+  if (caught) {
+    const k = Math.max(0, Math.min(1, (te - 0.7) / 0.3))
+    el = { ...el, elevation: (el.elevation ?? 0) * (1 - k) + caught.meta.hand[1] * k }
+  }
   if (isObject3DBall(b.objectId) && dist > 0.5) {
     // Run distance in ground metres (spline paths: sampled arc length).
     let run = dist
