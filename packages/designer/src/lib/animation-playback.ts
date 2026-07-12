@@ -615,7 +615,8 @@ const DRIBBLE_R = 1.8 // ball stays within this of the runner → Dribble
 const INTERACT_R = 1.0
 const KICK_MIN_RUN = 3 // the ball must depart at least this far
 const KICK_PRE_S = 0.25 // one-shot starts this long before its ball contact
-const GAIT_FADE_S = 0.25 // cross-fade into this segment's gait
+const GAIT_FADE_S = 0.25 // clip-to-clip cross-fade (jog↔run, into one-shots)
+const GAIT_RAMP_S = 0.3 // idle↔locomotion envelope: ramp in from rest / out to rest
 const FACE_BLEND = 0.15 // transition fraction blending authored ↔ path tangent
 
 /** Ground position along a straight or spline run at eased time q (spline =
@@ -661,7 +662,10 @@ interface PlayerRules {
    *  outranks a receive this turn (the arrival tail plays the strike's
    *  wind-up instead of a trap). */
   nextKickerOf: Map<string, { pass: boolean }>
-  prevGait?: Map<string, { clip: string; rate: number }>
+  prevGait?: Map<string, { clip: string; rate: number; moving: boolean }>
+  /** The NEXT transition's speed-based gaits — a player coming to REST next
+   *  turn ramps its locomotion out toward idle before the boundary. */
+  nextGait?: Map<string, { clip: string; rate: number; moving: boolean }>
 }
 
 /** Who strikes which ball in the transition a→b, and whether it's a PASS
@@ -731,18 +735,30 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
   if (next) {
     for (const s of detectStrikes(b, next.elements, next.paths, cam, next.effects)) rules.nextKickerOf.set(s.kickerId, { pass: s.pass })
   }
-  // Previous segment's gaits (straight-line speeds are enough for a fade).
+  // Neighbour segments' gaits (straight-line speeds are enough for fades /
+  // the idle↔locomotion envelope).
   if (prev) {
     const prevById = new Map(prev.elements.map((e) => [e.id, e]))
-    const gaits = new Map<string, { clip: string; rate: number }>()
+    const gaits = new Map<string, { clip: string; rate: number; moving: boolean }>()
     for (const p of playersB) {
       const p1 = byIdA.get(p.id) as Obj3D | undefined // player at the shared frame
       const p0 = prevById.get(p.id) as Obj3D | undefined
       if (!p0 || !p1 || p0.type !== 'object3d' || p1.type !== 'object3d') continue
       const g = gaitFor(Math.hypot(p1.x - p0.x, p1.z - p0.z) / D)
-      gaits.set(p.id, { clip: g.clip, rate: g.rate })
+      gaits.set(p.id, { clip: g.clip, rate: g.rate, moving: g.moving })
     }
     rules.prevGait = gaits
+  }
+  if (next) {
+    const nextById = new Map(next.elements.map((e) => [e.id, e]))
+    const gaits = new Map<string, { clip: string; rate: number; moving: boolean }>()
+    for (const p of playersB) {
+      const p2 = nextById.get(p.id) as Obj3D | undefined
+      if (!p2 || p2.type !== 'object3d') continue
+      const g = gaitFor(Math.hypot(p2.x - p.x, p2.z - p.z) / D)
+      gaits.set(p.id, { clip: g.clip, rate: g.rate, moving: g.moving })
+    }
+    rules.nextGait = gaits
   }
   return rules
 }
@@ -836,12 +852,30 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
     const rt = wall - D + (meta.contactTime ?? Math.min(dur, D))
     if (rt >= 0) anim = { clip: meta.clip, time: Math.min(rt, dur - 1e-3) }
   }
-  // Cross-fade in from the previous segment's gait at the boundary — but
-  // never dilute a one-shot that is already mid-flight (a strike continuing
-  // across the boundary must land its contact at full weight).
-  const prev = rules?.prevGait?.get(b.id)
-  if (prev && wall < GAIT_FADE_S && prev.clip !== anim.clip && anim.time < GAIT_FADE_S) {
-    anim = { ...anim, prev: { clip: prev.clip, time: elapsedS * prev.rate }, fade: wall / GAIT_FADE_S }
+  // Blending. A LOCOMOTION segment gets an idle↔motion ENVELOPE: starting
+  // from rest ramps the gait in against idle, and coming to rest next turn
+  // ramps it back out toward idle before the boundary — so runs start and
+  // stop softly instead of cutting at the frame edge. Gait→gait changes
+  // between two MOVING segments (jog↔run) keep a clip-to-clip cross-fade,
+  // and one-shots fade in from the previous gait (but a one-shot already
+  // mid-flight is never diluted).
+  const prevG = rules?.prevGait?.get(b.id)
+  const nextG = rules?.nextGait?.get(b.id)
+  if (anim.clip === gaitClip && gait.moving) {
+    let w = 1
+    if (!prevG || !prevG.moving) w = Math.min(w, wall / GAIT_RAMP_S)
+    if (rules && (!nextG || !nextG.moving)) w = Math.min(w, (D - wall) / GAIT_RAMP_S)
+    w = Math.max(0, Math.min(1, w))
+    if (w < 1) {
+      anim = { ...anim, prev: { clip: idleClip, time: elapsedS }, fade: w }
+    } else if (prevG && prevG.moving && prevG.clip !== anim.clip && wall < GAIT_FADE_S) {
+      anim = { ...anim, prev: { clip: prevG.clip, time: elapsedS * prevG.rate }, fade: wall / GAIT_FADE_S }
+    }
+  } else if (anim.clip !== gaitClip && prevG && wall < GAIT_FADE_S && prevG.clip !== anim.clip && anim.time < GAIT_FADE_S) {
+    // One-shots fade in from the previous gait. (An IDLE gait segment never
+    // head-fades: the previous segment's ramp-out already landed on idle —
+    // re-fading would pop the old gait back in.)
+    anim = { ...anim, prev: { clip: prevG.clip, time: elapsedS * prevG.rate }, fade: wall / GAIT_FADE_S }
   }
   return { ...el, anim }
 }
