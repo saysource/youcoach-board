@@ -112,10 +112,10 @@ export const GK_KICK: PlayerClipMeta = { clip: 'Goalkeeper Drop Kick', loop: fal
 // SCISSOR (bicycle) KICK: a scissor-pose player whose inbound ball departs
 // again next turn strikes it IN THE AIR — the foot meets the ball at frame 26,
 // timed to land exactly on the frame boundary. The ball's arrival retargets to
-// the strike point (user-measured in Blender: (0.47, 0, 1.7) → local
+// the strike point (user-measured in Blender: (-0.47, 0, 1.7) → local
 // [side, height, front], same convention as the GK hands) and next turn it
 // flies out FROM that point while the player finishes the clip.
-export const SCISSOR_KICK: GkCatchMeta = { clip: 'Scissor Kick', loop: false, contactTime: 26 / 30, reach: 1.0, hand: [0.47, 1.7, 0] }
+export const SCISSOR_KICK: GkCatchMeta = { clip: 'Scissor Kick', loop: false, contactTime: 26 / 30, reach: 1.0, hand: [-0.47, 1.7, 0] }
 
 /** Whether this pose is the scissor kick. */
 export function isScissorPose(objectId: string): boolean {
