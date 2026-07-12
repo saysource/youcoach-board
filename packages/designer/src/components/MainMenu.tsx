@@ -37,7 +37,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/cn'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { openBoardFromFile, saveBoardToFile } from '../lib/board-file'
-import { boardExporter } from '../lib/export-image'
+import { boardExporter, boardVideoExporter } from '../lib/export-image'
 import type { ThemeSetting } from '../lib/use-theme'
 
 interface MainMenuProps {
@@ -62,6 +62,8 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
   const resetCanvas = useEditorStore((s) => s.resetCanvas)
   const exportGuide = useEditorStore((s) => s.exportGuide)
   const setExportGuide = useEditorStore((s) => s.setExportGuide)
+  // Video export is offered only for real animations (more than one frame).
+  const hasAnimation = useEditorStore((s) => s.doc.animation.frames.length > 1)
   return (
     <DropdownMenu>
       <Tooltip>
@@ -92,6 +94,15 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
             <DropdownMenuItem onSelect={() => void boardExporter()?.(1440, 1080)}><Image /> 4:3 (1440×1080)</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void boardExporter()?.(1920, 1080)}><Image /> 16:9 (1920×1080)</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void boardExporter()?.(1080, 1920)}><Image /> 9:16 (1080×1920)</DropdownMenuItem>
+            {/* Animation → .webm: only meaningful with more than one frame. */}
+            {hasAnimation && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(960, 720)}><Video /> Video (960×720)</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(1920, 1080)}><Video /> Video (1920×1080)</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(1080, 1920)}><Video /> Video (1080×1920)</DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 

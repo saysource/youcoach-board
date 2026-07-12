@@ -37,6 +37,16 @@ export function boardExporter(): Exporter | null {
   return currentExporter
 }
 
+// Video exporter (animation → .webm): registered by InteractiveBoard, called by
+// the main menu's Video items (shown only when the drawing has >1 frame).
+let currentVideoExporter: Exporter | null = null
+export function registerBoardVideoExporter(fn: Exporter | null): void {
+  currentVideoExporter = fn
+}
+export function boardVideoExporter(): Exporter | null {
+  return currentVideoExporter
+}
+
 /** The letterboxed 4:3 board rect within the container, in container px. */
 function boardRect(env: ExportEnv): { x: number; y: number; width: number; height: number } {
   const sr = env.svg.getBoundingClientRect()
@@ -210,6 +220,41 @@ const SS = 2
  * exactly; 16:9 crops top/bottom; portrait 9:16 fills the height and crops
  * the sides.
  */
+// Ensure the document's curated fonts are loaded (text3d strips draw via canvas)
+// and return the @font-face CSS to embed into the isolated SVG clones.
+export async function loadExportFonts(env: ExportEnv): Promise<string> {
+  await Promise.all(env.fontIds.map(loadBoardFont))
+  return env.fontIds.length ? await fontFaceCssFor(env.fontIds) : ''
+}
+
+// Paint the live layer stack into `g` (transform + scale `k` already applied).
+// Shared by the still export and the per-frame video capture.
+async function paintBoard(g: CanvasRenderingContext2D, env: ExportEnv, br: { x: number; y: number; width: number; height: number }, k: number, fontCss: string): Promise<void> {
+  await drawBackground(g, env, br)
+  drawCanvasLayer(g, env, 'canvas[data-layer="field3d"]')
+  await drawSvg(g, env, env.svg, k, fontCss)
+  for (const el of env.texts) drawText3d(g, env, el, k)
+  const tokens2d = env.container.querySelector<SVGSVGElement>('svg[data-layer="tokens-2d"]')
+  if (tokens2d) await drawSvg(g, env, tokens2d, k)
+  drawCanvasLayer(g, env, 'canvas[data-layer="arrow3d"]')
+  drawCanvasLayer(g, env, 'canvas[data-layer="object3d"]')
+  const captions = env.container.querySelector<SVGSVGElement>('svg[data-layer="captions"]')
+  if (captions) await drawSvg(g, env, captions, k)
+}
+
+// Paint ONE animation frame straight into a (width×height) video canvas: cover-fit
+// (board fills the frame, excess cropped about the centre), at 1× — no supersample,
+// so each frame stays fast enough to keep up with playback. `fontCss` is loaded once
+// by the caller. The context is cleared each call (video canvases have no alpha).
+export async function drawBoardVideoFrame(env: ExportEnv, g: CanvasRenderingContext2D, width: number, height: number, fontCss: string): Promise<void> {
+  const br = boardRect(env)
+  g.setTransform(1, 0, 0, 1, 0, 0)
+  g.clearRect(0, 0, width, height)
+  const k = Math.max(width / br.width, height / br.height)
+  g.setTransform(k, 0, 0, k, -br.x * k + (width - br.width * k) / 2, -br.y * k + (height - br.height * k) / 2)
+  await paintBoard(g, env, br, k, fontCss)
+}
+
 export async function exportBoardImage(env: ExportEnv, width: number, height: number, filename: string): Promise<void> {
   const br = boardRect(env)
   const big = document.createElement('canvas')
@@ -225,22 +270,10 @@ export async function exportBoardImage(env: ExportEnv, width: number, height: nu
   const k = Math.max((width * SS) / br.width, (height * SS) / br.height)
   g.setTransform(k, 0, 0, k, -br.x * k + (width * SS - br.width * k) / 2, -br.y * k + (height * SS - br.height * k) / 2)
 
-  // Curated fonts: ensure they're loaded (the text3d strips draw via canvas,
-  // which uses document.fonts) and build the data-URI @font-face CSS for the
-  // SVG clones (which rasterize in isolated documents).
-  await Promise.all(env.fontIds.map(loadBoardFont))
-  const fontCss = env.fontIds.length ? await fontFaceCssFor(env.fontIds) : ''
-
-  await drawBackground(g, env, br)
-  drawCanvasLayer(g, env, 'canvas[data-layer="field3d"]')
-  await drawSvg(g, env, env.svg, k, fontCss)
-  for (const el of env.texts) drawText3d(g, env, el, k)
-  const tokens2d = env.container.querySelector<SVGSVGElement>('svg[data-layer="tokens-2d"]')
-  if (tokens2d) await drawSvg(g, env, tokens2d, k)
-  drawCanvasLayer(g, env, 'canvas[data-layer="arrow3d"]')
-  drawCanvasLayer(g, env, 'canvas[data-layer="object3d"]')
-  const captions = env.container.querySelector<SVGSVGElement>('svg[data-layer="captions"]')
-  if (captions) await drawSvg(g, env, captions, k)
+  // Curated fonts: loaded (the text3d strips draw via canvas / document.fonts) and
+  // the data-URI @font-face CSS built for the SVG clones (isolated documents).
+  const fontCss = await loadExportFonts(env)
+  await paintBoard(g, env, br, k, fontCss)
 
   // Downscale the supersampled composite to the target size (the AA pass).
   const out = document.createElement('canvas')
