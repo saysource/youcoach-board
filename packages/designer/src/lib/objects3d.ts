@@ -188,6 +188,15 @@ export function recolorObject3DSlots(obj: THREE.Object3D, objectId: string, colo
 
 // 3D players: static Studio Ochi character meshes baked in a neutral standing
 // pose, textured with their own kit atlas. Real metric height (~1.5–1.8 m).
+// Airborne poses authored RESTING on the ground that should FLOAT: lifted by
+// this many metres (scales with the player) so the body hangs mid-action.
+const POSE_GROUND_LIFT: Record<string, number> = {
+  pose_gk_man_catch_diving_right: 0.5,
+  pose_gk_man_catch_diving_left: 0.5,
+  pose_gk_woman_catch_diving_right: 0.5,
+  pose_gk_woman_catch_diving_left: 0.5,
+}
+
 const PLAYER_GLBS: Record<string, { data: string; texture: string }> = {
   player_man_a: { data: PLAYER_MAN_A_GLB_BASE64, texture: playerManATex },
   player_man_b: { data: PLAYER_MAN_B_GLB_BASE64, texture: playerManBTex },
@@ -1071,7 +1080,11 @@ export function buildObject3D(objectId: string): THREE.Object3D {
     // Pose GLBs are baked with their real height: grounded poses touch y=0 (with
     // ink clearance) and airborne ones (scissor kick) FLOAT — keep the authored
     // height instead of re-resting the bounding box on the ground.
-    if (objectId.startsWith('pose_')) mesh.userData.originAtGround = true
+    if (objectId.startsWith('pose_')) {
+      mesh.userData.originAtGround = true
+      const lift = POSE_GROUND_LIFT[objectId]
+      if (lift) mesh.userData.groundLift = lift
+    }
     return mesh
   }
   const glb = GLB_OBJECTS[objectId]

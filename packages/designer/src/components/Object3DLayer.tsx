@@ -304,7 +304,9 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       const scale = (isObject3DGoal(e.objectId) ? Math.max(0.05, rel) : Math.max(minScale, rel * mult)) * Math.max(0.001, e.effectScale ?? 1)
       obj.scale.setScalar(scale)
       const baseMinY = (obj.userData.baseMinY as number) ?? -0.5
-      obj.position.set(e.x, -baseMinY * scale + (e.elevation ?? 0), e.z)
+      // Airborne poses (diving catches) float by their authored lift.
+      const lift = (obj.userData.groundLift as number) ?? 0
+      obj.position.set(e.x, (-baseMinY + lift) * scale + (e.elevation ?? 0), e.z)
       obj.rotation.set(0, e.rotation, 0)
       // Rolling (playback): world-space rotation about the ground axis
       // perpendicular to the motion, PIVOTED AT THE MESH CENTRE (the ball's
