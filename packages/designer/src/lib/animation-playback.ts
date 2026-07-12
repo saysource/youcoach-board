@@ -962,14 +962,29 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
   // frame-a authored rotation at the start and back to frame-b's at the end.
   let moved = run
   if (posAt) {
-    const g0 = posAt(Math.max(0, te - 0.02))
-    const g1 = posAt(Math.min(1, te + 0.02))
-    if (g0 && g1) {
+    // Sharp-turn window: the Change Direction clip performs the VISIBLE turn
+    // (~150° of authored body rotation) — hold the OLD leg's direction while
+    // it plays, and come out already facing the new one (no re-turn after).
+    const turnContact = PLAYER_CLIPS.changeDir.contactTime ?? 0.833
+    const turningOut = !!rules?.turnOf?.has(b.id) && t * D > D - turnContact
+    const afterTurn = !!rules?.prevTurnOf?.has(b.id)
+    const fp = afterTurn ? rules?.turnFreezeOf?.get(b.id) : undefined
+    const turningIn = afterTurn && t * D < clipDuration(PLAYER_CLIPS.changeDir.clip) - turnContact
+    const qs = turningOut ? Math.max(0, (D - turnContact) / D) : te
+    const g0 = posAt(Math.max(0, qs - 0.02))
+    const g1 = posAt(Math.min(1, qs + 0.02))
+    if (turningIn && fp) {
+      // The clip is still playing on the new leg: keep the OLD direction (the
+      // freeze point → corner), the clip's own rotation does the turning.
+      el = { ...el, rotation: Math.atan2(a.x - fp.x, a.z - fp.z) }
+    } else if (g0 && g1) {
       const dx = g1.x - g0.x
       const dz = g1.z - g0.z
       if (Math.hypot(dx, dz) > 1e-4 && moved > 0.3) {
         const tangent = Math.atan2(dx, dz)
-        const rot = t < FACE_BLEND ? angleLerp(a.rotation, tangent, t / FACE_BLEND) : t > 1 - FACE_BLEND ? angleLerp(tangent, b.rotation, (t - (1 - FACE_BLEND)) / FACE_BLEND) : tangent
+        const rot = turningOut || afterTurn
+          ? tangent // through/after the clip: the leg direction, no boundary blends
+          : t < FACE_BLEND ? angleLerp(a.rotation, tangent, t / FACE_BLEND) : t > 1 - FACE_BLEND ? angleLerp(tangent, b.rotation, (t - (1 - FACE_BLEND)) / FACE_BLEND) : tangent
         el = { ...el, rotation: rot }
       }
     }
