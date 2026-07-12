@@ -19,7 +19,7 @@ import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchor
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { isObject3DBall, isObject3DPlayer } from './objects3d'
-import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, PLAYER_CLIPS, playerIdleClip, type GkCatchMeta } from './player-anim'
+import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, kickStyleFor, PLAYER_CLIPS, playerIdleClip, type GkCatchMeta, type PlayerClipMeta } from './player-anim'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -664,8 +664,12 @@ type Obj3D = Extract<BoardElement, { type: 'object3d' }>
 interface PlayerRules {
   /** Every moving ball's trajectory (for the dribble glue-check). */
   balls: Array<{ posAt: (q: number) => { x: number; z: number } | null; run: number }>
-  /** playerId → the strike it performs this transition (pass vs kick). */
-  kickerOf: Map<string, { pass: boolean }>
+  /** playerId → the strike it performs this transition (pass vs kick; kicks
+   *  carry the pose-chosen clip — place kick vs strike-in-stride). */
+  kickerOf: Map<string, { pass: boolean; meta: PlayerClipMeta }>
+  /** ballId → seconds the KICKED ball waits at its spot before departing
+   *  (the strike-in-stride foot meets the ball 13 frames in). */
+  kickDelayOf?: Map<string, number>
   /** playerIds a ball ARRIVES at this transition. */
   receiverOf: Set<string>
   /** Lookahead: playerId → the strike it performs in the NEXT transition —
@@ -695,27 +699,27 @@ interface PlayerRules {
  *  (lands at a teammate, no Power Shot) or a KICK/shot: per BALL, the player
  *  within reach of its start whom the ball then LEAVES. `effects` = the
  *  transition's per-turn overrides (a move-scoped Power Shot counts). */
-function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null, effects?: AnimationFrame['effects']): Array<{ kickerId: string; pass: boolean; receiverId?: string }> {
+function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFrame['paths'], cam: () => THREE.Camera | null, effects?: AnimationFrame['effects']): Array<{ ballId: string; kickerId: string; kickerObjectId: string; pass: boolean; receiverId?: string }> {
   // Goalkeepers never take part in the field-player rules (their save has its
   // own detection); they can't kick, receive, or be a pass target here.
   const playersB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DPlayer(e.objectId) && !isGoalkeeper(e.objectId))
   const ballsB = b.filter((e): e is Obj3D => e.type === 'object3d' && isObject3DBall(e.objectId))
   if (!playersB.length || !ballsB.length) return []
   const byIdA = new Map(a.map((e) => [e.id, e]))
-  const out: Array<{ kickerId: string; pass: boolean; receiverId?: string }> = []
+  const out: Array<{ ballId: string; kickerId: string; kickerObjectId: string; pass: boolean; receiverId?: string }> = []
   for (const ballB of ballsB) {
     const ballA = byIdA.get(ballB.id) as Obj3D | undefined
     if (!ballA || ballA.type !== 'object3d') continue
     const mids = paths?.[ballB.id]
     const run = groundRun(ballA, ballB, mids, mids?.length ? cam() : null)
     if (run < KICK_MIN_RUN) continue
-    let best: { id: string; d: number } | null = null
+    let best: { id: string; objectId: string; d: number } | null = null
     for (const p of playersB) {
       const pa = byIdA.get(p.id) as Obj3D | undefined
       if (!pa || pa.type !== 'object3d') continue
       const d = Math.hypot(pa.x - ballA.x, pa.z - ballA.z)
       const sep = Math.hypot(p.x - ballB.x, p.z - ballB.z)
-      if (d <= INTERACT_R && sep > DRIBBLE_R && (!best || d < best.d)) best = { id: p.id, d }
+      if (d <= INTERACT_R && sep > DRIBBLE_R && (!best || d < best.d)) best = { id: p.id, objectId: p.objectId, d }
     }
     if (!best) continue
     let recv: { id: string; d: number } | null = null
@@ -725,7 +729,7 @@ function detectStrikes(a: BoardElement[], b: BoardElement[], paths: AnimationFra
       if (d <= INTERACT_R && (!recv || d < recv.d)) recv = { id: p.id, d }
     }
     const power = !!(effects?.[ballB.id]?.power ?? ballB.effectPower)
-    out.push({ kickerId: best.id, pass: !!recv && !power, receiverId: recv?.id })
+    out.push({ ballId: ballB.id, kickerId: best.id, kickerObjectId: best.objectId, pass: !!recv && !power, receiverId: recv?.id })
   }
   return out
 }
@@ -778,7 +782,11 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
     rules.balls.push({ posAt: groundPosAt(ballA, ballB, mids, c), run: groundRun(ballA, ballB, mids, c) })
   }
   for (const s of detectStrikes(a, b, paths, cam, effects)) {
-    rules.kickerOf.set(s.kickerId, { pass: s.pass })
+    const style = kickStyleFor(s.kickerObjectId)
+    rules.kickerOf.set(s.kickerId, { pass: s.pass, meta: style.meta })
+    // A KICKED ball waits at the kicker's feet until the clip's foot-contact
+    // moment (passes keep the classic instant departure).
+    if (!s.pass && style.ballDelay > 0) (rules.kickDelayOf = rules.kickDelayOf ?? new Map()).set(s.ballId, style.ballDelay)
     if (s.receiverId) rules.receiverOf.add(s.receiverId)
   }
   // Lookahead: a ball leaving a player again in the NEXT transition outranks
@@ -957,11 +965,11 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
     const ct = start + wall
     if (ct < clipDuration(GK_KICK.clip)) anim = { clip: GK_KICK.clip, time: ct }
   } else if (kicks) {
-    const meta = kicks.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
+    const meta = kicks.pass ? PLAYER_CLIPS.pass : kicks.meta
     // A SHOT (kick — Power Shot or not landing at a player) plays the WHOLE
-    // strike from the beginning of its own frame (user rule); the previous
-    // turn is untouched (a run finishes cleanly). Passes keep the classic
-    // slightly-pre-contact start so the contact stays near the departure.
+    // pose-chosen kick clip from the beginning of its own frame (user rule);
+    // the previous turn is untouched (a run finishes cleanly). Passes keep the
+    // classic slightly-pre-contact start so the contact stays near the departure.
     const start = kicks.pass ? Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S) : 0
     const ct = start + wall
     if (ct < clipDuration(meta.clip)) anim = { clip: meta.clip, time: ct }
@@ -1046,6 +1054,19 @@ function applyObject3DMove(
   const dist = Math.hypot(b.x - a.x, b.z - a.z)
   // Ground position at eased time q — along the path spline when one exists.
   const posAt = groundPosAt(a, b, mids, cam)
+  // A KICKED ball waits at the kicker's feet until the strike's foot-contact
+  // moment, then covers its whole run in the remaining wall time. Retime this
+  // ball's progress up front so everything downstream (position, roll, tail,
+  // parabola, catch elevation) samples the delayed trajectory.
+  const kickDelay = isObject3DBall(b.objectId) ? rules?.kickDelayOf?.get(b.id) : undefined
+  if (kickDelay && segD > kickDelay) {
+    t = Math.min(1, Math.max(0, (t * segD - kickDelay) / (segD - kickDelay)))
+    te = easeOf(b)(t)
+    if (!mids?.length) {
+      const g = posAt(te)
+      if (g) el = { ...el, x: g.x, z: g.z }
+    }
+  }
   if ((caught || handoff) && !mids?.length) {
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
@@ -1332,8 +1353,9 @@ function segmentDuration(a: AnimationFrame, b: AnimationFrame, preCam: FieldView
   if (!rules) return base
   let d = base
   for (const [, k] of rules.kickerOf) {
-    const meta = k.pass ? PLAYER_CLIPS.pass : PLAYER_CLIPS.kick
-    // Kicks play the FULL clip from the frame start; passes start pre-contact.
+    const meta = k.pass ? PLAYER_CLIPS.pass : k.meta
+    // Kicks play the FULL pose-chosen clip from the frame start; passes start
+    // pre-contact.
     d = Math.max(d, clipDuration(meta.clip) - (k.pass ? Math.max(0, (meta.contactTime ?? 0.4) - KICK_PRE_S) : 0))
   }
   if (rules.receiverOf.size) d = Math.max(d, PLAYER_CLIPS.receive.contactTime ?? base)
