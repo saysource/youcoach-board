@@ -545,18 +545,27 @@ export const OUTLINE_FRACTION = 0.013
  *  (which displaces the shell sideways on thin, off-centre parts like a hurdle
  *  rail — a one-sided outline), it pushes every vertex OUT along its surface
  *  normal by a fixed distance, giving an even line all the way round. Offset in
- *  model space so it scales with the object; clipping-plane aware (y<0 hidden). */
-function outlineMaterial(thickness: number): THREE.ShaderMaterial {
+ *  model space so it scales with the object; clipping-plane aware (y<0 hidden).
+ *  The skinning chunks are #ifdef-guarded no-ops on plain meshes; on a
+ *  SkinnedMesh the renderer defines USE_SKINNING and the shell follows the
+ *  bones (used by the skinned playback players in player-anim.ts). */
+export function outlineMaterial(thickness: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: { thickness: { value: thickness } },
     side: THREE.BackSide,
     clipping: true,
     vertexShader: `
+      #include <common>
+      #include <skinning_pars_vertex>
       #include <clipping_planes_pars_vertex>
       uniform float thickness;
       void main() {
-        vec3 p = position + normalize(normal) * thickness;
-        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+        #include <skinbase_vertex>
+        vec3 objectNormal = vec3(normal);
+        #include <skinnormal_vertex>
+        vec3 transformed = position + normalize(objectNormal) * thickness;
+        #include <skinning_vertex>
+        vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
         gl_Position = projectionMatrix * mvPosition;
         #include <clipping_planes_vertex>
       }

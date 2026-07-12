@@ -14,7 +14,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { Object3DElement } from '@youcoach-board/core'
 import { toonGradientMap } from './toon'
-import { isObject3DPlayer, notifyObject3DAssetReady, playerKitTexture } from './objects3d'
+import { isObject3DPlayer, notifyObject3DAssetReady, playerKitTexture, outlineMaterial, OUTLINE_FRACTION } from './objects3d'
 import { PLAYERS3D_MIXAMO_GLB_BASE64 } from './players3d-mixamo-glb'
 
 // ── Clip registry ────────────────────────────────────────────────────────────
@@ -319,6 +319,7 @@ export function buildSkinnedPlayer(objectId: string): THREE.Object3D | null {
   // conversion, and wrap in a Group the layer can transform freely (setting
   // rotation on the rig itself would clobber the axis conversion).
   rig.position.set(0, 0, 0)
+  const skins: THREE.SkinnedMesh[] = []
   rig.traverse((o) => {
     if (!(o as THREE.SkinnedMesh).isSkinnedMesh) return
     const m = o as THREE.SkinnedMesh
@@ -326,7 +327,22 @@ export function buildSkinnedPlayer(objectId: string): THREE.Object3D | null {
     // Bind-pose culling boxes don't follow the bones — never cull.
     m.frustumCulled = false
     m.material = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradientMap(), map: playerKitTexture(objectId) })
+    skins.push(m)
   })
+  // Toon ink outline, same shell as the static players: a twin SkinnedMesh on
+  // the same skeleton with the back-face normal-offset material (its skinning
+  // path kicks in on SkinnedMesh), so the silhouette deforms with the bones.
+  for (const m of skins) {
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox()
+    const size = m.geometry.boundingBox!.getSize(new THREE.Vector3())
+    const dims = [size.x, size.y, size.z].sort((a, b) => a - b)
+    const outline = new THREE.SkinnedMesh(m.geometry, outlineMaterial(OUTLINE_FRACTION * (dims[1] || 1)))
+    outline.name = 'toonOutline'
+    outline.raycast = () => {} // decorative shell — never a click target
+    outline.frustumCulled = false
+    outline.bind(m.skeleton, m.bindMatrix)
+    m.add(outline)
+  }
   const root = new THREE.Group()
   root.add(rig)
   root.userData.mixer = new THREE.AnimationMixer(rig)
