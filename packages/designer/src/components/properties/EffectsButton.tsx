@@ -188,7 +188,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
   const moveScope = scope === 'move' && canMove
   const override = moveScope ? frames[currentFrame]?.effects?.[first.id] : undefined
   // Override keys ↔ the object-level field names.
-  const OV: Record<string, keyof NonNullable<typeof override>> = { effectTail: 'tail', effectTailColor: 'tailColor', effectPulse: 'pulse', effectPulseColor: 'pulseColor', effectEase: 'ease', effectParabolic: 'parabolic' }
+  const OV: Record<string, keyof NonNullable<typeof override>> = { effectTail: 'tail', effectTailColor: 'tailColor', effectPulse: 'pulse', effectPulseColor: 'pulseColor', effectEase: 'ease', effectPower: 'power', effectParabolic: 'parabolic' }
 
   function setField(key: string, value: boolean | string) {
     if (moveScope) {
@@ -320,10 +320,30 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
                 <Separator />
               </>
             )}
+            {/* Easy Easing applies to every element; the ball ALSO offers Power
+                Shot as an alternative easing — the two are mutually exclusive. */}
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">{allBalls ? 'Power Shot' : 'Easy Easing'}</span>
-              <Switch checked={!!fv.effectEase} onCheckedChange={(v) => setField('effectEase', v)} />
+              <span className="text-sm font-medium text-foreground">Easy Easing</span>
+              <Switch
+                checked={!!fv.effectEase}
+                onCheckedChange={(v) => {
+                  setField('effectEase', v)
+                  if (v && fv.effectPower) setField('effectPower', false)
+                }}
+              />
             </div>
+            {allBalls && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">Power Shot</span>
+                <Switch
+                  checked={!!fv.effectPower}
+                  onCheckedChange={(v) => {
+                    setField('effectPower', v)
+                    if (v && fv.effectEase) setField('effectEase', false)
+                  }}
+                />
+              </div>
+            )}
           </div>
         ) : allClosed ? (
           <div className="max-h-[480px] space-y-1 divide-y divide-border overflow-y-auto">
