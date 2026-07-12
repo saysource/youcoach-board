@@ -65,6 +65,7 @@ import { POSE_MAN_DEEP_KICK_3_GLB_BASE64 } from './pose-man-deep-kick-3-glb'
 import { POSE_MAN_RECEIVE_2_GLB_BASE64 } from './pose-man-receive-2-glb'
 import { POSE_MAN_DECELERATION_GLB_BASE64 } from './pose-man-deceleration-glb'
 import { POSE_MAN_SPIN_GLB_BASE64 } from './pose-man-spin-glb'
+import { POSE_MAN_CHANGE_DIRECTION_GLB_BASE64 } from './pose-man-change-direction-glb'
 import { POSE_WOMAN_DIAGONAL_JOG_GLB_BASE64 } from './pose-woman-diagonal-jog-glb'
 import { POSE_WOMAN_DIAGONAL_JOG_2_GLB_BASE64 } from './pose-woman-diagonal-jog-2-glb'
 import { POSE_WOMAN_RUN_START_GLB_BASE64 } from './pose-woman-run-start-glb'
@@ -74,6 +75,7 @@ import { POSE_WOMAN_DEEP_KICK_3_GLB_BASE64 } from './pose-woman-deep-kick-3-glb'
 import { POSE_WOMAN_RECEIVE_2_GLB_BASE64 } from './pose-woman-receive-2-glb'
 import { POSE_WOMAN_DECELERATION_GLB_BASE64 } from './pose-woman-deceleration-glb'
 import { POSE_WOMAN_SPIN_GLB_BASE64 } from './pose-woman-spin-glb'
+import { POSE_WOMAN_CHANGE_DIRECTION_GLB_BASE64 } from './pose-woman-change-direction-glb'
 import { POSE_GK_MAN_IDLE_GLB_BASE64 } from './pose-gk-man-idle-glb'
 import { POSE_GK_MAN_CATCH_MIDDLE_GLB_BASE64 } from './pose-gk-man-catch-middle-glb'
 import { POSE_GK_MAN_CATCH_JUMPING_GLB_BASE64 } from './pose-gk-man-catch-jumping-glb'
@@ -239,6 +241,7 @@ const PLAYER_GLBS: Record<string, { data: string; texture: string }> = {
   pose_man_receive_2: { data: POSE_MAN_RECEIVE_2_GLB_BASE64, texture: playerNeutralTex },
   pose_man_deceleration: { data: POSE_MAN_DECELERATION_GLB_BASE64, texture: playerNeutralTex },
   pose_man_spin: { data: POSE_MAN_SPIN_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_change_direction: { data: POSE_MAN_CHANGE_DIRECTION_GLB_BASE64, texture: playerNeutralTex },
   pose_woman_diagonal_jog: { data: POSE_WOMAN_DIAGONAL_JOG_GLB_BASE64, texture: playerNeutralTex },
   pose_woman_diagonal_jog_2: { data: POSE_WOMAN_DIAGONAL_JOG_2_GLB_BASE64, texture: playerNeutralTex },
   pose_woman_run_start: { data: POSE_WOMAN_RUN_START_GLB_BASE64, texture: playerNeutralTex },
@@ -248,6 +251,7 @@ const PLAYER_GLBS: Record<string, { data: string; texture: string }> = {
   pose_woman_receive_2: { data: POSE_WOMAN_RECEIVE_2_GLB_BASE64, texture: playerNeutralTex },
   pose_woman_deceleration: { data: POSE_WOMAN_DECELERATION_GLB_BASE64, texture: playerNeutralTex },
   pose_woman_spin: { data: POSE_WOMAN_SPIN_GLB_BASE64, texture: playerNeutralTex },
+  pose_woman_change_direction: { data: POSE_WOMAN_CHANGE_DIRECTION_GLB_BASE64, texture: playerNeutralTex },
   pose_gk_man_idle: { data: POSE_GK_MAN_IDLE_GLB_BASE64, texture: playerNeutralTex },
   pose_gk_man_catch_middle: { data: POSE_GK_MAN_CATCH_MIDDLE_GLB_BASE64, texture: playerNeutralTex },
   pose_gk_man_catch_jumping: { data: POSE_GK_MAN_CATCH_JUMPING_GLB_BASE64, texture: playerNeutralTex },
@@ -285,7 +289,7 @@ const GOALS: Record<string, { width: number; height: number; style: GoalStyle }>
   goal_small: { width: 6 * FT, height: 4 * FT, style: 'angled' },
 }
 
-export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'flag_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small', 'player_man_a', 'player_man_b', 'player_man_c', 'player_woman_a', 'player_woman_b', 'player_woman_c', 'pose_man_idle', 'pose_man_jog', 'pose_man_run', 'pose_man_kick', 'pose_man_low_kick', 'pose_man_pass', 'pose_man_receive', 'pose_man_dribbling', 'pose_man_header', 'pose_man_jumping_header', 'pose_man_throw_in', 'pose_man_scissor', 'pose_woman_idle', 'pose_woman_jog', 'pose_woman_run', 'pose_woman_kick', 'pose_woman_low_kick', 'pose_woman_pass', 'pose_woman_receive', 'pose_woman_dribbling', 'pose_woman_header', 'pose_woman_jumping_header', 'pose_woman_throw_in', 'pose_woman_scissor', 'pose_man_diagonal_jog', 'pose_man_diagonal_jog_2', 'pose_man_run_start', 'pose_man_deep_kick', 'pose_man_deep_kick_2', 'pose_man_deep_kick_3', 'pose_man_receive_2', 'pose_man_deceleration', 'pose_man_spin', 'pose_woman_diagonal_jog', 'pose_woman_diagonal_jog_2', 'pose_woman_run_start', 'pose_woman_deep_kick', 'pose_woman_deep_kick_2', 'pose_woman_deep_kick_3', 'pose_woman_receive_2', 'pose_woman_deceleration', 'pose_woman_spin', 'pose_gk_man_idle', 'pose_gk_man_catch_middle', 'pose_gk_man_catch_jumping', 'pose_gk_man_catch_side_low', 'pose_gk_man_catch_diving_right', 'pose_gk_man_catch_diving_left', 'pose_gk_man_catch_middle_low', 'pose_gk_man_body_block', 'pose_gk_man_body_block_2', 'pose_gk_man_deep_kick', 'pose_gk_man_deep_kick_2', 'pose_gk_man_deep_kick_3', 'pose_gk_woman_idle', 'pose_gk_woman_catch_middle', 'pose_gk_woman_catch_jumping', 'pose_gk_woman_catch_side_low', 'pose_gk_woman_catch_diving_right', 'pose_gk_woman_catch_diving_left', 'pose_gk_woman_catch_middle_low', 'pose_gk_woman_body_block', 'pose_gk_woman_body_block_2', 'pose_gk_woman_deep_kick', 'pose_gk_woman_deep_kick_2', 'pose_gk_woman_deep_kick_3'] as const
+export const KNOWN_OBJECTS = ['ball', 'cube', 'cone', 'high_cone', 'cone_hurdle', 'hurdle_low', 'hurdle', 'hurdle_high', 'speed_ladder', 'mannequin', 'wall_mannequin', 'balance_dome', 'agility_pole', 'flag_pole', 'goal_full', 'goal_9', 'goal_7', 'goal_futsal', 'goal_small', 'player_man_a', 'player_man_b', 'player_man_c', 'player_woman_a', 'player_woman_b', 'player_woman_c', 'pose_man_idle', 'pose_man_jog', 'pose_man_run', 'pose_man_kick', 'pose_man_low_kick', 'pose_man_pass', 'pose_man_receive', 'pose_man_dribbling', 'pose_man_header', 'pose_man_jumping_header', 'pose_man_throw_in', 'pose_man_scissor', 'pose_woman_idle', 'pose_woman_jog', 'pose_woman_run', 'pose_woman_kick', 'pose_woman_low_kick', 'pose_woman_pass', 'pose_woman_receive', 'pose_woman_dribbling', 'pose_woman_header', 'pose_woman_jumping_header', 'pose_woman_throw_in', 'pose_woman_scissor', 'pose_man_diagonal_jog', 'pose_man_diagonal_jog_2', 'pose_man_run_start', 'pose_man_deep_kick', 'pose_man_deep_kick_2', 'pose_man_deep_kick_3', 'pose_man_receive_2', 'pose_man_deceleration', 'pose_man_spin', 'pose_man_change_direction', 'pose_woman_diagonal_jog', 'pose_woman_diagonal_jog_2', 'pose_woman_run_start', 'pose_woman_deep_kick', 'pose_woman_deep_kick_2', 'pose_woman_deep_kick_3', 'pose_woman_receive_2', 'pose_woman_deceleration', 'pose_woman_spin', 'pose_woman_change_direction', 'pose_gk_man_idle', 'pose_gk_man_catch_middle', 'pose_gk_man_catch_jumping', 'pose_gk_man_catch_side_low', 'pose_gk_man_catch_diving_right', 'pose_gk_man_catch_diving_left', 'pose_gk_man_catch_middle_low', 'pose_gk_man_body_block', 'pose_gk_man_body_block_2', 'pose_gk_man_deep_kick', 'pose_gk_man_deep_kick_2', 'pose_gk_man_deep_kick_3', 'pose_gk_woman_idle', 'pose_gk_woman_catch_middle', 'pose_gk_woman_catch_jumping', 'pose_gk_woman_catch_side_low', 'pose_gk_woman_catch_diving_right', 'pose_gk_woman_catch_diving_left', 'pose_gk_woman_catch_middle_low', 'pose_gk_woman_body_block', 'pose_gk_woman_body_block_2', 'pose_gk_woman_deep_kick', 'pose_gk_woman_deep_kick_2', 'pose_gk_woman_deep_kick_3'] as const
 export type Object3DKind = (typeof KNOWN_OBJECTS)[number]
 export function isKnownObject(id: string): id is Object3DKind {
   return (KNOWN_OBJECTS as readonly string[]).includes(id)

@@ -17799,6 +17799,13 @@
      "w": 100,
      "h": 100,
      "label": "Spin"
+    },
+    {
+     "object3d": "pose_man_change_direction",
+     "thumb": "materials3d/pose_man_change_direction",
+     "w": 100,
+     "h": 100,
+     "label": "Change Direction"
     }
    ]
   },
@@ -17952,6 +17959,13 @@
      "w": 100,
      "h": 100,
      "label": "Spin"
+    },
+    {
+     "object3d": "pose_woman_change_direction",
+     "thumb": "materials3d/pose_woman_change_direction",
+     "w": 100,
+     "h": 100,
+     "label": "Change Direction"
     }
    ]
   },
