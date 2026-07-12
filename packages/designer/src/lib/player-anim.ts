@@ -50,8 +50,8 @@ export const PLAYER_CLIPS: Record<string, PlayerClipMeta> = {
   // ≈ 0.45 — the ball departs 13 frames in, see KICK_BALL_DELAY_S).
   kick: { clip: 'Strike Foward Jog', loop: false, contactTime: 0.45 },
   // The KICK / LOW KICK poses shoot with the plain place-kick clip instead
-  // (0.6 s, strikes right away — the ball departs with no delay).
-  kickBall: { clip: 'Kick Soccerball', loop: false, contactTime: 0.15 },
+  // (0.6 s, foot contact 6 frames in — see PLACE_KICK_BALL_DELAY_S).
+  kickBall: { clip: 'Kick Soccerball', loop: false, contactTime: 6 / 30 },
   // The authored 5.17 s clip walks to the ball first: keep only the trap —
   // frames 25–45 at 30 fps (user-picked in Blender) — pinned in place.
   // contactTime just inside the window's end: the whole selected range plays
@@ -115,16 +115,17 @@ export function isGkDeepKick(objectId: string): boolean {
 }
 
 // How a FIELD player's shot renders is chosen by the authored pose (user
-// rules): the Kick / Low Kick poses strike right away with the place-kick
-// clip and the ball departs immediately; the Deep Kick poses (and every
-// other kicker) play the strike-in-stride clip, whose foot meets the ball
-// 13 frames in — the ball waits that long before departing.
-export const KICK_BALL_DELAY_S = 13 / 30
+// rules): the Kick / Low Kick poses strike with the place-kick clip, whose
+// foot meets the ball 6 frames in; the Deep Kick poses (and every other
+// kicker) play the strike-in-stride clip, whose contact is 13 frames in.
+// The ball waits at the kicker's feet until its clip's contact.
+export const STRIKE_BALL_DELAY_S = 13 / 30
+export const PLACE_KICK_BALL_DELAY_S = 6 / 30
 
 /** The shot clip + ball-departure delay for this kicker's pose. */
 export function kickStyleFor(objectId: string): { meta: PlayerClipMeta; ballDelay: number } {
-  if (/^pose_(?:man|woman)_(?:low_)?kick$/.test(objectId)) return { meta: PLAYER_CLIPS.kickBall, ballDelay: 0 }
-  return { meta: PLAYER_CLIPS.kick, ballDelay: KICK_BALL_DELAY_S }
+  if (/^pose_(?:man|woman)_(?:low_)?kick$/.test(objectId)) return { meta: PLAYER_CLIPS.kickBall, ballDelay: PLACE_KICK_BALL_DELAY_S }
+  return { meta: PLAYER_CLIPS.kick, ballDelay: STRIKE_BALL_DELAY_S }
 }
 
 /** GK players are the pose_gk_* catalog entries — the pose IS the save type. */
