@@ -619,6 +619,15 @@ const GAIT_FADE_S = 0.25 // clip-to-clip cross-fade (jog↔run, into one-shots)
 const GAIT_RAMP_S = 0.3 // idle↔locomotion envelope: ramp in from rest / out to rest
 const FACE_BLEND = 0.15 // transition fraction blending authored ↔ path tangent
 
+/** How close a ball must land to this player to count as an interaction:
+ *  INTERACT_R for field players, the authored pose's catch reach for
+ *  goalkeepers, null for non-players. Used by the editor's drag highlight. */
+export function interactionReach(objectId: string): number | null {
+  if (!isObject3DPlayer(objectId)) return null
+  if (isGoalkeeper(objectId)) return gkCatchFor(objectId)?.reach ?? null
+  return INTERACT_R
+}
+
 /** Ground position along a straight or spline run at eased time q (spline =
  *  the movement path in board coords, sampled and dropped back onto grass). */
 function groundPosAt(a: { x: number; z: number }, b: { x: number; z: number }, mids: PathPoint[] | undefined, cam: THREE.Camera | null | undefined): (q: number) => { x: number; z: number } | null {

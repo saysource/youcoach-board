@@ -83,11 +83,12 @@ import { FieldZoneTool } from './FieldZoneTool'
 import { MovementPathLayer } from './MovementPathLayer'
 import { Object3DMotionFx } from './Object3DMotionFx'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
-import { isObject3DRotatable } from '../lib/objects3d'
+import { isObject3DBall, isObject3DRotatable } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, type PitchType } from '../lib/field-camera'
 import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
 import { exportBoardImage, registerBoardExporter } from '../lib/export-image'
+import { interactionReach } from '../lib/animation-playback'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -2355,6 +2356,30 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         ? resolveAnchorDrag(gesture).guides
         : []
   const alignGuides = [...(fieldMoveSnap?.guides ?? []), ...(objectSnap?.guides ?? []), ...resizeGuides, ...pointGuides, ...object3dSnapGuides]
+  // While DRAGGING a ball: a yellow ground ring around every player the ball
+  // is in interaction proximity of (field players 1 m; keepers their pose's
+  // catch reach) — the drop would read as a pass/shot/save to that player.
+  const interactionRings = ((): string[] => {
+    if (!object3dGesture || object3dGesture.kind !== 'move') return []
+    const ballIds = new Set(object3dGesture.moving.map((m) => m.id))
+    const balls = doc.elements.filter((e): e is Object3DElement => e.type === 'object3d' && ballIds.has(e.id) && isObject3DBall(e.objectId))
+    if (balls.length === 0) return []
+    const rings: string[] = []
+    for (const e of doc.elements) {
+      if (e.type !== 'object3d') continue
+      const reach = interactionReach(e.objectId)
+      if (reach == null) continue
+      if (!balls.some((bl) => Math.hypot(bl.x - e.x, bl.z - e.z) <= reach)) continue
+      rings.push(
+        Array.from({ length: 36 }, (_, i) => {
+          const ang = (i / 36) * 2 * Math.PI
+          const pt = object3dToBoard(e.x + Math.cos(ang) * reach, 0, e.z + Math.sin(ang) * reach)
+          return `${pt.x},${pt.y}`
+        }).join(' '),
+      )
+    }
+    return rings
+  })()
   const gapGuides = objectSnap?.gaps ?? []
 
   // 2D selection chrome excludes 3D arrows (they have no SVG box; their own
@@ -2656,6 +2681,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
                 pointerEvents="none"
               />
             )}
+            {/* Ball-drag interaction proximity: a yellow ground ring around
+                each player the dragged ball would interact with. */}
+            {interactionRings.map((pts, i) => (
+              <polygon key={`ir-${i}`} points={pts} fill="#facc15" fillOpacity={0.15} stroke="#eab308" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+            ))}
             {/* Object-snap alignment guides (red) while dragging a selection: a
                 line through the aligned coordinate plus a small × on each notable
                 point that triggered it. */}
