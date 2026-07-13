@@ -57,7 +57,7 @@ const FIELDS3D_CATS: { id: string; name: string; type: FieldType }[] = [
 // SVG fields from the catalog's field categories, shown in one sectioned panel.
 const LEGACY_CAT = { id: LEGACY_BACKGROUNDS_CAT_ID, name: 'Legacy Backgrounds' }
 // Display order of the category-list groups (Fields appended last).
-const GROUP_ORDER = ['players', 'materials', 'players3d', 'materials3d']
+const GROUP_ORDER = ['players3d', 'materials3d', 'players', 'materials']
 
 interface LibraryDrawerProps {
   open: boolean

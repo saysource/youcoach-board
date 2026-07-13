@@ -19,6 +19,23 @@
  },
  "groups": [
   {
+   "id": "players3d",
+   "name": "Players 3D",
+   "categories": [
+    "players3d_men",
+    "players3d_women",
+    "goalkeepers3d_men",
+    "goalkeepers3d_women"
+   ]
+  },
+  {
+   "id": "materials3d",
+   "name": "Materials 3D",
+   "categories": [
+    "materials3d"
+   ]
+  },
+  {
    "id": "players",
    "name": "Players",
    "categories": [
@@ -40,23 +57,6 @@
    "name": "Materials",
    "categories": [
     "materials"
-   ]
-  },
-  {
-   "id": "materials3d",
-   "name": "Materials 3D",
-   "categories": [
-    "materials3d"
-   ]
-  },
-  {
-   "id": "players3d",
-   "name": "Players 3D",
-   "categories": [
-    "players3d_men",
-    "players3d_women",
-    "goalkeepers3d_men",
-    "goalkeepers3d_women"
    ]
   },
   {

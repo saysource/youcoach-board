@@ -85,7 +85,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // toolbar's More-tools menu can jump to a category and open the drawer.
   const { catalog } = useAssets()
   const [libraryCatId, setLibraryCatId] = useState<string | null>(null)
-  // Default to the first NON-field category (Players (Men)); the legacy 'fields'
+  // Default to the first NON-field category (Players 3D (Men)); the legacy 'fields'
   // categories are hidden from the palette and kept only for loading old drawings.
   if (catalog && libraryCatId === null) {
     const firstCat = catalog.groups.flatMap((g) => g.categories).find((id) => catalog.categories[id]?.kind !== 'field')
