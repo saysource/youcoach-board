@@ -1272,8 +1272,10 @@ function applyObject3DMove(
   const handoff = isObject3DBall(b.objectId) ? rules?.prevCaughtBy?.get(b.id) : undefined
   if (handoff) a = { ...a, ...handPoint(handoff.gk, handoff.meta.hand) }
   // A THROWN ball starts at the thrower's overhead release point, oriented
-  // toward the target (the thrower faces it for the whole throw).
-  const thrown = isObject3DBall(b.objectId) && !caught && !handoff ? rules?.thrownBall?.get(b.id) : undefined
+  // toward the target (the thrower faces it for the whole throw). It may ALSO
+  // be caught/met in the air at the other end (throw-in to a header, a throw
+  // at the keeper) — the two combine into a direct air-to-air flight.
+  const thrown = isObject3DBall(b.objectId) && !handoff ? rules?.thrownBall?.get(b.id) : undefined
   if (thrown) {
     const rot = Math.atan2(thrown.target[0] - thrown.thrower.x, thrown.target[1] - thrown.thrower.z)
     a = { ...a, ...handPoint({ ...thrown.thrower, rotation: rot }, THROW_IN.hand) }
@@ -1339,9 +1341,9 @@ function applyObject3DMove(
   // a ball caught LAST turn descends from the hands as it's put down/played.
   if (caught) {
     // If the ball ALSO leaves from an in-air point (a header chain, a ball
-    // held by the keeper), fly the DIRECT line between the two air points
-    // instead of dipping to the ground and climbing back.
-    const hStart = handoff ? handoff.meta.hand[1] * gkScale(handoff.gk) : 0
+    // held by the keeper, a throw-in), fly the DIRECT line between the two
+    // air points instead of dipping to the ground and climbing back.
+    const hStart = handoff ? handoff.meta.hand[1] * gkScale(handoff.gk) : thrown ? THROW_IN.hand[1] * gkScale(thrown.thrower) : 0
     el = { ...el, elevation: ((el.elevation ?? 0) + hStart) * (1 - te) + caught.meta.hand[1] * gkScale(caught.gk) * te }
   } else if (handoff) {
     el = { ...el, elevation: Math.max(el.elevation ?? 0, handoff.meta.hand[1] * gkScale(handoff.gk) * (1 - te)) }
