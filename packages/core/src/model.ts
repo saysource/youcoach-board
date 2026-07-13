@@ -184,7 +184,7 @@ export const DEFAULT_BACKGROUND: BoardBackground = {
   figureScale: 1,
   objectScale: 4, // materials are real-size (a cone is a dot on a full pitch); 4× makes them legible by default
   showGoals: true,
-  tokens3d: false,
+  tokens3d: true, // new boards render disc tokens as 3D pucks (saved docs keep their explicit value)
   showLines: true,
   bandsOpacity: 1,
   centerLight: 1,
@@ -261,7 +261,7 @@ function parseBackground(raw: unknown): BoardBackground {
     figureScale: num(o.figureScale, DEFAULT_BACKGROUND.figureScale),
     objectScale: num(o.objectScale, DEFAULT_BACKGROUND.objectScale),
     showGoals: o.showGoals !== false,
-    tokens3d: o.tokens3d === true,
+    tokens3d: o.tokens3d !== false, // default ON — saved docs always carry the explicit choice
     showLines: o.showLines !== false,
     // bandsOpacity supersedes the former linesOpacity (which faded lines + bands).
     bandsOpacity: Math.min(1, Math.max(0, num(o.bandsOpacity, num(o.linesOpacity, DEFAULT_BACKGROUND.bandsOpacity)))),
