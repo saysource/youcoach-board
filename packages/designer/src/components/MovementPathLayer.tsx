@@ -27,9 +27,13 @@ interface Props {
   center3D?: (el: BoardElement) => PathPoint | null
   /** Commit an element's path (null clears it). */
   onSetPath: (elementId: string, points: PathPoint[] | null) => void
+  /** Whether a SELECTED element sits at this board point — then a press on
+   *  the path belongs to the element (e.g. the ball resting on its own
+   *  trajectory end), not to a new anchor. */
+  hitsSelected?: (p: PathPoint) => boolean
 }
 
-export function MovementPathLayer({ prevElements, elements, paths, scale, center3D, onSetPath }: Props) {
+export function MovementPathLayer({ prevElements, elements, paths, scale, center3D, onSetPath, hitsSelected }: Props) {
   const s = scale || 1
   // Anchor being dragged: live points held locally, committed on pointer-up.
   const [drag, setDrag] = useState<{ id: string; index: number; points: PathPoint[] } | null>(null)
@@ -98,6 +102,22 @@ export function MovementPathLayer({ prevElements, elements, paths, scale, center
                 const svg = (e.currentTarget as SVGGraphicsElement).ownerSVGElement
                 if (!svg) return
                 const p = clientToBoard(svg, e.clientX, e.clientY)
+                // A SELECTED element under the cursor wins over the path (a
+                // small ball sits right ON its trajectory — clicking it must
+                // select/drag the ball, not sprout an anchor): step aside and
+                // replay the press on whatever is underneath.
+                if (hitsSelected?.([p.x, p.y])) {
+                  const self = e.currentTarget as SVGPathElement
+                  self.style.pointerEvents = 'none'
+                  const under = document.elementFromPoint(e.clientX, e.clientY)
+                  self.style.pointerEvents = ''
+                  if (under && under !== self) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    under.dispatchEvent(new PointerEvent('pointerdown', e.nativeEvent))
+                  }
+                  return
+                }
                 const idx = insertIndexFor(a, stored, b, [p.x, p.y])
                 const pts2 = stored.slice()
                 pts2.splice(idx, 0, [p.x, p.y])

@@ -1552,7 +1552,7 @@ export function startPlayback(store: EditorStore): void {
     const elapsedS = (elapsedBase + t * curD) / spd
     const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
     const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
-    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, store.getState().doc.background.tokens3d, curD / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, elapsedS, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths, effects: fr[seg + 2].effects } : undefined), pose, seg + t)
+    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, store.getState().doc.background.tokens3d && !!store.getState().doc.background.field3d, curD / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, elapsedS, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths, effects: fr[seg + 2].effects } : undefined), pose, seg + t)
     if (t >= 1) {
       if (seg + 1 >= fr.length - 1) {
         // Reached the last frame. Loop wraps (hard cut back to frame 1);
@@ -1659,7 +1659,7 @@ export function seekAnimationFrame(store: EditorStore, n: number): void {
   const anim = store.getState().doc.animation
   const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
   const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
-  const els = lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, preCamera, store.getState().doc.background.tokens3d, durs[seg] / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, tr, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths, effects: fr[seg + 2].effects } : undefined)
+  const els = lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, preCamera, store.getState().doc.background.tokens3d && !!store.getState().doc.background.field3d, durs[seg] / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, tr, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths, effects: fr[seg + 2].effects } : undefined)
   applyPlaybackState(store, preCamera, els, pose, seg + t)
 }
 

@@ -83,7 +83,7 @@ import { FieldZoneTool } from './FieldZoneTool'
 import { MovementPathLayer } from './MovementPathLayer'
 import { Object3DMotionFx } from './Object3DMotionFx'
 import { arrow3DHandlePositions, arrow3DHandlePositionsVia, arrow3DWorldHandles, boardToApexHeight, boardToGround, boardToHeight, makeArrow3DCamera, worldPointToBoard } from '../lib/arrow3d'
-import { isObject3DBall, isObject3DRotatable } from '../lib/objects3d'
+import { isObject3DBall, isObject3DRotatable, object3dGroundBounds } from '../lib/objects3d'
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, type PitchType } from '../lib/field-camera'
 import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
@@ -711,7 +711,9 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Object3DLayer. Ground/size come from the pin anchors when present, else are
   // projected through the current camera / sized by the reference ppm. Jersey
   // tokens keep their 2D badge (their silhouette has no 3D counterpart).
-  const tokens3d = doc.background.tokens3d
+  // Pucks only exist on a real 3D field — on 2D fields tokens stay flat
+  // whatever the stored flag says (it survives for when the field changes).
+  const tokens3d = doc.background.tokens3d && !!field3d
   const token3dList: Token3D[] = !tokens3d
     ? []
     : doc.elements.flatMap((el) => {
@@ -2980,6 +2982,29 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
             scale={scale}
             center3D={(el) => (el.type === 'object3d' ? [projectGround(arrow3dCam, el.x, el.z)[0], projectGround(arrow3dCam, el.x, el.z)[1]] : null)}
             onSetPath={(id, pts) => storeApi.getState().setFramePath(currentFrame, id, pts)}
+            hitsSelected={(bp) => {
+              // A press on the path that lands ON a selected element belongs
+              // to the element (select/drag), not to a new path anchor.
+              for (const id of selectedIds) {
+                const el = doc.elements.find((x) => x.id === id)
+                if (!el) continue
+                if (el.type === 'object3d') {
+                  const g = arrow3dGround({ x: bp[0], y: bp[1] })
+                  if (!g) continue
+                  const fp = object3dGroundBounds(el.objectId)
+                  const s = Math.max(1, (el.useGlobalSize ? 1 : el.size) * (doc.background.objectScale ?? 1))
+                  const r = Math.max(0.4, (Math.max(fp.maxX - fp.minX, fp.maxZ - fp.minZ) / 2) * s)
+                  if (Math.hypot(g.x - el.x, g.z - el.z) <= r) return true
+                } else {
+                  const b = getElementBounds(el)
+                  const x = bp[0] - el.transform.x
+                  const y = bp[1] - el.transform.y
+                  const pad = 4
+                  if (x >= b.x - pad && x <= b.x + b.width + pad && y >= b.y - pad && y <= b.y + b.height + pad) return true
+                }
+              }
+              return false
+            }}
           />
         )}
         {fieldCamCfg && (

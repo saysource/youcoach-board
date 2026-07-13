@@ -143,8 +143,10 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
   const [tab, setTab] = useState<'in' | 'out' | 'between'>('in')
   // Scope of the movement-effects tab: "Whole animation" edits the object-
   // level fields; "This move" writes a per-turn override for the transition
-  // INTO the frame being edited (the movement-path mental model).
-  const [scope, setScope] = useState<'all' | 'move'>('all')
+  // INTO the frame being edited (the movement-path mental model). Per-move is
+  // the common case → the default; it falls back to animation-wide on frames
+  // with no incoming move (frame 1).
+  const [scopeRaw, setScope] = useState<'all' | 'move'>('move')
   // Which section is expanded (VA-style accordion) for the sectioned layouts
   // (closed shapes: Border/Fill; texts: Effect/Text).
   const [openSection, setOpenSection] = useState<'first' | 'second' | null>('first')
@@ -185,6 +187,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
   // The movement-effects tab (see the scope state above). Frame 1 has no
   // incoming move.
   const canMove = currentFrame > 0 && currentFrame < frames.length
+  const scope = canMove ? scopeRaw : 'all'
   const moveScope = scope === 'move' && canMove
   const override = moveScope ? frames[currentFrame]?.effects?.[first.id] : undefined
   // Override keys ↔ the object-level field names.
