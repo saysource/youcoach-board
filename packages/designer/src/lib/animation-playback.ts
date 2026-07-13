@@ -941,6 +941,17 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
     }
     rules.nextGait = gaits
   }
+  // CONSECUTIVE turns (zig-zag): a leg that both exits one turn and enters the
+  // next can't honor both clips (their windows overlap on a 1 s leg) — the
+  // coming plant wins, the previous turn's exit is dropped so the anim, the
+  // facing and the travel all agree (a stale exit hold would show the player
+  // running at the OLD direction).
+  if (rules.turnOf && rules.prevTurnOf) {
+    for (const id of rules.turnOf) {
+      rules.prevTurnOf.delete(id)
+      rules.turnFreezeOf?.delete(id)
+    }
+  }
   return rules
 }
 
