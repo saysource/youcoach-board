@@ -75,19 +75,6 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // Presentation mode: the board fills the whole page (full height, centred), all
   // editing chrome hidden; Esc exits. Enter from the main menu.
   const [presenting, setPresenting] = useState(false)
-  useEffect(() => {
-    if (!presenting) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        e.stopPropagation()
-        setPresenting(false)
-      }
-    }
-    // Capture phase so it wins over the other Esc handlers (nav/edit exits).
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [presenting])
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
   const [formation, setFormation] = useState<string | null>(null)
@@ -329,7 +316,27 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // plain drag pans the field camera instead of rotating it. Derived off when
   // no orbit overlay is up, so it never lingers into normal mode.
   const [fieldPan, setFieldPan] = useState(false)
-  const fieldPanning = fieldPan && (navigating || bgEditing)
+  const fieldPanning = fieldPan && (navigating || bgEditing || presenting)
+  // Leave presentation, dropping any orbit/pan it turned on so it doesn't linger
+  // into normal editing.
+  const exitPresent = () => {
+    setNavigating(false)
+    setFieldPan(false)
+    setPresenting(false)
+  }
+  useEffect(() => {
+    if (!presenting) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        exitPresent()
+      }
+    }
+    // Capture phase so it wins over the other Esc handlers (nav/edit exits).
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [presenting])
   // The nav toolbar's +/− magnifiers. In an orbit session (navigation /
   // Edit Background) dolly DIRECTLY: the session already coalesces into one
   // undo step, and the animated tween would commit that transaction early.
@@ -711,7 +718,17 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             </>
           )}
 
-          {presenting && <PresentationOverlay onExit={() => setPresenting(false)} />}
+          {presenting && (
+            <PresentationOverlay
+              onExit={exitPresent}
+              canNavigate={!!savedField3d}
+              orbiting={navigating && !fieldPan}
+              panning={navigating && fieldPan}
+              onOrbit={() => { if (navigating && !fieldPan) { setNavigating(false) } else { setNavigating(true); setFieldPan(false) } }}
+              onPan={() => { if (navigating && fieldPan) { setNavigating(false); setFieldPan(false) } else { setNavigating(true); setFieldPan(true) } }}
+              onExitNav={() => { setNavigating(false); setFieldPan(false) }}
+            />
+          )}
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
           <GameSystemDialog code={formation} onClose={() => setFormation(null)} />

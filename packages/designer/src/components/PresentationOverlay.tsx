@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Gauge, Highlighter, X } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Gauge, Highlighter, Rotate3d, Move, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Slider } from './ui/slider'
@@ -45,24 +45,34 @@ function LaserTrail() {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
-      for (let i = 1; i < pts.length; i++) {
-        const a = pts[i - 1]
-        const b = pts[i]
-        if (b.brk) continue // start of a new stroke — don't connect it to the last one
-        const op = Math.max(0, 1 - (now - b.t) / FADE_MS)
-        if (op <= 0) continue
-        ctx.strokeStyle = `rgba(255,90,90,${op * 0.35})` // soft glow
-        ctx.lineWidth = 12
-        ctx.beginPath()
-        ctx.moveTo(a.x, a.y)
-        ctx.lineTo(b.x, b.y)
-        ctx.stroke()
-        ctx.strokeStyle = `rgba(230,20,20,${op})` // core
-        ctx.lineWidth = 4
-        ctx.beginPath()
-        ctx.moveTo(a.x, a.y)
-        ctx.lineTo(b.x, b.y)
-        ctx.stroke()
+      // Draw each stroke (a run of points between `brk` markers) as ONE continuous
+      // path — so round caps land only at the two ends, never at interior joints
+      // (which is what made the line look like a string of beads). The stroke fades
+      // as a unit by the age of its freshest point, and old tail points are trimmed
+      // above, so the trail shrinks from the tail while dimming.
+      let i = 0
+      while (i < pts.length) {
+        let j = i + 1
+        while (j < pts.length && !pts[j].brk) j++
+        if (j - i >= 2) {
+          const op = Math.max(0, 1 - (now - pts[j - 1].t) / FADE_MS)
+          if (op > 0) {
+            const trace = () => {
+              ctx.beginPath()
+              ctx.moveTo(pts[i].x, pts[i].y)
+              for (let k = i + 1; k < j; k++) ctx.lineTo(pts[k].x, pts[k].y)
+            }
+            ctx.strokeStyle = `rgba(255,90,90,${op * 0.35})` // soft glow
+            ctx.lineWidth = 12
+            trace()
+            ctx.stroke()
+            ctx.strokeStyle = `rgba(230,20,20,${op})` // core
+            ctx.lineWidth = 4
+            trace()
+            ctx.stroke()
+          }
+        }
+        i = j
       }
     }
     draw()
@@ -81,12 +91,23 @@ function LaserTrail() {
       className="fixed inset-0 z-40 cursor-crosshair"
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
-        ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
         drawing.current = true
         points.current.push({ x: e.clientX, y: e.clientY, t: performance.now(), brk: true })
+        // Capture so the stroke keeps drawing if the pointer leaves the element;
+        // best-effort (throws when there's no active pointer, e.g. synthetic events).
+        try {
+          ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+        } catch {
+          /* capture is optional; window-level moves still reach us */
+        }
       }}
       onPointerMove={(e) => {
-        if (drawing.current) points.current.push({ x: e.clientX, y: e.clientY, t: performance.now() })
+        if (!drawing.current) return
+        // Drop samples closer than 3px to the last one — dense clusters at a near-
+        // stationary pointer would otherwise pile up into a visible blob.
+        const last = points.current[points.current.length - 1]
+        if (last && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 3) return
+        points.current.push({ x: e.clientX, y: e.clientY, t: performance.now() })
       }}
       onPointerUp={end}
       onPointerCancel={end}
@@ -125,7 +146,27 @@ function SpeedControl({ speed, onChange, disabled }: { speed: number; onChange: 
 // Presentation-mode HUD: a controls bar that appears on activity and fades after
 // IDLE_MS, plus the laser overlay. Space toggles play; Esc (owned by BoardShell)
 // exits.
-export function PresentationOverlay({ onExit }: { onExit: () => void }) {
+export function PresentationOverlay({
+  onExit,
+  canNavigate = false,
+  orbiting = false,
+  panning = false,
+  onOrbit,
+  onPan,
+  onExitNav = () => {},
+}: {
+  onExit: () => void
+  /** A 3D field exists, so orbit/pan the camera is possible. */
+  canNavigate?: boolean
+  /** Orbit mode is active (drag rotates the camera around the scene). */
+  orbiting?: boolean
+  /** Pan mode is active (drag slides the camera across the ground). */
+  panning?: boolean
+  onOrbit?: () => void
+  onPan?: () => void
+  /** Leave orbit/pan mode (called before playback resumes, or when the laser turns on). */
+  onExitNav?: () => void
+}) {
   const storeApi = useEditorStoreApi()
   const playing = useEditorStore((s) => s.playing)
   const currentFrame = useEditorStore((s) => s.currentFrame)
@@ -156,9 +197,15 @@ export function PresentationOverlay({ onExit }: { onExit: () => void }) {
   }, [])
 
   const togglePlay = () => {
-    if (isPaused(storeApi)) resumePlayback(storeApi) // resume from the frozen frame
-    else if (isPlaying(storeApi)) pausePlayback(storeApi) // freeze in place
-    else startPlayback(storeApi)
+    if (isPaused(storeApi)) {
+      onExitNav() // leave orbit/pan so the camera follows playback again
+      resumePlayback(storeApi) // resume from the frozen frame
+    } else if (isPlaying(storeApi)) {
+      pausePlayback(storeApi) // freeze in place
+    } else {
+      onExitNav()
+      startPlayback(storeApi)
+    }
   }
 
   // Leaving presentation stops any running/paused playback (resets to a clean frame).
@@ -197,8 +244,22 @@ export function PresentationOverlay({ onExit }: { onExit: () => void }) {
             <SkipForward />
           </Button>
           <SpeedControl speed={speed} onChange={(v) => setAnimationSettings({ speed: v })} disabled={!hasAnim} />
+          {canNavigate && (
+            <>
+              <span className="mx-0.5 h-5 w-px bg-border" />
+              {/* Orbit / pan the 3D camera to inspect the scene from another angle.
+                  Disabled while playing (the animation drives the camera); available
+                  when paused or stopped. */}
+              <Button size="icon-sm" aria-label="Orbit camera" aria-pressed={orbiting} disabled={playing} onClick={() => { setLaser(false); onOrbit?.() }} className={cn('hover:bg-primary/25', orbiting && 'bg-primary/20 text-primary')}>
+                <Rotate3d />
+              </Button>
+              <Button size="icon-sm" aria-label="Pan camera" aria-pressed={panning} disabled={playing} onClick={() => { setLaser(false); onPan?.() }} className={cn('hover:bg-primary/25', panning && 'bg-primary/20 text-primary')}>
+                <Move />
+              </Button>
+            </>
+          )}
           <span className="mx-0.5 h-5 w-px bg-border" />
-          <Button size="icon-sm" aria-label="Laser pointer" aria-pressed={laser} onClick={() => setLaser((v) => !v)} className={cn('hover:bg-primary/25', laser && 'bg-red-500/15 text-red-500 hover:bg-red-500/25')}>
+          <Button size="icon-sm" aria-label="Laser pointer" aria-pressed={laser} onClick={() => setLaser((v) => { const next = !v; if (next) onExitNav(); return next })} className={cn('hover:bg-primary/25', laser && 'bg-red-500/15 text-red-500 hover:bg-red-500/25')}>
             <Highlighter />
           </Button>
           <span className="mx-0.5 h-5 w-px bg-border" />

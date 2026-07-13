@@ -1536,7 +1536,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   function onContainerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only the LEFT button drives interactions (touch/pen primary press is 0 too).
     if (e.button !== 0) return
-    if (backgroundMode || homographyMode || cameraMode || zoneMode || navigating || playing) return // calibration/navigation/playback: only their own handles are active
+    if (backgroundMode || homographyMode || cameraMode || zoneMode || navigating || playing || presenting) return // calibration/navigation/playback/presentation: only their own handles are active
     const svg = svgRef.current
     if (!svg) return
     const p = clientToBoard(svg, e.clientX, e.clientY)
