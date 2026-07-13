@@ -1,38 +1,16 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { BOARD_WIDTH, BOARD_HEIGHT, type BoardDoc, type LogoPosition } from '@youcoach-board/core'
+import { BOARD_WIDTH, BOARD_HEIGHT, type BoardDoc } from '@youcoach-board/core'
 import { useAssets } from '../lib/assets'
 import { loadSvgTemplate, recoloredInnerHtml, type SvgTemplate } from '../lib/figure-svg'
-import logoUrl from '../assets/youcoach-logo.svg'
+import { logoRect, logoUrl } from '../lib/logo'
 
 // Renders the document background into BoardCanvas's background layer: a solid
 // color (or the legacy grass image), the chosen field SVG (fetched, scaled and
 // panned), and the YouCoach logo (0.2 opacity) which animates between positions.
-// The field SVG injection is a designer/viewer concern — core only draws a
-// placeholder.
-
-const LOGO_W = 280 // corner width; centered is 2× (see logoRect)
-const LOGO_RATIO = 63 / 398 // logo viewBox is 398×63
-const LOGO_PAD = 40 // identical inset from each relevant border
-
-// Logo box for a position. Centered is twice the size; corners keep a constant
-// LOGO_PAD inset from their two borders.
-function logoRect(pos: LogoPosition): { x: number; y: number; w: number; h: number } {
-  const w = pos === 'center' ? LOGO_W * 2 : LOGO_W
-  const h = w * LOGO_RATIO
-  switch (pos) {
-    case 'top-left':
-      return { x: LOGO_PAD, y: LOGO_PAD, w, h }
-    case 'top-right':
-      return { x: BOARD_WIDTH - w - LOGO_PAD, y: LOGO_PAD, w, h }
-    case 'bottom-left':
-      return { x: LOGO_PAD, y: BOARD_HEIGHT - h - LOGO_PAD, w, h }
-    case 'bottom-right':
-      return { x: BOARD_WIDTH - w - LOGO_PAD, y: BOARD_HEIGHT - h - LOGO_PAD, w, h }
-    default:
-      return { x: (BOARD_WIDTH - w) / 2, y: (BOARD_HEIGHT - h) / 2, w, h }
-  }
-}
+// On 3D fields the logo is painted INTO the WebGL canvas instead (see
+// Object3DLayer's HUD pass). The field SVG injection is a designer/viewer
+// concern — core only draws a placeholder.
 
 export function BackgroundView({ doc }: { doc: BoardDoc }) {
   const { url } = useAssets()

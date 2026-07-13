@@ -4,12 +4,13 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement, type Arrow3DElement } from '@youcoach-board/core'
+import { BOARD_WIDTH, BOARD_HEIGHT, type Object3DElement, type Arrow3DElement, type LogoPosition } from '@youcoach-board/core'
 import { createArrowGeometry, makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
 import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, buildGoalsOverlay } from '../lib/field3d'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildObject3D, buildTokenDisc, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, object3dGlbReady, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots, setTokenDiscFace, type TokenFaceStyle } from '../lib/objects3d'
+import { logoRect, logoUrl } from '../lib/logo'
 import { applySkinnedPose, buildSkinnedPlayer, ensurePlayerAnimLoaded, playerAnimReady, setSkinnedPlayerKit, wantsSkinnedPlayer } from '../lib/player-anim'
 
 
@@ -64,6 +65,9 @@ interface Props {
   fieldType: FieldType
   layout: TrainingLayout
   showGoals: boolean
+  /** YouCoach watermark position (background.logo) — painted INTO the canvas
+   *  as a HUD pass on 3D fields; null hides it. */
+  logo?: LogoPosition | null
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
 }
@@ -82,6 +86,12 @@ interface Ctx {
   outlinePass: OutlinePass
   goals: THREE.Group | null
   goalsKey: string
+  /** YouCoach watermark HUD: painted INTO the canvas after the main pass so
+   *  it can't be stripped by hiding a DOM node (3D fields only — 2D boards
+   *  keep the SVG logo in BackgroundView). */
+  hudScene: THREE.Scene
+  hudCam: THREE.OrthographicCamera
+  logoMesh: THREE.Mesh
 }
 
 const SELECT_COLOR = 0x2a6cff
@@ -146,7 +156,7 @@ function setObjectDim(obj: THREE.Object3D, opacity: number) {
   })
 }
 
-export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, tokens = [], arrows = [], selectedIds, replaceTargetId = null, erasingIds, viewport, camera, objectScale, minScale = 1, fieldType, layout, showGoals, svgRef, containerRef }, ref) {
+export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, tokens = [], arrows = [], selectedIds, replaceTargetId = null, erasingIds, viewport, camera, objectScale, minScale = 1, fieldType, layout, showGoals, logo = null, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -224,7 +234,33 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     composer.addPass(outlinePass)
     composer.addPass(new OutputPass())
 
-    ctxRef.current = { renderer, scene, fixedCam, calibCam, outlineCam: new THREE.PerspectiveCamera(), meshes: new Map(), tokenMeshes: new Map(), arrowMeshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '' }
+    // Watermark HUD: an orthographic pass in BOARD coordinates (the canvas is
+    // sized to the letterboxed board rect, so board units map straight onto
+    // it). The SVG logo rasterizes into a CanvasTexture at 2× its largest
+    // display size for crispness; the first render after decode repaints.
+    const hudScene = new THREE.Scene()
+    const hudCam = new THREE.OrthographicCamera(0, BOARD_WIDTH, BOARD_HEIGHT, 0, -10, 10)
+    const logoMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.2, depthTest: false, depthWrite: false, toneMapped: false })
+    const logoMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), logoMat)
+    logoMesh.visible = false
+    hudScene.add(logoMesh)
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = 1120
+      c.height = Math.round(1120 * (img.height / img.width || 63 / 398))
+      const g = c.getContext('2d')
+      if (!g) return
+      g.drawImage(img, 0, 0, c.width, c.height)
+      const tex = new THREE.CanvasTexture(c)
+      tex.colorSpace = THREE.SRGBColorSpace
+      logoMat.map = tex
+      logoMat.needsUpdate = true
+      renderRef.current()
+    }
+    img.src = logoUrl
+
+    ctxRef.current = { renderer, scene, fixedCam, calibCam, outlineCam: new THREE.PerspectiveCamera(), meshes: new Map(), tokenMeshes: new Map(), arrowMeshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '', hudScene, hudCam, logoMesh }
     return ctxRef.current
   }
 
@@ -541,6 +577,20 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       ? [replaceMesh]
       : selectedIds.map((id) => ctx.meshes.get(id) ?? ctx.tokenMeshes.get(id)).filter((o): o is THREE.Object3D => !!o)
     ctx.composer.render()
+    // YouCoach watermark: a HUD pass painted INTO the canvas bitmap on top of
+    // everything (no DOM node to hide). 3D fields only — 2D boards keep the
+    // SVG logo in BackgroundView.
+    const showLogo = !!camera && !!logo && !!(ctx.logoMesh.material as THREE.MeshBasicMaterial).map
+    ctx.logoMesh.visible = showLogo
+    if (showLogo) {
+      const r = logoRect(logo!)
+      ctx.logoMesh.position.set(r.x + r.w / 2, BOARD_HEIGHT - (r.y + r.h / 2), 0)
+      ctx.logoMesh.scale.set(r.w, r.h, 1)
+      ctx.renderer.autoClear = false
+      ctx.renderer.clearDepth()
+      ctx.renderer.render(ctx.hudScene, ctx.hudCam)
+      ctx.renderer.autoClear = true
+    }
   }
 
   const renderRef = useRef(render)
@@ -551,7 +601,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, tokens, arrows, selectedIds, replaceTargetId, erasingIds, viewport, camera, objectScale, minScale, fieldType, layout, showGoals])
+  }, [elements, tokens, arrows, selectedIds, replaceTargetId, erasingIds, viewport, camera, objectScale, minScale, fieldType, layout, showGoals, logo])
 
   useEffect(() => {
     const container = containerRef.current
