@@ -714,6 +714,10 @@ interface PlayerRules {
   /** playerId → the clip-start point on the PREVIOUS leg — only used to face
    *  the OLD run direction while the clip finishes on the new leg. */
   turnFreezeOf?: Map<string, { x: number; z: number }>
+  /** STATIONARY players whose authored rotation changes ≥ 45° this transition
+   *  → the turn clip to play (Left/Right by spin direction): they step around
+   *  on the spot instead of pivoting like a statue. */
+  turnInPlaceOf?: Map<string, string>
 }
 
 /** Who strikes which ball in the transition a→b, and whether it's a PASS
@@ -952,6 +956,20 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       rules.turnFreezeOf?.delete(id)
     }
   }
+  // TURN IN PLACE: a stationary player whose authored rotation spins ≥ 45°
+  // steps around with the Left/Right Turn clip (by spin direction).
+  for (const p of playersB) {
+    if (isGoalkeeper(p.objectId) || busy(p.id)) continue
+    const pA = byIdA.get(p.id) as Obj3D | undefined
+    if (!pA || pA.type !== 'object3d') continue
+    if (Math.hypot(p.x - pA.x, p.z - pA.z) / D >= IDLE_SPEED) continue
+    let d = (p.rotation - pA.rotation) % (2 * Math.PI)
+    if (d > Math.PI) d -= 2 * Math.PI
+    if (d < -Math.PI) d += 2 * Math.PI
+    if (Math.abs(d) < TURN_MIN_RAD) continue
+    // facing = (sin r, cos r): INCREASING rotation turns the player to his RIGHT
+    ;(rules.turnInPlaceOf = rules.turnInPlaceOf ?? new Map()).set(p.id, (d > 0 ? PLAYER_CLIPS.rightTurn : PLAYER_CLIPS.leftTurn).clip)
+  }
   return rules
 }
 
@@ -1131,6 +1149,18 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
     const meta = PLAYER_CLIPS.changeDir
     const ct = (meta.contactTime ?? 0.833) + wall
     if (ct < clipDuration(meta.clip)) anim = { clip: meta.clip, time: ct }
+  } else if (rules?.turnInPlaceOf?.has(b.id) && !gait.moving) {
+    // TURN IN PLACE: the clip's authored body yaw (~120°) does the visible
+    // spin — hold the START rotation while it plays (the element's rotation
+    // would otherwise pivot the mesh a second time), land on the authored
+    // end rotation when it finishes.
+    const clip = rules.turnInPlaceOf.get(b.id)!
+    if (wall < clipDuration(clip)) {
+      anim = { clip, time: wall }
+      el = { ...el, rotation: a.rotation }
+    } else {
+      el = { ...el, rotation: b.rotation }
+    }
   }
   // Blending. A LOCOMOTION segment gets an idle↔motion ENVELOPE: starting
   // from rest ramps the gait in against idle, and coming to rest next turn

@@ -66,6 +66,11 @@ export const PLAYER_CLIPS: Record<string, PlayerClipMeta> = {
   // user-picked) lands ON the boundary, the exit plays into the next leg.
   // Authored running out-and-back (~1 m): pinned, the path moves the player.
   changeDir: { clip: 'Change Direction', loop: false, contactTime: 25 / 30, inPlace: true },
+  // A STATIONARY player whose authored rotation changes between frames steps
+  // around on the spot (0.93 s, ~120° of authored body yaw each way) instead
+  // of pivoting like a statue.
+  leftTurn: { clip: 'Left Turn', loop: false },
+  rightTurn: { clip: 'Right Turn', loop: false },
 }
 
 // ── Goalkeeper saves ─────────────────────────────────────────────────────────
