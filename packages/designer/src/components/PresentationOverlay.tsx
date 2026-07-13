@@ -64,13 +64,6 @@ function LaserTrail() {
         ctx.lineTo(b.x, b.y)
         ctx.stroke()
       }
-      const head = pts[pts.length - 1]
-      if (head && now - head.t < 250) {
-        ctx.fillStyle = 'rgba(255,60,60,0.95)'
-        ctx.beginPath()
-        ctx.arc(head.x, head.y, 7, 0, Math.PI * 2)
-        ctx.fill()
-      }
     }
     draw()
     return () => {
