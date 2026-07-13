@@ -1,6 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ElementView } from '@youcoach-board/core'
 import soccerRaw from '../assets/football_field.svg?raw'
 import futsalRaw from '../assets/futsal_field.svg?raw'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
@@ -8,6 +7,7 @@ import { Button } from './ui/button'
 import { cn } from '../lib/cn'
 import { useEditorStore } from '../store/context'
 import { makeToken, TOKEN_SIZE, type TokenStyle } from '../lib/draw'
+import { onObject3DAssetReady, tokenPuckThumb } from '../lib/objects3d'
 import { pinTokensAtGround } from '../lib/field-anchor'
 import {
   systemConfigForField,
@@ -21,8 +21,8 @@ import {
 } from '../lib/formations'
 
 // The two default team colors when the board doesn't already have teams.
-const RED: TokenStyle = { shape: 'token', tokenFill: 'solid', color1: '#e37268', color2: '#e37268', textColor: '#ffffff', showLabel: false }
-const BLUE: TokenStyle = { shape: 'token', tokenFill: 'solid', color1: '#799eed', color2: '#799eed', textColor: '#ffffff', showLabel: false }
+const RED: TokenStyle = { shape: 'token', tokenFill: 'solid', color1: '#d34134', color2: '#d34134', textColor: '#000000', showLabel: false }
+const BLUE: TokenStyle = { shape: 'token', tokenFill: 'solid', color1: '#3888ff', color2: '#3888ff', textColor: '#000000', showLabel: false }
 
 // The field artwork (single stroked path) per kind.
 const FIELD_PATH: Record<FieldKind, string> = {
@@ -44,14 +44,10 @@ function styleOptions(elements: { type: string }[]): TokenStyle[] {
   return opts.length >= 2 ? opts : [RED, BLUE]
 }
 
-// A token preview for a team swatch (sized like the token Fill picker).
+// A token preview for a team swatch: the same glossy puck art as the drawer's
+// Tokens palette (tokenPuckThumb — cached 2D face render, no number).
 function TokenSwatch({ style }: { style: TokenStyle }) {
-  const el = makeToken('swatch', 50, 50, style, '', 100)
-  return (
-    <svg width={48} height={48} viewBox="-4 -4 108 108" aria-hidden>
-      <ElementView element={el} />
-    </svg>
-  )
+  return <img src={tokenPuckThumb({ tokenFill: style.tokenFill, color1: style.color1, color2: style.color2, textColor: style.textColor, text: '' })} width={48} height={48} alt="" draggable={false} aria-hidden />
 }
 
 // A mini pitch showing where the formation lands and which way it attacks. Authored
@@ -85,6 +81,10 @@ function FieldPreview({ code, kind, dir, spread }: { code: string; kind: FieldKi
 
 function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose: () => void }) {
   const { t } = useTranslation()
+  // Re-render when the token faces' shading overlay decodes (the puck
+  // swatches first draw flat, then glossy — same as the drawer's palette).
+  const [, bumpAssets] = useState(0)
+  useEffect(() => onObject3DAssetReady(() => bumpAssets((n) => n + 1)), [])
   const elements = useEditorStore((s) => s.doc.elements)
   const field3d = useEditorStore((s) => s.doc.background.field3d)
   const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
