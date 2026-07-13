@@ -71,6 +71,22 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   const [drawerUserOpen, setDrawerUserOpen] = useState(false)
   const [drawerTouched, setDrawerTouched] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  // Presentation mode: the board fills the whole page (full height, centred), all
+  // editing chrome hidden; Esc exits. Enter from the main menu.
+  const [presenting, setPresenting] = useState(false)
+  useEffect(() => {
+    if (!presenting) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        setPresenting(false)
+      }
+    }
+    // Capture phase so it wins over the other Esc handlers (nav/edit exits).
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [presenting])
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
   const [formation, setFormation] = useState<string | null>(null)
@@ -513,7 +529,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
         'ycb-root relative isolate overflow-hidden bg-background text-foreground',
         // "Fill the viewport" simply pins the whole component over the host —
         // the embed-friendly meaning of fullscreen (no native Fullscreen API).
-        fullscreen ? 'fixed inset-0 z-[2147483647]' : 'h-full w-full',
+        // Presentation mode pins the same way (whole page for the board).
+        fullscreen || presenting ? 'fixed inset-0 z-[2147483647]' : 'h-full w-full',
         isDark && 'dark',
       )}
       // style={fullscreen ? undefined : { minHeight: 480 }}
@@ -526,13 +543,15 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           <div
             className={cn(
               'absolute inset-y-0 left-0 transition-all duration-200',
-              reserveRight ? 'right-64' : 'right-0',
+              !presenting && reserveRight ? 'right-64' : 'right-0',
             )}
             style={{
-              paddingTop: BOARD_TOP_PAD,
-              paddingBottom: BOARD_TOP_PAD,
-              paddingLeft: leftPad,
-              paddingRight: boardPaddingRight,
+              // Presentation: no padding — the board fills the full page height and
+              // self-centres horizontally (4:3 letterbox against the page bg).
+              paddingTop: presenting ? 0 : BOARD_TOP_PAD,
+              paddingBottom: presenting ? 0 : BOARD_TOP_PAD,
+              paddingLeft: presenting ? 0 : leftPad,
+              paddingRight: presenting ? 0 : boardPaddingRight,
             }}
           >
             <InteractiveBoard backgroundMode={backgroundMode} homographyMode={homographyEditing} cameraMode={cameraEditing} zoneMode={zoneEditing} showGrid={showGrid} navigating={navigating} navMarkers={navMarkers} onNavTap={navTap} fieldPanMode={fieldPanning} onExitFieldPan={() => setFieldPan(false)} animMode={animEditing} />
@@ -545,9 +564,12 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             {panning && <div className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing" onPointerDown={startPanDrag} />}
           </div>
 
+          {/* All editing chrome — hidden in presentation mode (Esc to exit). */}
+          {!presenting && (
+            <>
           {/* Top-left menu (+ the navigation control below it on mobile). */}
           <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
-            <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} onFieldHomography={fieldHomography} onFieldCamera={startFieldCamera} onFieldZones={startFieldZones} />
+            <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} onFieldHomography={fieldHomography} onFieldCamera={startFieldCamera} onFieldZones={startFieldZones} onPresent={() => { store.getState().setSelection([]); setPresenting(true) }} />
             {mobile && <NavBar vertical available={navAvailable || navigating || (bgEditing && !!savedField3d)} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} editingBg={bgEditing} onZoom3d={zoomFieldButton} pan3d={fieldPanning} onTogglePan3d={() => setFieldPan((v) => !v)} showPan3d={navigating || bgEditing} />}
           </div>
 
@@ -685,6 +707,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             onCategoryChange={selectCategory}
             orbitActive={navigating || backgroundMode}
           />
+            </>
+          )}
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
           <GameSystemDialog code={formation} onClose={() => setFormation(null)} />

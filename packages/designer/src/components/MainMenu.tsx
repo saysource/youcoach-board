@@ -18,6 +18,7 @@ import {
   Grid3x3,
   Video,
   MapPin,
+  Presentation,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from './ui/button'
@@ -52,9 +53,11 @@ interface MainMenuProps {
   onFieldHomography?: () => void
   onFieldCamera?: () => void
   onFieldZones?: () => void
+  /** Enter presentation mode (full-page board, chrome hidden; Esc exits). */
+  onPresent?: () => void
 }
 
-export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts, onFieldHomography, onFieldCamera, onFieldZones }: MainMenuProps) {
+export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts, onFieldHomography, onFieldCamera, onFieldZones, onPresent }: MainMenuProps) {
   const storeApi = useEditorStoreApi()
   const snapToObjects = useEditorStore((s) => s.snapToObjects)
   const toggleSnapToObjects = useEditorStore((s) => s.toggleSnapToObjects)
@@ -105,6 +108,11 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
             )}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onPresent?.()}>
+          <Presentation /> Presentation mode
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled>
