@@ -36,6 +36,13 @@
    ]
   },
   {
+   "id": "tokens",
+   "name": "Tokens",
+   "categories": [
+    "tokens"
+   ]
+  },
+  {
    "id": "players",
    "name": "Players",
    "categories": [
@@ -18148,12 +18155,167 @@
      "label": "Deep Kick 3"
     }
    ]
+  },
+  "tokens": {
+   "name": "Tokens",
+   "kind": "figure",
+   "figures": [
+    {
+     "label": "Red",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "solid",
+      "color1": "#d34134",
+      "color2": "#d34134",
+      "textColor": "#000000"
+     }
+    },
+    {
+     "label": "Blue",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "solid",
+      "color1": "#3888ff",
+      "color2": "#3888ff",
+      "textColor": "#000000"
+     }
+    },
+    {
+     "label": "Barcelona",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "vstripes",
+      "color1": "#004d98",
+      "color2": "#a50044",
+      "textColor": "#ffffff"
+     }
+    },
+    {
+     "label": "Juventus",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "vstripes",
+      "color1": "#000000",
+      "color2": "#ffffff",
+      "textColor": "#000000"
+     }
+    },
+    {
+     "label": "Argentina",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "vstripes",
+      "color1": "#75aadb",
+      "color2": "#ffffff",
+      "textColor": "#000000"
+     }
+    },
+    {
+     "label": "Real Madrid",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "solid",
+      "color1": "#ffffff",
+      "color2": "#ffffff",
+      "textColor": "#d4af37"
+     }
+    },
+    {
+     "label": "Liverpool",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "solid",
+      "color1": "#c8102e",
+      "color2": "#c8102e",
+      "textColor": "#ffffff"
+     }
+    },
+    {
+     "label": "Paris Saint-Germain",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "vstripe",
+      "color1": "#004170",
+      "color2": "#da291c",
+      "textColor": "#ffffff"
+     }
+    },
+    {
+     "label": "Boca Juniors",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "hstripe",
+      "color1": "#003263",
+      "color2": "#fdb913",
+      "textColor": "#ffffff"
+     }
+    },
+    {
+     "label": "Bayern Munich",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "checker",
+      "color1": "#dc052d",
+      "color2": "#ffffff",
+      "textColor": "#ffffff"
+     }
+    },
+    {
+     "label": "Croatia",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "checker",
+      "color1": "#ed1c24",
+      "color2": "#ffffff",
+      "textColor": "#000000"
+     }
+    },
+    {
+     "label": "Manchester United",
+     "thumb": "",
+     "w": 64,
+     "h": 64,
+     "token": {
+      "tokenFill": "hstripe",
+      "color1": "#da291c",
+      "color2": "#000000",
+      "textColor": "#ffffff"
+     }
+    }
+   ]
   }
  },
  "i18n": {
   "it": {
    "All Fields": "Tutti i campi",
+   "Argentina": "Argentina",
    "Balls": "Palloni",
+   "Barcelona": "Barcellona",
+   "Bayern Munich": "Bayern Monaco",
+   "Blue": "Blu",
+   "Boca Juniors": "Boca Juniors",
    "Body Block": "Parata col corpo",
    "Body Block 2": "Parata col corpo 2",
    "Bose": "Bose",
@@ -18166,6 +18328,7 @@
    "Change Direction": "Cambio di direzione",
    "Children": "Bambini",
    "Coaches": "Allenatori",
+   "Croatia": "Croazia",
    "Deceleration": "Decelerazione",
    "Deep Kick": "Rinvio",
    "Deep Kick 2": "Rinvio 2",
@@ -18191,13 +18354,17 @@
    "Idle": "Fermo",
    "Jog": "Corsa leggera",
    "Jumping Header": "Colpo di testa in elevazione",
+   "Juventus": "Juventus",
    "Kick": "Tiro",
    "Kicking": "Tiro",
    "Left": "Sinistra",
+   "Liverpool": "Liverpool",
    "Long Pass": "Passaggio lungo",
    "Low Kick": "Tiro basso",
+   "Manchester United": "Manchester United",
    "Materials": "Materiali",
    "Materials 3D": "Materiali 3D",
+   "Paris Saint-Germain": "Paris Saint-Germain",
    "Pass": "Passaggio",
    "Perspective": "Prospettiva",
    "Players": "Giocatori",
@@ -18209,8 +18376,10 @@
    "Players 3D (Women)": "Giocatrici 3D (Donne)",
    "Preparation (Men)": "Preparazione (Uomini)",
    "Preparation (Women)": "Preparazione (Donne)",
+   "Real Madrid": "Real Madrid",
    "Receive": "Ricezione",
    "Receive 2": "Ricezione 2",
+   "Red": "Rosso",
    "Referees": "Arbitri",
    "Right": "Destra",
    "Run": "Corsa",
@@ -18224,6 +18393,7 @@
    "Standing": "In piedi",
    "Target": "Bersaglio",
    "Throw In": "Rimessa laterale",
+   "Tokens": "Gettoni",
    "Top view": "Vista dall'alto",
    "Up": "Su",
    "Wall": "Barriera",

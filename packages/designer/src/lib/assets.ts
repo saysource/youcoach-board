@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import { IDENTITY_TRANSFORM, BOARD_WIDTH, OBJECT3D_DEFAULTS, type BoardElement } from '@youcoach-board/core'
+import { IDENTITY_TRANSFORM, BOARD_WIDTH, OBJECT3D_DEFAULTS, type BoardElement, type TokenFill } from '@youcoach-board/core'
 import { defaultObject3DSize, isObject3DColorable, object3dDefaultColor } from './objects3d'
 
 // Host-provided asset access (see specs/catalog.md). The board never hardcodes a
@@ -42,6 +42,9 @@ export interface CatalogFigure {
   /** A real 3D object (three.js) rather than an SVG figure — its objectId (e.g.
    *  'ball' | 'cube'). Dropped onto the pitch as an `object3d` element. */
   object3d?: string
+  /** A TOKEN template: dropping it creates a disc token with this style and
+   *  makes the style the token tool's new default. */
+  token?: { tokenFill: TokenFill; color1: string; color2: string; textColor: string }
   /** Human-readable name shown as the thumbnail's tooltip (e.g. a pose's action). */
   label?: string
 }
@@ -203,6 +206,8 @@ export interface FigureDragData {
   /** Set for a "Materials 3D" item: the object3d id ('ball' | 'cube'); when
    *  present the drop creates an `object3d` element on the pitch, not a figure. */
   object3d?: string
+  /** A TOKEN template's style (see CatalogFigure.token). */
+  token?: { tokenFill: TokenFill; color1: string; color2: string; textColor: string }
 }
 
 /** Build a placed 3D-object element sitting on the pitch at ground (x, z) metres.

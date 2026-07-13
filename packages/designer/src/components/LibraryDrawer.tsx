@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Sparkles, Maximize, Minimize, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, Camera, type LucideIcon } from 'lucide-react'
-import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
+import { BOARD_WIDTH, BOARD_HEIGHT, ElementView } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
 import { useAssets, buildFigureElement, buildObject3DElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
-import { clientToBoard } from '../lib/draw'
+import { clientToBoard, makeToken, nextTokenText, TOKEN_SIZE } from '../lib/draw'
+import { pinNewToken } from '../lib/field-anchor'
 import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
 import { isObject3DPlayer, PLAYER_NEUTRAL_SLOTS } from '../lib/objects3d'
 import { makeCalibratedCamera } from '../lib/field-camera'
@@ -57,7 +58,7 @@ const FIELDS3D_CATS: { id: string; name: string; type: FieldType }[] = [
 // SVG fields from the catalog's field categories, shown in one sectioned panel.
 const LEGACY_CAT = { id: LEGACY_BACKGROUNDS_CAT_ID, name: 'Legacy Backgrounds' }
 // Display order of the category-list groups (Fields appended last).
-const GROUP_ORDER = ['players3d', 'materials3d', 'players', 'materials']
+const GROUP_ORDER = ['players3d', 'materials3d', 'tokens', 'players', 'materials']
 
 interface LibraryDrawerProps {
   open: boolean
@@ -211,6 +212,9 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
     // A 3D material: dropped as an `object3d` (not an SVG figure). No colors/size
     // inheritance — the drop resolves its ground spot from the drop point.
     if (f.object3d) return { figureId: `object3d:${f.object3d}`, w: 64, h: 64, mirror: false, object3d: f.object3d }
+    // A TOKEN template: dropped as a disc token with this style (which also
+    // becomes the token tool's new default).
+    if (f.token) return { figureId: 'token-template', w: 64, h: 64, mirror: false, token: f.token }
     if (!cat || cat.kind !== 'figure' || !catalog || !f.svg) return null
     // Legacy sizing (yceditor): a figure's longest side is the board-relative
     // base (boardWidth/10), with the catalog SVG size only giving the aspect
@@ -424,6 +428,36 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
       }
       const inherited = Object.keys(playerColors).length ? playerColors : PLAYER_NEUTRAL_SLOTS
       createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z, isObject3DPlayer(d.desc.object3d) ? inherited : undefined))
+      return
+    }
+    // A TOKEN template: create a disc token there (like the token tool would)
+    // and make the template's style the tool's new default.
+    if (d.desc.token) {
+      let bx = BOARD_WIDTH / 2
+      let by = BOARD_HEIGHT / 2
+      if (atPoint) {
+        if (!b || !overBoard(b, x, y)) return
+        const p = clientToBoard(b.svg, x, y)
+        bx = clamp(p.x, 0, BOARD_WIDTH)
+        by = clamp(p.y, 0, BOARD_HEIGHT)
+      }
+      const st = storeApi.getState()
+      const style = { shape: 'token' as const, showLabel: false, ...d.desc.token }
+      st.setTokenDefaults({ ...style, label: '' })
+      // Size like the token tool: match the last token on the board, else the
+      // field's figure scale.
+      const ref = [...st.doc.elements].reverse().find((e) => e.type === 'token')
+      const size = ref?.type === 'token' ? ref.width : Math.round(TOKEN_SIZE * st.doc.background.figureScale)
+      let tok = makeToken(crypto.randomUUID(), bx, by, style, '1', size)
+      if (tok.type === 'token') {
+        tok.text = nextTokenText(st.doc.elements, tok, st.tokenDefaults.text)
+        const eff = field3d ?? fieldCamera(bgFieldSvg)
+        if (eff) {
+          const existing = st.doc.elements.find((e): e is Extract<typeof e, { type: 'token' }> => e.type === 'token')
+          tok = pinNewToken(tok, eff, existing?.sizeM ?? st.tokenSizeM)
+        }
+      }
+      createFigure(tok)
       return
     }
     if (atPoint) {
@@ -712,10 +746,14 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                             onPointerDown={(e) => onThumbPointerDown(e, f)}
                             className={cn(
                               'flex aspect-square touch-manipulation items-center justify-center rounded-md border border-transparent p-1 hover:border-primary hover:bg-primary/20',
-                              f.svg ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+                              f.svg || f.token ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                             )}
                           >
-                            <img src={f.object3d ? OBJECT3D_THUMBS[f.object3d] : url(f.thumb)} alt="" loading="lazy" draggable={false} className="max-h-full max-w-full object-contain" />
+                            {f.token ? (
+                              <TokenThumb token={f.token} />
+                            ) : (
+                              <img src={f.object3d ? OBJECT3D_THUMBS[f.object3d] : url(f.thumb)} alt="" loading="lazy" draggable={false} className="max-h-full max-w-full object-contain" />
+                            )}
                           </button>
                         )
                         // Labeled figures (e.g. 3D-player poses) get a proper tooltip
@@ -739,6 +777,17 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
         </>
       )}
     </aside>
+  )
+}
+
+/** Drawer preview of a token TEMPLATE: the real token rendering (ElementView)
+ *  at thumbnail size, so the drawer shows exactly what a drop creates. */
+function TokenThumb({ token }: { token: NonNullable<CatalogFigure['token']> }) {
+  const el = makeToken('token-thumb', 32, 32, { shape: 'token', showLabel: false, ...token }, '1', 46)
+  return (
+    <svg viewBox="0 0 64 64" className="max-h-full max-w-full">
+      <ElementView element={el} />
+    </svg>
   )
 }
 
