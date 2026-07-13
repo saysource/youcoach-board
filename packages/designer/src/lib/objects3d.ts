@@ -26,80 +26,6 @@ import { BALANCE_DOME_GLB_BASE64 } from './balance-dome-glb'
 import { AGILITY_POLE_GLB_BASE64 } from './agility-pole-glb'
 import { FLAG_POLE_GLB_BASE64 } from './flag-pole-glb'
 import { BALL_GLB_BASE64 } from './ball-glb'
-import { PLAYER_MAN_A_GLB_BASE64 } from './player-man-a-glb'
-import { PLAYER_MAN_B_GLB_BASE64 } from './player-man-b-glb'
-import { PLAYER_MAN_C_GLB_BASE64 } from './player-man-c-glb'
-import { PLAYER_WOMAN_A_GLB_BASE64 } from './player-woman-a-glb'
-import { PLAYER_WOMAN_B_GLB_BASE64 } from './player-woman-b-glb'
-import { PLAYER_WOMAN_C_GLB_BASE64 } from './player-woman-c-glb'
-import { POSE_MAN_IDLE_GLB_BASE64 } from './pose-man-idle-glb'
-import { POSE_MAN_JOG_GLB_BASE64 } from './pose-man-jog-glb'
-import { POSE_MAN_RUN_GLB_BASE64 } from './pose-man-run-glb'
-import { POSE_MAN_KICK_GLB_BASE64 } from './pose-man-kick-glb'
-import { POSE_MAN_LOW_KICK_GLB_BASE64 } from './pose-man-low-kick-glb'
-import { POSE_MAN_PASS_GLB_BASE64 } from './pose-man-pass-glb'
-import { POSE_MAN_RECEIVE_GLB_BASE64 } from './pose-man-receive-glb'
-import { POSE_MAN_DRIBBLING_GLB_BASE64 } from './pose-man-dribbling-glb'
-import { POSE_MAN_HEADER_GLB_BASE64 } from './pose-man-header-glb'
-import { POSE_MAN_JUMPING_HEADER_GLB_BASE64 } from './pose-man-jumping-header-glb'
-import { POSE_MAN_THROW_IN_GLB_BASE64 } from './pose-man-throw-in-glb'
-import { POSE_MAN_SCISSOR_GLB_BASE64 } from './pose-man-scissor-glb'
-import { POSE_WOMAN_IDLE_GLB_BASE64 } from './pose-woman-idle-glb'
-import { POSE_WOMAN_JOG_GLB_BASE64 } from './pose-woman-jog-glb'
-import { POSE_WOMAN_RUN_GLB_BASE64 } from './pose-woman-run-glb'
-import { POSE_WOMAN_KICK_GLB_BASE64 } from './pose-woman-kick-glb'
-import { POSE_WOMAN_LOW_KICK_GLB_BASE64 } from './pose-woman-low-kick-glb'
-import { POSE_WOMAN_PASS_GLB_BASE64 } from './pose-woman-pass-glb'
-import { POSE_WOMAN_RECEIVE_GLB_BASE64 } from './pose-woman-receive-glb'
-import { POSE_WOMAN_DRIBBLING_GLB_BASE64 } from './pose-woman-dribbling-glb'
-import { POSE_WOMAN_HEADER_GLB_BASE64 } from './pose-woman-header-glb'
-import { POSE_WOMAN_JUMPING_HEADER_GLB_BASE64 } from './pose-woman-jumping-header-glb'
-import { POSE_WOMAN_THROW_IN_GLB_BASE64 } from './pose-woman-throw-in-glb'
-import { POSE_WOMAN_SCISSOR_GLB_BASE64 } from './pose-woman-scissor-glb'
-import { POSE_MAN_DIAGONAL_JOG_GLB_BASE64 } from './pose-man-diagonal-jog-glb'
-import { POSE_MAN_DIAGONAL_JOG_2_GLB_BASE64 } from './pose-man-diagonal-jog-2-glb'
-import { POSE_MAN_RUN_START_GLB_BASE64 } from './pose-man-run-start-glb'
-import { POSE_MAN_DEEP_KICK_GLB_BASE64 } from './pose-man-deep-kick-glb'
-import { POSE_MAN_DEEP_KICK_2_GLB_BASE64 } from './pose-man-deep-kick-2-glb'
-import { POSE_MAN_DEEP_KICK_3_GLB_BASE64 } from './pose-man-deep-kick-3-glb'
-import { POSE_MAN_RECEIVE_2_GLB_BASE64 } from './pose-man-receive-2-glb'
-import { POSE_MAN_DECELERATION_GLB_BASE64 } from './pose-man-deceleration-glb'
-import { POSE_MAN_SPIN_GLB_BASE64 } from './pose-man-spin-glb'
-import { POSE_MAN_CHANGE_DIRECTION_GLB_BASE64 } from './pose-man-change-direction-glb'
-import { POSE_WOMAN_DIAGONAL_JOG_GLB_BASE64 } from './pose-woman-diagonal-jog-glb'
-import { POSE_WOMAN_DIAGONAL_JOG_2_GLB_BASE64 } from './pose-woman-diagonal-jog-2-glb'
-import { POSE_WOMAN_RUN_START_GLB_BASE64 } from './pose-woman-run-start-glb'
-import { POSE_WOMAN_DEEP_KICK_GLB_BASE64 } from './pose-woman-deep-kick-glb'
-import { POSE_WOMAN_DEEP_KICK_2_GLB_BASE64 } from './pose-woman-deep-kick-2-glb'
-import { POSE_WOMAN_DEEP_KICK_3_GLB_BASE64 } from './pose-woman-deep-kick-3-glb'
-import { POSE_WOMAN_RECEIVE_2_GLB_BASE64 } from './pose-woman-receive-2-glb'
-import { POSE_WOMAN_DECELERATION_GLB_BASE64 } from './pose-woman-deceleration-glb'
-import { POSE_WOMAN_SPIN_GLB_BASE64 } from './pose-woman-spin-glb'
-import { POSE_WOMAN_CHANGE_DIRECTION_GLB_BASE64 } from './pose-woman-change-direction-glb'
-import { POSE_GK_MAN_IDLE_GLB_BASE64 } from './pose-gk-man-idle-glb'
-import { POSE_GK_MAN_CATCH_MIDDLE_GLB_BASE64 } from './pose-gk-man-catch-middle-glb'
-import { POSE_GK_MAN_CATCH_JUMPING_GLB_BASE64 } from './pose-gk-man-catch-jumping-glb'
-import { POSE_GK_MAN_CATCH_SIDE_LOW_GLB_BASE64 } from './pose-gk-man-catch-side-low-glb'
-import { POSE_GK_MAN_CATCH_DIVING_RIGHT_GLB_BASE64 } from './pose-gk-man-catch-diving-right-glb'
-import { POSE_GK_MAN_CATCH_DIVING_LEFT_GLB_BASE64 } from './pose-gk-man-catch-diving-left-glb'
-import { POSE_GK_MAN_CATCH_MIDDLE_LOW_GLB_BASE64 } from './pose-gk-man-catch-middle-low-glb'
-import { POSE_GK_MAN_BODY_BLOCK_GLB_BASE64 } from './pose-gk-man-body-block-glb'
-import { POSE_GK_MAN_BODY_BLOCK_2_GLB_BASE64 } from './pose-gk-man-body-block-2-glb'
-import { POSE_GK_MAN_DEEP_KICK_GLB_BASE64 } from './pose-gk-man-deep-kick-glb'
-import { POSE_GK_MAN_DEEP_KICK_2_GLB_BASE64 } from './pose-gk-man-deep-kick-2-glb'
-import { POSE_GK_MAN_DEEP_KICK_3_GLB_BASE64 } from './pose-gk-man-deep-kick-3-glb'
-import { POSE_GK_WOMAN_IDLE_GLB_BASE64 } from './pose-gk-woman-idle-glb'
-import { POSE_GK_WOMAN_CATCH_MIDDLE_GLB_BASE64 } from './pose-gk-woman-catch-middle-glb'
-import { POSE_GK_WOMAN_CATCH_JUMPING_GLB_BASE64 } from './pose-gk-woman-catch-jumping-glb'
-import { POSE_GK_WOMAN_CATCH_SIDE_LOW_GLB_BASE64 } from './pose-gk-woman-catch-side-low-glb'
-import { POSE_GK_WOMAN_CATCH_DIVING_RIGHT_GLB_BASE64 } from './pose-gk-woman-catch-diving-right-glb'
-import { POSE_GK_WOMAN_CATCH_DIVING_LEFT_GLB_BASE64 } from './pose-gk-woman-catch-diving-left-glb'
-import { POSE_GK_WOMAN_CATCH_MIDDLE_LOW_GLB_BASE64 } from './pose-gk-woman-catch-middle-low-glb'
-import { POSE_GK_WOMAN_BODY_BLOCK_GLB_BASE64 } from './pose-gk-woman-body-block-glb'
-import { POSE_GK_WOMAN_BODY_BLOCK_2_GLB_BASE64 } from './pose-gk-woman-body-block-2-glb'
-import { POSE_GK_WOMAN_DEEP_KICK_GLB_BASE64 } from './pose-gk-woman-deep-kick-glb'
-import { POSE_GK_WOMAN_DEEP_KICK_2_GLB_BASE64 } from './pose-gk-woman-deep-kick-2-glb'
-import { POSE_GK_WOMAN_DEEP_KICK_3_GLB_BASE64 } from './pose-gk-woman-deep-kick-3-glb'
 // The inflatable mannequin's "fake defender" drawing — a single black line-art
 // path, printed onto the front of the (tintable) mannequin body as a decal.
 import mannequinDecalRaw from '../assets/materials3d/mannequin_decal.svg?raw'
@@ -199,83 +125,83 @@ const POSE_GROUND_LIFT: Record<string, number> = {
   pose_gk_woman_catch_diving_left: 0.5,
 }
 
-const PLAYER_GLBS: Record<string, { data: string; texture: string }> = {
-  player_man_a: { data: PLAYER_MAN_A_GLB_BASE64, texture: playerManATex },
-  player_man_b: { data: PLAYER_MAN_B_GLB_BASE64, texture: playerManBTex },
-  player_man_c: { data: PLAYER_MAN_C_GLB_BASE64, texture: playerManCTex },
-  player_woman_a: { data: PLAYER_WOMAN_A_GLB_BASE64, texture: playerWomanATex },
-  player_woman_b: { data: PLAYER_WOMAN_B_GLB_BASE64, texture: playerWomanBTex },
-  player_woman_c: { data: PLAYER_WOMAN_C_GLB_BASE64, texture: playerWomanCTex },
+const PLAYER_GLBS: Record<string, { load: () => Promise<string>; texture: string }> = {
+  player_man_a: { load: () => import('./player-man-a-glb').then((m) => m.PLAYER_MAN_A_GLB_BASE64), texture: playerManATex },
+  player_man_b: { load: () => import('./player-man-b-glb').then((m) => m.PLAYER_MAN_B_GLB_BASE64), texture: playerManBTex },
+  player_man_c: { load: () => import('./player-man-c-glb').then((m) => m.PLAYER_MAN_C_GLB_BASE64), texture: playerManCTex },
+  player_woman_a: { load: () => import('./player-woman-a-glb').then((m) => m.PLAYER_WOMAN_A_GLB_BASE64), texture: playerWomanATex },
+  player_woman_b: { load: () => import('./player-woman-b-glb').then((m) => m.PLAYER_WOMAN_B_GLB_BASE64), texture: playerWomanBTex },
+  player_woman_c: { load: () => import('./player-woman-c-glb').then((m) => m.PLAYER_WOMAN_C_GLB_BASE64), texture: playerWomanCTex },
   // Static pose variants (Mixamo clip frames baked on the B characters — the
   // drawer's Man/Woman; see specs/positions.md for the clip/frame table).
-  pose_man_idle: { data: POSE_MAN_IDLE_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_jog: { data: POSE_MAN_JOG_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_run: { data: POSE_MAN_RUN_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_kick: { data: POSE_MAN_KICK_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_low_kick: { data: POSE_MAN_LOW_KICK_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_pass: { data: POSE_MAN_PASS_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_receive: { data: POSE_MAN_RECEIVE_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_dribbling: { data: POSE_MAN_DRIBBLING_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_header: { data: POSE_MAN_HEADER_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_jumping_header: { data: POSE_MAN_JUMPING_HEADER_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_throw_in: { data: POSE_MAN_THROW_IN_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_scissor: { data: POSE_MAN_SCISSOR_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_idle: { data: POSE_WOMAN_IDLE_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_jog: { data: POSE_WOMAN_JOG_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_run: { data: POSE_WOMAN_RUN_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_kick: { data: POSE_WOMAN_KICK_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_low_kick: { data: POSE_WOMAN_LOW_KICK_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_pass: { data: POSE_WOMAN_PASS_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_receive: { data: POSE_WOMAN_RECEIVE_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_dribbling: { data: POSE_WOMAN_DRIBBLING_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_header: { data: POSE_WOMAN_HEADER_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_jumping_header: { data: POSE_WOMAN_JUMPING_HEADER_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_throw_in: { data: POSE_WOMAN_THROW_IN_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_scissor: { data: POSE_WOMAN_SCISSOR_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_diagonal_jog: { data: POSE_MAN_DIAGONAL_JOG_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_diagonal_jog_2: { data: POSE_MAN_DIAGONAL_JOG_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_run_start: { data: POSE_MAN_RUN_START_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_deep_kick: { data: POSE_MAN_DEEP_KICK_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_deep_kick_2: { data: POSE_MAN_DEEP_KICK_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_deep_kick_3: { data: POSE_MAN_DEEP_KICK_3_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_receive_2: { data: POSE_MAN_RECEIVE_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_deceleration: { data: POSE_MAN_DECELERATION_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_spin: { data: POSE_MAN_SPIN_GLB_BASE64, texture: playerNeutralTex },
-  pose_man_change_direction: { data: POSE_MAN_CHANGE_DIRECTION_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_diagonal_jog: { data: POSE_WOMAN_DIAGONAL_JOG_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_diagonal_jog_2: { data: POSE_WOMAN_DIAGONAL_JOG_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_run_start: { data: POSE_WOMAN_RUN_START_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_deep_kick: { data: POSE_WOMAN_DEEP_KICK_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_deep_kick_2: { data: POSE_WOMAN_DEEP_KICK_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_deep_kick_3: { data: POSE_WOMAN_DEEP_KICK_3_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_receive_2: { data: POSE_WOMAN_RECEIVE_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_deceleration: { data: POSE_WOMAN_DECELERATION_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_spin: { data: POSE_WOMAN_SPIN_GLB_BASE64, texture: playerNeutralTex },
-  pose_woman_change_direction: { data: POSE_WOMAN_CHANGE_DIRECTION_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_idle: { data: POSE_GK_MAN_IDLE_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_catch_middle: { data: POSE_GK_MAN_CATCH_MIDDLE_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_catch_jumping: { data: POSE_GK_MAN_CATCH_JUMPING_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_catch_side_low: { data: POSE_GK_MAN_CATCH_SIDE_LOW_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_catch_diving_right: { data: POSE_GK_MAN_CATCH_DIVING_RIGHT_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_catch_diving_left: { data: POSE_GK_MAN_CATCH_DIVING_LEFT_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_catch_middle_low: { data: POSE_GK_MAN_CATCH_MIDDLE_LOW_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_body_block: { data: POSE_GK_MAN_BODY_BLOCK_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_body_block_2: { data: POSE_GK_MAN_BODY_BLOCK_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_deep_kick: { data: POSE_GK_MAN_DEEP_KICK_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_deep_kick_2: { data: POSE_GK_MAN_DEEP_KICK_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_man_deep_kick_3: { data: POSE_GK_MAN_DEEP_KICK_3_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_idle: { data: POSE_GK_WOMAN_IDLE_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_catch_middle: { data: POSE_GK_WOMAN_CATCH_MIDDLE_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_catch_jumping: { data: POSE_GK_WOMAN_CATCH_JUMPING_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_catch_side_low: { data: POSE_GK_WOMAN_CATCH_SIDE_LOW_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_catch_diving_right: { data: POSE_GK_WOMAN_CATCH_DIVING_RIGHT_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_catch_diving_left: { data: POSE_GK_WOMAN_CATCH_DIVING_LEFT_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_catch_middle_low: { data: POSE_GK_WOMAN_CATCH_MIDDLE_LOW_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_body_block: { data: POSE_GK_WOMAN_BODY_BLOCK_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_body_block_2: { data: POSE_GK_WOMAN_BODY_BLOCK_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_deep_kick: { data: POSE_GK_WOMAN_DEEP_KICK_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_deep_kick_2: { data: POSE_GK_WOMAN_DEEP_KICK_2_GLB_BASE64, texture: playerNeutralTex },
-  pose_gk_woman_deep_kick_3: { data: POSE_GK_WOMAN_DEEP_KICK_3_GLB_BASE64, texture: playerNeutralTex },
+  pose_man_idle: { load: () => import('./pose-man-idle-glb').then((m) => m.POSE_MAN_IDLE_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_jog: { load: () => import('./pose-man-jog-glb').then((m) => m.POSE_MAN_JOG_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_run: { load: () => import('./pose-man-run-glb').then((m) => m.POSE_MAN_RUN_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_kick: { load: () => import('./pose-man-kick-glb').then((m) => m.POSE_MAN_KICK_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_low_kick: { load: () => import('./pose-man-low-kick-glb').then((m) => m.POSE_MAN_LOW_KICK_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_pass: { load: () => import('./pose-man-pass-glb').then((m) => m.POSE_MAN_PASS_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_receive: { load: () => import('./pose-man-receive-glb').then((m) => m.POSE_MAN_RECEIVE_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_dribbling: { load: () => import('./pose-man-dribbling-glb').then((m) => m.POSE_MAN_DRIBBLING_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_header: { load: () => import('./pose-man-header-glb').then((m) => m.POSE_MAN_HEADER_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_jumping_header: { load: () => import('./pose-man-jumping-header-glb').then((m) => m.POSE_MAN_JUMPING_HEADER_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_throw_in: { load: () => import('./pose-man-throw-in-glb').then((m) => m.POSE_MAN_THROW_IN_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_scissor: { load: () => import('./pose-man-scissor-glb').then((m) => m.POSE_MAN_SCISSOR_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_idle: { load: () => import('./pose-woman-idle-glb').then((m) => m.POSE_WOMAN_IDLE_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_jog: { load: () => import('./pose-woman-jog-glb').then((m) => m.POSE_WOMAN_JOG_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_run: { load: () => import('./pose-woman-run-glb').then((m) => m.POSE_WOMAN_RUN_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_kick: { load: () => import('./pose-woman-kick-glb').then((m) => m.POSE_WOMAN_KICK_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_low_kick: { load: () => import('./pose-woman-low-kick-glb').then((m) => m.POSE_WOMAN_LOW_KICK_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_pass: { load: () => import('./pose-woman-pass-glb').then((m) => m.POSE_WOMAN_PASS_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_receive: { load: () => import('./pose-woman-receive-glb').then((m) => m.POSE_WOMAN_RECEIVE_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_dribbling: { load: () => import('./pose-woman-dribbling-glb').then((m) => m.POSE_WOMAN_DRIBBLING_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_header: { load: () => import('./pose-woman-header-glb').then((m) => m.POSE_WOMAN_HEADER_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_jumping_header: { load: () => import('./pose-woman-jumping-header-glb').then((m) => m.POSE_WOMAN_JUMPING_HEADER_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_throw_in: { load: () => import('./pose-woman-throw-in-glb').then((m) => m.POSE_WOMAN_THROW_IN_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_scissor: { load: () => import('./pose-woman-scissor-glb').then((m) => m.POSE_WOMAN_SCISSOR_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_diagonal_jog: { load: () => import('./pose-man-diagonal-jog-glb').then((m) => m.POSE_MAN_DIAGONAL_JOG_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_diagonal_jog_2: { load: () => import('./pose-man-diagonal-jog-2-glb').then((m) => m.POSE_MAN_DIAGONAL_JOG_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_run_start: { load: () => import('./pose-man-run-start-glb').then((m) => m.POSE_MAN_RUN_START_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_deep_kick: { load: () => import('./pose-man-deep-kick-glb').then((m) => m.POSE_MAN_DEEP_KICK_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_deep_kick_2: { load: () => import('./pose-man-deep-kick-2-glb').then((m) => m.POSE_MAN_DEEP_KICK_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_deep_kick_3: { load: () => import('./pose-man-deep-kick-3-glb').then((m) => m.POSE_MAN_DEEP_KICK_3_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_receive_2: { load: () => import('./pose-man-receive-2-glb').then((m) => m.POSE_MAN_RECEIVE_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_deceleration: { load: () => import('./pose-man-deceleration-glb').then((m) => m.POSE_MAN_DECELERATION_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_spin: { load: () => import('./pose-man-spin-glb').then((m) => m.POSE_MAN_SPIN_GLB_BASE64), texture: playerNeutralTex },
+  pose_man_change_direction: { load: () => import('./pose-man-change-direction-glb').then((m) => m.POSE_MAN_CHANGE_DIRECTION_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_diagonal_jog: { load: () => import('./pose-woman-diagonal-jog-glb').then((m) => m.POSE_WOMAN_DIAGONAL_JOG_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_diagonal_jog_2: { load: () => import('./pose-woman-diagonal-jog-2-glb').then((m) => m.POSE_WOMAN_DIAGONAL_JOG_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_run_start: { load: () => import('./pose-woman-run-start-glb').then((m) => m.POSE_WOMAN_RUN_START_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_deep_kick: { load: () => import('./pose-woman-deep-kick-glb').then((m) => m.POSE_WOMAN_DEEP_KICK_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_deep_kick_2: { load: () => import('./pose-woman-deep-kick-2-glb').then((m) => m.POSE_WOMAN_DEEP_KICK_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_deep_kick_3: { load: () => import('./pose-woman-deep-kick-3-glb').then((m) => m.POSE_WOMAN_DEEP_KICK_3_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_receive_2: { load: () => import('./pose-woman-receive-2-glb').then((m) => m.POSE_WOMAN_RECEIVE_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_deceleration: { load: () => import('./pose-woman-deceleration-glb').then((m) => m.POSE_WOMAN_DECELERATION_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_spin: { load: () => import('./pose-woman-spin-glb').then((m) => m.POSE_WOMAN_SPIN_GLB_BASE64), texture: playerNeutralTex },
+  pose_woman_change_direction: { load: () => import('./pose-woman-change-direction-glb').then((m) => m.POSE_WOMAN_CHANGE_DIRECTION_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_idle: { load: () => import('./pose-gk-man-idle-glb').then((m) => m.POSE_GK_MAN_IDLE_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_catch_middle: { load: () => import('./pose-gk-man-catch-middle-glb').then((m) => m.POSE_GK_MAN_CATCH_MIDDLE_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_catch_jumping: { load: () => import('./pose-gk-man-catch-jumping-glb').then((m) => m.POSE_GK_MAN_CATCH_JUMPING_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_catch_side_low: { load: () => import('./pose-gk-man-catch-side-low-glb').then((m) => m.POSE_GK_MAN_CATCH_SIDE_LOW_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_catch_diving_right: { load: () => import('./pose-gk-man-catch-diving-right-glb').then((m) => m.POSE_GK_MAN_CATCH_DIVING_RIGHT_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_catch_diving_left: { load: () => import('./pose-gk-man-catch-diving-left-glb').then((m) => m.POSE_GK_MAN_CATCH_DIVING_LEFT_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_catch_middle_low: { load: () => import('./pose-gk-man-catch-middle-low-glb').then((m) => m.POSE_GK_MAN_CATCH_MIDDLE_LOW_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_body_block: { load: () => import('./pose-gk-man-body-block-glb').then((m) => m.POSE_GK_MAN_BODY_BLOCK_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_body_block_2: { load: () => import('./pose-gk-man-body-block-2-glb').then((m) => m.POSE_GK_MAN_BODY_BLOCK_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_deep_kick: { load: () => import('./pose-gk-man-deep-kick-glb').then((m) => m.POSE_GK_MAN_DEEP_KICK_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_deep_kick_2: { load: () => import('./pose-gk-man-deep-kick-2-glb').then((m) => m.POSE_GK_MAN_DEEP_KICK_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_man_deep_kick_3: { load: () => import('./pose-gk-man-deep-kick-3-glb').then((m) => m.POSE_GK_MAN_DEEP_KICK_3_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_idle: { load: () => import('./pose-gk-woman-idle-glb').then((m) => m.POSE_GK_WOMAN_IDLE_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_catch_middle: { load: () => import('./pose-gk-woman-catch-middle-glb').then((m) => m.POSE_GK_WOMAN_CATCH_MIDDLE_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_catch_jumping: { load: () => import('./pose-gk-woman-catch-jumping-glb').then((m) => m.POSE_GK_WOMAN_CATCH_JUMPING_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_catch_side_low: { load: () => import('./pose-gk-woman-catch-side-low-glb').then((m) => m.POSE_GK_WOMAN_CATCH_SIDE_LOW_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_catch_diving_right: { load: () => import('./pose-gk-woman-catch-diving-right-glb').then((m) => m.POSE_GK_WOMAN_CATCH_DIVING_RIGHT_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_catch_diving_left: { load: () => import('./pose-gk-woman-catch-diving-left-glb').then((m) => m.POSE_GK_WOMAN_CATCH_DIVING_LEFT_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_catch_middle_low: { load: () => import('./pose-gk-woman-catch-middle-low-glb').then((m) => m.POSE_GK_WOMAN_CATCH_MIDDLE_LOW_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_body_block: { load: () => import('./pose-gk-woman-body-block-glb').then((m) => m.POSE_GK_WOMAN_BODY_BLOCK_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_body_block_2: { load: () => import('./pose-gk-woman-body-block-2-glb').then((m) => m.POSE_GK_WOMAN_BODY_BLOCK_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_deep_kick: { load: () => import('./pose-gk-woman-deep-kick-glb').then((m) => m.POSE_GK_WOMAN_DEEP_KICK_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_deep_kick_2: { load: () => import('./pose-gk-woman-deep-kick-2-glb').then((m) => m.POSE_GK_WOMAN_DEEP_KICK_2_GLB_BASE64), texture: playerNeutralTex },
+  pose_gk_woman_deep_kick_3: { load: () => import('./pose-gk-woman-deep-kick-3-glb').then((m) => m.POSE_GK_WOMAN_DEEP_KICK_3_GLB_BASE64), texture: playerNeutralTex },
 }
 
 // Procedural goals. Built at their real metric size (feet → metres), so they're
@@ -1068,6 +994,44 @@ export function setTokenDiscFace(mesh: THREE.Mesh, style: TokenFaceStyle): void 
  *  real-size Mesh (base on the ground); goals are a real-size Group. `userData
  *  .outlineOffset` is the ink thickness in world metres, so the layer can lift
  *  the object by it. Object3DLayer handles either. */
+// ── Lazy player/pose model data (dynamic chunks) ─────────────────────────────
+// The player + pose GLBs dominate the library bundle (~17 MB of base64), so
+// their modules load via dynamic import ON FIRST USE. While a model's bytes
+// are in flight, buildObject3D renders a transient invisible stub; the
+// asset-ready notification then re-renders and the layer rebuilds the mesh.
+const playerGlbCache = new Map<string, string>()
+const playerGlbLoading = new Set<string>()
+function playerGlbData(objectId: string): string | null {
+  const cached = playerGlbCache.get(objectId)
+  if (cached) return cached
+  const entry = PLAYER_GLBS[objectId]
+  if (entry && !playerGlbLoading.has(objectId)) {
+    playerGlbLoading.add(objectId)
+    void entry.load().then((b64) => {
+      playerGlbCache.set(objectId, b64)
+      notifyAssetReady()
+    })
+  }
+  return null
+}
+
+/** Whether the objectId's model bytes are available right now (true for
+ *  procedural/inline objects). A false → buildObject3D returns a stub that
+ *  must be rebuilt once the asset-ready notification fires. */
+export function object3dGlbReady(objectId: string): boolean {
+  return !(objectId in PLAYER_GLBS) || playerGlbCache.has(objectId)
+}
+
+/** The transient placeholder while a model's chunk downloads: invisible,
+ *  nothing to dispose. `originAtGround` keeps the layer's ground-resting
+ *  math finite on the empty bounding box. */
+function stubObject3D(): THREE.Object3D {
+  const g = new THREE.Group()
+  g.userData.stub = true
+  g.userData.originAtGround = true
+  return g
+}
+
 // Local-space ground-plane bounds (metres, unit scale) per objectId, from a
 // throwaway build of the mesh — memoized, never added to a scene (so nothing
 // touches the GPU). Used by align/distribute to know each object's footprint.
@@ -1075,6 +1039,9 @@ const groundBoundsCache = new Map<string, { minX: number; maxX: number; minZ: nu
 export function object3dGroundBounds(objectId: string): { minX: number; maxX: number; minZ: number; maxZ: number } {
   let fp = groundBoundsCache.get(objectId)
   if (!fp) {
+    // A still-loading model has no footprint yet — return zeros WITHOUT
+    // caching (the real bounds are computed once the chunk lands).
+    if (!object3dGlbReady(objectId)) return { minX: 0, maxX: 0, minZ: 0, maxZ: 0 }
     const obj = buildObject3D(objectId)
     obj.updateMatrixWorld(true)
     const box = new THREE.Box3().setFromObject(obj)
@@ -1094,7 +1061,12 @@ export function buildObject3D(objectId: string): THREE.Object3D {
   }
   const player = PLAYER_GLBS[objectId]
   if (player) {
-    const geom = glbGeometry(objectId, player.data)
+    // Player/pose models load lazily (dynamic chunks): render an invisible
+    // stub while the bytes are in flight — the asset-ready notification
+    // re-renders and the layer swaps in the real mesh.
+    const data = playerGlbData(objectId)
+    if (!data) return stubObject3D()
+    const geom = glbGeometry(objectId, data)
     const s = geom.boundingBox!.getSize(new THREE.Vector3())
     const median = [s.x, s.y, s.z].sort((a, b) => a - b)[1]
     const outlineOffset = OUTLINE_FRACTION * (median || 1)

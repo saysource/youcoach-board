@@ -15,7 +15,6 @@ import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.j
 import type { Object3DElement } from '@youcoach-board/core'
 import { toonGradientMap } from './toon'
 import { isObject3DPlayer, notifyObject3DAssetReady, playerKitTexture, outlineMaterial, OUTLINE_FRACTION } from './objects3d'
-import { PLAYERS3D_MIXAMO_GLB_BASE64 } from './players3d-mixamo-glb'
 
 // ── Clip registry ────────────────────────────────────────────────────────────
 // Semantic ids → GLB clip names + the metadata the playback rules need.
@@ -281,13 +280,24 @@ function processClip(clip: THREE.AnimationClip): THREE.AnimationClip {
   return new THREE.AnimationClip(clip.name, meta.window ? w1 - w0 : clip.duration, tracks, clip.blendMode)
 }
 
-/** Kick the async parse (idempotent). Subscribers of onObject3DAssetReady
- *  re-render when it lands. */
+/** Kick the async load + parse (idempotent): the ~5.7 MB clip bundle ships as
+ *  its own dynamic chunk, fetched only when playback first needs a skinned
+ *  player. Subscribers of onObject3DAssetReady re-render when it lands. */
 export function ensurePlayerAnimLoaded(): void {
   if (templates || loading) return
   loading = true
+  void import('./players3d-mixamo-glb').then(
+    (mod) => parsePlayerAnimGlb(mod.PLAYERS3D_MIXAMO_GLB_BASE64),
+    (err) => {
+      loading = false
+      console.warn('players3d_mixamo chunk failed to load', err)
+    },
+  )
+}
+
+function parsePlayerAnimGlb(base64: string): void {
   new GLTFLoader().parse(
-    base64ToArrayBuffer(PLAYERS3D_MIXAMO_GLB_BASE64),
+    base64ToArrayBuffer(base64),
     '',
     (gltf) => {
       const map = new Map<string, THREE.Object3D>()

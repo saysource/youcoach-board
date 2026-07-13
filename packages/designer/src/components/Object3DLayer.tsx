@@ -9,7 +9,7 @@ import { createArrowGeometry, makeArrow3DCamera } from '../lib/arrow3d'
 import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/field-camera'
 import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, buildGoalsOverlay } from '../lib/field3d'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
-import { buildObject3D, buildTokenDisc, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots, setTokenDiscFace, type TokenFaceStyle } from '../lib/objects3d'
+import { buildObject3D, buildTokenDisc, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, object3dGlbReady, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots, setTokenDiscFace, type TokenFaceStyle } from '../lib/objects3d'
 import { applySkinnedPose, buildSkinnedPlayer, ensurePlayerAnimLoaded, playerAnimReady, setSkinnedPlayerKit, wantsSkinnedPlayer } from '../lib/player-anim'
 
 
@@ -258,7 +258,9 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       const wantSkinned = wantsSkinnedPlayer(e)
       if (wantSkinned && !playerAnimReady()) ensurePlayerAnimLoaded()
       const useSkinned = wantSkinned && playerAnimReady()
-      if (!obj || obj.userData.objectId !== e.objectId || !!obj.userData.skinned !== useSkinned) {
+      // Rebuild when the element changed model, swapped static↔skinned, or its
+      // lazily-loaded GLB chunk just landed (the stub placeholder can go).
+      if (!obj || obj.userData.objectId !== e.objectId || !!obj.userData.skinned !== useSkinned || (obj.userData.stub && object3dGlbReady(e.objectId))) {
         if (obj) dispose(obj)
         const skinnedObj = useSkinned ? buildSkinnedPlayer(e.objectId) : null
         obj = skinnedObj ?? buildObject3D(e.objectId)
