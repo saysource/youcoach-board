@@ -19,7 +19,7 @@ import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchor
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { isObject3DBall, isObject3DPlayer } from './objects3d'
-import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, isScissorPose, isThrowInPose, kickStyleFor, PLAYER_CLIPS, playerIdleClip, SCISSOR_KICK, THROW_IN, type GkCatchMeta, type PlayerClipMeta } from './player-anim'
+import { airStrikeFor, clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, isThrowInPose, kickStyleFor, PLAYER_CLIPS, playerIdleClip, THROW_IN, type GkCatchMeta, type PlayerClipMeta } from './player-anim'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -837,7 +837,7 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
     const ballX = x.find((e) => e.id === ballId) as Obj3D | undefined
     if (!ballX || !ballY || ballX.type !== 'object3d' || ballY.type !== 'object3d') return false
     const run = groundRun(ballX, ballY, xyPaths?.[ballId], xyPaths?.[ballId]?.length ? cam() : null)
-    return run >= KICK_MIN_RUN && Math.hypot(py.x - ballY.x, py.z - ballY.z) <= (SCISSOR_KICK.reach ?? INTERACT_R)
+    return run >= KICK_MIN_RUN && Math.hypot(py.x - ballY.x, py.z - ballY.z) <= INTERACT_R
   }
   const thisStrikes = detectStrikes(a, b, paths, cam, effects)
   for (const s of thisStrikes) {
@@ -866,30 +866,33 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
   if (next) {
     for (const s of detectStrikes(b, next.elements, next.paths, cam, next.effects)) {
       rules.nextKickerOf.set(s.kickerId, { pass: s.pass })
-      // SCISSOR KICK (this turn): the pose's inbound ball departs again next
-      // turn — play the bicycle kick with its strike frame at the boundary,
-      // and retarget the ball's arrival to the in-air strike point.
+      // AIR STRIKE (scissor / header, this turn): the pose's inbound ball
+      // departs again next turn — play the clip with its strike frame at the
+      // boundary, and retarget the ball's arrival to the in-air point.
       const p = b.find((e) => e.id === s.kickerId) as Obj3D | undefined
-      if (p?.type === 'object3d' && isScissorPose(p.objectId) && ballArrives(a, b, paths, s.ballId, p)) {
-        ;(rules.scissorOf = rules.scissorOf ?? new Map()).set(p.id, SCISSOR_KICK)
+      const air = p?.type === 'object3d' ? airStrikeFor(p.objectId) : null
+      if (p?.type === 'object3d' && air && ballArrives(a, b, paths, s.ballId, p)) {
+        ;(rules.scissorOf = rules.scissorOf ?? new Map()).set(p.id, air)
         rules.caughtBy = rules.caughtBy ?? new Map()
-        if (!rules.caughtBy.has(s.ballId)) rules.caughtBy.set(s.ballId, { gk: p, meta: SCISSOR_KICK })
+        if (!rules.caughtBy.has(s.ballId)) rules.caughtBy.set(s.ballId, { gk: p, meta: air })
       }
     }
   }
-  // SCISSOR KICK (the turn after): the strike happened ON the boundary — the
+  // AIR STRIKE (the turn after): the strike happened ON the boundary — the
   // struck ball flies out FROM the in-air point while the player finishes the
-  // clip. His departure is the scissor itself: drop the regular kick (and the
+  // clip. His departure IS the strike: drop the regular kick (and the
   // kicked-ball departure delay) detected for this transition.
   if (prev) {
     for (const s of thisStrikes) {
       const p = b.find((e) => e.id === s.kickerId) as Obj3D | undefined
       const pA = a.find((e) => e.id === s.kickerId) as Obj3D | undefined
-      if (!p || p.type !== 'object3d' || !isScissorPose(p.objectId) || !pA || pA.type !== 'object3d') continue
+      if (!p || p.type !== 'object3d' || !pA || pA.type !== 'object3d') continue
+      const air = airStrikeFor(p.objectId)
+      if (!air) continue
       if (!ballArrives(prev.elements, a, prev.paths, s.ballId, pA)) continue
-      ;(rules.prevScissorOf = rules.prevScissorOf ?? new Map()).set(p.id, SCISSOR_KICK)
+      ;(rules.prevScissorOf = rules.prevScissorOf ?? new Map()).set(p.id, air)
       rules.prevCaughtBy = rules.prevCaughtBy ?? new Map()
-      if (!rules.prevCaughtBy.has(s.ballId)) rules.prevCaughtBy.set(s.ballId, { gk: pA, meta: SCISSOR_KICK })
+      if (!rules.prevCaughtBy.has(s.ballId)) rules.prevCaughtBy.set(s.ballId, { gk: pA, meta: air })
       rules.kickerOf.delete(s.kickerId)
       rules.kickDelayOf?.delete(s.ballId)
     }

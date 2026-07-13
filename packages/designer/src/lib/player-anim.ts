@@ -126,9 +126,23 @@ export const GK_KICK: PlayerClipMeta = { clip: 'Goalkeeper Drop Kick', loop: fal
 // flies out FROM that point while the player finishes the clip.
 export const SCISSOR_KICK: GkCatchMeta = { clip: 'Scissor Kick', loop: false, contactTime: 26 / 30, reach: 1.0, hand: [-0.47, 1.7, 0] }
 
+// HEADER: same trigger and machinery as the scissor — the inbound ball meets
+// the head at frame 20 (user-measured (-0.03, -0.65, 1.4), raw mapping: the
+// clip's hips barely move) exactly ON the frame boundary.
+export const HEADER: GkCatchMeta = { clip: 'Header', loop: false, contactTime: 20 / 30, reach: 1.0, hand: [-0.03, 1.4, 0.65] }
+
 /** Whether this pose is the scissor kick. */
 export function isScissorPose(objectId: string): boolean {
   return /^pose_(?:man|woman)_scissor$/.test(objectId)
+}
+
+/** AIR STRIKES: poses that meet an inbound-then-outbound ball IN THE AIR at
+ *  the frame boundary (the ball's arrival retargets to the strike point, the
+ *  departure starts from it) — the scissor kick and the header. */
+export function airStrikeFor(objectId: string): GkCatchMeta | null {
+  if (isScissorPose(objectId)) return SCISSOR_KICK
+  if (/^pose_(?:man|woman)_header$/.test(objectId)) return HEADER
+  return null
 }
 
 // THROW-IN: a throw-in-pose player whose ball departs THROWS it — the clip is
@@ -175,7 +189,7 @@ export function gkCatchFor(objectId: string): GkCatchMeta | null {
   return (m && GK_CATCH[m[1]]) || null
 }
 
-const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK, SCISSOR_KICK, THROW_IN].map((m) => [m.clip, m]))
+const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK, SCISSOR_KICK, HEADER, THROW_IN].map((m) => [m.clip, m]))
 
 // ── Character lookup ─────────────────────────────────────────────────────────
 // Which skinned character a player objectId animates as. Base players map to
