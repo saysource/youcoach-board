@@ -44,7 +44,7 @@
   },
   {
    "id": "materials3d",
-   "name": "3D Materials",
+   "name": "Materials 3D",
    "categories": [
     "materials3d"
    ]
@@ -71,7 +71,7 @@
  ],
  "categories": {
   "players": {
-   "name": "Players (Male)",
+   "name": "Players (Men)",
    "kind": "figure",
    "colors": "players",
    "figures": [
@@ -3750,7 +3750,7 @@
    }
   },
   "players_female": {
-   "name": "Players (Female)",
+   "name": "Players (Women)",
    "kind": "figure",
    "colors": "players",
    "figures": [
@@ -6419,7 +6419,7 @@
    }
   },
   "goalkeepers": {
-   "name": "Goalkeepers (Male)",
+   "name": "Goalkeepers (Men)",
    "kind": "figure",
    "colors": "players",
    "figures": [
@@ -8153,7 +8153,7 @@
    }
   },
   "goalkeepers_female": {
-   "name": "Goalkeepers (Female)",
+   "name": "Goalkeepers (Women)",
    "kind": "figure",
    "colors": "players",
    "figures": [
@@ -13789,7 +13789,7 @@
    }
   },
   "preparation": {
-   "name": "Preparation (Male)",
+   "name": "Preparation (Men)",
    "kind": "figure",
    "colors": "players",
    "figures": [
@@ -15644,7 +15644,7 @@
    ]
   },
   "preparation_female": {
-   "name": "Preparation (Female)",
+   "name": "Preparation (Women)",
    "kind": "figure",
    "colors": "players",
    "figures": [
@@ -17536,7 +17536,7 @@
    "figures": []
   },
   "materials3d": {
-   "name": "3D Materials",
+   "name": "Materials 3D",
    "kind": "figure",
    "figures": [
     {

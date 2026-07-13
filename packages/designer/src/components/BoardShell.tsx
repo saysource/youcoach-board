@@ -83,7 +83,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // toolbar's More-tools menu can jump to a category and open the drawer.
   const { catalog } = useAssets()
   const [libraryCatId, setLibraryCatId] = useState<string | null>(null)
-  // Default to the first NON-field category (Players (Male)); the legacy 'fields'
+  // Default to the first NON-field category (Players (Men)); the legacy 'fields'
   // categories are hidden from the palette and kept only for loading old drawings.
   if (catalog && libraryCatId === null) {
     const firstCat = catalog.groups.flatMap((g) => g.categories).find((id) => catalog.categories[id]?.kind !== 'field')
@@ -507,9 +507,11 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // Global keyboard shortcuts (see useDesignerHotkeys for the full map). Drawer
   // opens and ball quick-add are wired to the shell's callbacks; grid/zoom/help
   // are added by later phases.
-  const playersCat = catalog?.groups.find((g) => g.id === 'players')?.categories[0] ?? null
-  // M opens the 3D materials (cones, hurdles, goals…), not the flat 2D materials.
-  const materialsCat = catalog?.groups.find((g) => g.id === 'materials3d')?.categories[0] ?? null
+  // P / M open the field-appropriate palettes: the 3D players/materials on a
+  // 3D field, their flat 2D counterparts otherwise. openCategory then lands on
+  // the group's LAST-used sub-category (e.g. Players 3D (Women)).
+  const playersCat = catalog?.groups.find((g) => g.id === (savedField3d ? 'players3d' : 'players'))?.categories[0] ?? null
+  const materialsCat = catalog?.groups.find((g) => g.id === (savedField3d ? 'materials3d' : 'materials'))?.categories[0] ?? null
   useDesignerHotkeys({
     storeApi: store,
     bgEditing,
