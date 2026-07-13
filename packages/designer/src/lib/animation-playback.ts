@@ -19,7 +19,7 @@ import { projectGround, reprojectBoardPoints, reprojectChanges, withGroundAnchor
 import { makeCalibratedCamera } from './field-camera'
 import { boardToGround } from './arrow3d'
 import { isObject3DBall, isObject3DPlayer } from './objects3d'
-import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, isScissorPose, kickStyleFor, PLAYER_CLIPS, playerIdleClip, SCISSOR_KICK, type GkCatchMeta, type PlayerClipMeta } from './player-anim'
+import { clipDuration, clipRootOffset, ensurePlayerAnimLoaded, gkCatchFor, GK_KICK, isGkDeepKick, isGoalkeeper, isScissorPose, isThrowInPose, kickStyleFor, PLAYER_CLIPS, playerIdleClip, SCISSOR_KICK, THROW_IN, type GkCatchMeta, type PlayerClipMeta } from './player-anim'
 import { elementCenter, pointAlongPath, type PathPoint } from './movement-path'
 
 const TRANSITION_MS = 1000 // 1 s per frame transition at 1× speed
@@ -718,6 +718,13 @@ interface PlayerRules {
    *  → the turn clip to play (Left/Right by spin direction): they step around
    *  on the spot instead of pivoting like a statue. */
   turnInPlaceOf?: Map<string, string>
+  /** Throw-in-pose players whose ball departs this transition: they THROW it.
+   *  The player faces the target while the trimmed clip plays; the ball starts
+   *  at the overhead release point and flies a soft parabola to the target,
+   *  ignoring its Power Shot / Parabolic effects for this turn. */
+  throwOf?: Map<string, { thrower: Obj3D; target: [number, number] }>
+  /** ballId → the same throw info (the ball's trajectory override). */
+  thrownBall?: Map<string, { thrower: Obj3D; target: [number, number] }>
 }
 
 /** Who strikes which ball in the transition a→b, and whether it's a PASS
@@ -817,6 +824,18 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
   }
   const thisStrikes = detectStrikes(a, b, paths, cam, effects)
   for (const s of thisStrikes) {
+    // A throw-in-pose player THROWS the departing ball (no kick, no delay).
+    if (isThrowInPose(s.kickerObjectId)) {
+      const thrower = a.find((e) => e.id === s.kickerId) as Obj3D | undefined
+      const ballB = b.find((e) => e.id === s.ballId) as Obj3D | undefined
+      if (thrower?.type === 'object3d' && ballB?.type === 'object3d') {
+        const info = { thrower, target: [ballB.x, ballB.z] as [number, number] }
+        ;(rules.throwOf = rules.throwOf ?? new Map()).set(s.kickerId, info)
+        ;(rules.thrownBall = rules.thrownBall ?? new Map()).set(s.ballId, info)
+        if (s.receiverId) rules.receiverOf.add(s.receiverId)
+        continue
+      }
+    }
     const style = kickStyleFor(s.kickerObjectId)
     rules.kickerOf.set(s.kickerId, { pass: s.pass, meta: style.meta })
     // A KICKED ball waits at the kicker's feet until the clip's foot-contact
@@ -1149,6 +1168,12 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
     const meta = PLAYER_CLIPS.changeDir
     const ct = (meta.contactTime ?? 0.833) + wall
     if (ct < clipDuration(meta.clip)) anim = { clip: meta.clip, time: ct }
+  } else if (rules?.throwOf?.has(b.id)) {
+    // THROW-IN: the trimmed release clip from the turn start, facing the
+    // target for the whole turn (the ball flies where he looks).
+    const th = rules.throwOf.get(b.id)!
+    if (wall < clipDuration(THROW_IN.clip)) anim = { clip: THROW_IN.clip, time: wall }
+    el = { ...el, rotation: Math.atan2(th.target[0] - b.x, th.target[1] - b.z) }
   } else if (rules?.turnInPlaceOf?.has(b.id) && !gait.moving) {
     // TURN IN PLACE: the clip's authored body yaw (~120°) does the visible
     // spin — hold the START rotation while it plays (the element's rotation
@@ -1226,6 +1251,13 @@ function applyObject3DMove(
   // gliding down to its authored spot — or distributed onward).
   const handoff = isObject3DBall(b.objectId) && !caught ? rules?.prevCaughtBy?.get(b.id) : undefined
   if (handoff) a = { ...a, ...handPoint(handoff.gk, handoff.meta.hand) }
+  // A THROWN ball starts at the thrower's overhead release point, oriented
+  // toward the target (the thrower faces it for the whole throw).
+  const thrown = isObject3DBall(b.objectId) && !caught && !handoff ? rules?.thrownBall?.get(b.id) : undefined
+  if (thrown) {
+    const rot = Math.atan2(thrown.target[0] - thrown.thrower.x, thrown.target[1] - thrown.thrower.z)
+    a = { ...a, ...handPoint({ ...thrown.thrower, rotation: rot }, THROW_IN.hand) }
+  }
   const dist = Math.hypot(b.x - a.x, b.z - a.z)
   // Ground position at eased time q — along the path spline when one exists.
   const posAt = groundPosAt(a, b, mids, cam)
@@ -1242,7 +1274,9 @@ function applyObject3DMove(
       if (g) el = { ...el, x: g.x, z: g.z }
     }
   }
-  if ((caught || handoff) && !mids?.length) {
+  // A thrown ball ignores its Power Shot easing this turn (plain pace).
+  if (thrown) te = t
+  if ((caught || handoff || thrown) && !mids?.length) {
     const g = posAt(te)
     if (g) el = { ...el, x: g.x, z: g.z }
   }
@@ -1275,7 +1309,7 @@ function applyObject3DMove(
   }
   // Parabolic shot (ball): the flight height follows a parabola peaking
   // mid-move — a lofted pass. Peak scales with the run (capped).
-  const parabolic = isObject3DBall(b.objectId) && b.effectParabolic && dist > 0.5
+  const parabolic = isObject3DBall(b.objectId) && b.effectParabolic && !thrown && dist > 0.5
   const peakH = parabolic ? Math.min(12, Math.max(1.5, dist * 0.25)) : 0
   const heightAt = (q: number) => (parabolic ? peakH * 4 * q * (1 - q) : 0)
   if (parabolic) el = { ...el, elevation: (el.elevation ?? 0) + heightAt(te) }
@@ -1287,6 +1321,11 @@ function applyObject3DMove(
     el = { ...el, elevation: (el.elevation ?? 0) * (1 - te) + caught.meta.hand[1] * gkScale(caught.gk) * te }
   } else if (handoff) {
     el = { ...el, elevation: Math.max(el.elevation ?? 0, handoff.meta.hand[1] * gkScale(handoff.gk) * (1 - te)) }
+  } else if (thrown) {
+    // From overhead down to the target, with a SOFT throw arc on top.
+    const h0 = THROW_IN.hand[1] * gkScale(thrown.thrower)
+    const peak = Math.min(3, Math.max(0.5, dist * 0.12))
+    el = { ...el, elevation: h0 * (1 - te) + peak * 4 * te * (1 - te) }
   }
   if (isObject3DBall(b.objectId) && dist > 0.5) {
     // Run distance in ground metres (spline paths: sampled arc length).

@@ -131,6 +131,19 @@ export function isScissorPose(objectId: string): boolean {
   return /^pose_(?:man|woman)_scissor$/.test(objectId)
 }
 
+// THROW-IN: a throw-in-pose player whose ball departs THROWS it — the clip is
+// trimmed to the release (frames 44–60, user-picked; the authored walk-up is
+// stripped by the in-place pin, which also fixes the clip's ~2 m displacement).
+// `hand` = where the ball sits overhead at the release, in the thrower's local
+// frame [side, height, front]: user-measured (-0.1, -2, 1.6) minus the hips
+// ground offset at frame 44 (-0.125, -1.949).
+export const THROW_IN: GkCatchMeta = { clip: 'Throw In', loop: false, window: [44 / 30, 60 / 30], inPlace: true, reach: 1.0, hand: [0.03, 1.6, 0.05] }
+
+/** Whether this pose is the throw-in. */
+export function isThrowInPose(objectId: string): boolean {
+  return /^pose_(?:man|woman)_throw_in$/.test(objectId)
+}
+
 /** Whether this goalkeeper pose is one of the deep kicks. */
 export function isGkDeepKick(objectId: string): boolean {
   return /^pose_gk_(?:man|woman)_deep_kick(?:_2|_3)?$/.test(objectId)
@@ -162,7 +175,7 @@ export function gkCatchFor(objectId: string): GkCatchMeta | null {
   return (m && GK_CATCH[m[1]]) || null
 }
 
-const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK, SCISSOR_KICK].map((m) => [m.clip, m]))
+const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK, SCISSOR_KICK, THROW_IN].map((m) => [m.clip, m]))
 
 // ── Character lookup ─────────────────────────────────────────────────────────
 // Which skinned character a player objectId animates as. Base players map to
