@@ -2513,7 +2513,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const g = rec.getContext('2d')
       if (!g) return
       const stream = rec.captureStream(30)
-      const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm'
+      // Prefer MP4/H.264 (universally playable, native on iOS/Safari); fall back to
+      // WebM (VP9/VP8) where MP4 recording isn't supported (e.g. Firefox).
+      const mime = ['video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm'
+      const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm'
       let recorder: MediaRecorder
       try {
         recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16_000_000 })
@@ -2553,11 +2556,11 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       s2.setAnimationSettings({ loop: prevLoop })
       s2.setCurrentFrame(prevFrame)
       setSelection(prevSel)
-      const blob = new Blob(chunks, { type: 'video/webm' })
+      const blob = new Blob(chunks, { type: mime })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${doc.title || 'board'}-${w}x${h}.webm`
+      a.download = `${doc.title || 'board'}-${w}x${h}.${ext}`
       a.click()
       URL.revokeObjectURL(url)
     }
