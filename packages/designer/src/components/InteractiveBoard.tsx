@@ -88,7 +88,7 @@ import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-referen
 import { makeCalibratedCamera, type PitchType } from '../lib/field-camera'
 import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
 import { exportBoardImage, registerBoardExporter, registerBoardVideoExporter, loadExportFonts, drawBoardVideoFrame } from '../lib/export-image'
-import { interactionReach, startPlayback, isPlaying } from '../lib/animation-playback'
+import { interactionReach, startPlayback, isPlaying, beginAnimationRender, seekAnimationFrame, endAnimationRender, animationFrameCount } from '../lib/animation-playback'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -2584,6 +2584,49 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       }
     }
   }, [])
+
+  // Deterministic frame-render control API for a HEADLESS renderer (server-side
+  // MP4): begin() enters render mode + returns the sample-frame count; goToFrame(n)
+  // renders frame n and resolves once the WebGL/SVG layers have painted (so a
+  // screenshot is never black); end() restores editing. Always exposed (a headless
+  // Chrome may load the production bundle), namespaced under window.ycbAnim.
+  //   const N = await window.ycbAnim.begin(30)
+  //   for (let n = 0; n < N; n++) { await window.ycbAnim.goToFrame(n); /* screenshot */ }
+  //   window.ycbAnim.end()
+  useEffect(() => {
+    const waitPaint = () =>
+      new Promise<void>((res) => {
+        let done = false
+        let f = 0
+        const fin = () => {
+          if (!done) {
+            done = true
+            res()
+          }
+        }
+        // ~3 frames: store commit → layer render effects → GL draw → paint.
+        const tick = () => (++f >= 3 ? fin() : requestAnimationFrame(tick))
+        requestAnimationFrame(tick)
+        setTimeout(fin, 400) // fallback if rAF is throttled in the headless tab
+      })
+    const api = {
+      /** Enter render mode; returns the number of sample frames (0 if <2 frames). */
+      begin: (fps = 30) => beginAnimationRender(storeApi, fps),
+      /** Sample-frame count without entering render mode (= duration ÷ speed × fps). */
+      frames: (fps = 30) => animationFrameCount(storeApi, fps),
+      /** Render sample frame n (0‥N−1); resolves after the layers repaint. */
+      goToFrame: async (n: number) => {
+        seekAnimationFrame(storeApi, n)
+        await waitPaint()
+      },
+      /** Leave render mode; restore the editing state. */
+      end: () => endAnimationRender(storeApi),
+    }
+    ;(window as unknown as { ycbAnim?: unknown }).ycbAnim = api
+    return () => {
+      delete (window as unknown as { ycbAnim?: unknown }).ycbAnim
+    }
+  }, [storeApi])
 
   // A 2D-badge token on a 3D field is lifted OUT of the main SVG into its own
   // layer painted ABOVE the 3D-text overlay (a badge "stands" on the grass, so

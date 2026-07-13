@@ -1389,6 +1389,29 @@ interface Playback {
 
 const players = new WeakMap<EditorStore, Playback>()
 
+/** Write one playback state into the doc (no ops / onChange — see header): the
+ *  interpolated `elements` and camera `pose`, with pitch-pinned elements + motion
+ *  tails reprojected from the resting camera `from` to the in-flight `pose`.
+ *  Shared by real-time playback and the deterministic frame-render seek. */
+function applyPlaybackState(store: EditorStore, from: FieldView | null, elements: BoardElement[], pose: FieldView | null, playhead: number): void {
+  const { doc } = store.getState()
+  let els = elements
+  if (pose && from && !samePose(pose, from)) {
+    const changes = reprojectChanges(withGroundAnchors(els, from), from, pose)
+    if (changes.length) els = applyOperation({ ...doc, elements: els }, { kind: 'update', changes }).elements
+    els = els.map((e) => {
+      const fx = e as { trail?: Array<[number, number]>; pulseRings?: Array<{ points: Array<[number, number]>; opacity: number }> }
+      if (!fx.trail && !fx.pulseRings) return e
+      return {
+        ...e,
+        ...(fx.trail ? { trail: reprojectBoardPoints(fx.trail, from, pose) } : {}),
+        ...(fx.pulseRings ? { pulseRings: fx.pulseRings.map((r) => ({ ...r, points: reprojectBoardPoints(r.points, from, pose) })) } : {}),
+      } as BoardElement
+    })
+  }
+  store.setState({ playhead, doc: { ...doc, elements: els, background: { ...doc.background, field3d: pose ?? doc.background.field3d } } })
+}
+
 /** Whether playback is running for this store. */
 export function isPlaying(store: EditorStore): boolean {
   return players.has(store)
@@ -1423,28 +1446,7 @@ export function startPlayback(store: EditorStore): void {
   // All frames' 2D coords are relative to the LIVE editing camera (pb.preCamera
   // — the setBackground invariant keeps them there), so pitch-pinned elements
   // reproject preCamera → the in-flight pose each step.
-  const apply = (elements: BoardElement[], pose: FieldView | null, playhead: number) => {
-    const { doc } = store.getState()
-    let els = elements
-    const from = pb.preCamera
-    if (pose && from && !samePose(pose, from)) {
-      const changes = reprojectChanges(withGroundAnchors(els, from), from, pose)
-      if (changes.length) els = applyOperation({ ...doc, elements: els }, { kind: 'update', changes }).elements
-      // Transient motion-tail samples are free board points in the RESTING
-      // (pre-play) camera space — remap them to the in-flight pose too, or the
-      // tail detaches from its token during a camera flight.
-      els = els.map((e) => {
-        const fx = e as { trail?: Array<[number, number]>; pulseRings?: Array<{ points: Array<[number, number]>; opacity: number }> }
-        if (!fx.trail && !fx.pulseRings) return e
-        return {
-          ...e,
-          ...(fx.trail ? { trail: reprojectBoardPoints(fx.trail, from, pose) } : {}),
-          ...(fx.pulseRings ? { pulseRings: fx.pulseRings.map((r) => ({ ...r, points: reprojectBoardPoints(r.points, from, pose) })) } : {}),
-        } as BoardElement
-      })
-    }
-    store.setState({ playhead, doc: { ...doc, elements: els, background: { ...doc.background, field3d: pose ?? doc.background.field3d } } })
-  }
+  const apply = (elements: BoardElement[], pose: FieldView | null, playhead: number) => applyPlaybackState(store, pb.preCamera, elements, pose, playhead)
 
   // Playback starts from the frame being EDITED (falling back to the start
   // when that's the last frame); loop wraps always restart from frame 1.
@@ -1502,6 +1504,110 @@ export function startPlayback(store: EditorStore): void {
     pb.raf = requestAnimationFrame(step)
   }
   pb.raf = requestAnimationFrame(step)
+}
+
+// ── Deterministic frame render (server-side MP4) ─────────────────────────────
+// Instead of real-time capture (drops frames when the layer stack can't composite
+// in time), a headless renderer drives the animation frame-by-frame: begin →
+// seek(0..N) rendering + screenshot each → end. Same interpolation as playback,
+// but the caller controls WHEN each frame is stepped, so it can wait for the WebGL/
+// SVG layers to actually paint before capturing. See window.ycbAnim in the app.
+
+interface RenderCtrl {
+  preElements: BoardElement[]
+  preCamera: FieldView | null
+  effCam: (FieldView | null)[]
+  durs: number[] // per-segment 1×-speed duration (s)
+  realDur: number // total playback length at the current speed (s)
+  spd: number
+  total: number // number of sample frames (fps × realDur, ≥ 2)
+  prevLoop: boolean
+  prevFrame: number
+}
+const renderCtrls = new WeakMap<EditorStore, RenderCtrl>()
+
+/** Enter deterministic render mode and return the number of sample frames
+ *  (≈ duration ÷ speed × fps, ≥ 2). Suspends editing (playing=true) until
+ *  endAnimationRender. No-op → 0 when there are fewer than 2 frames. */
+export function beginAnimationRender(store: EditorStore, fps = 30): number {
+  const s = store.getState()
+  const frames = s.doc.animation.frames
+  if (frames.length < 2) return 0
+  cancelFieldAnimation(store)
+  stopPlayback(store)
+  s.commitTransaction()
+  s.setSelection([])
+  const prevFrame = s.currentFrame
+  s.setCurrentFrame(0)
+  const doc0 = store.getState().doc
+  const preCamera = doc0.background.field3d
+  const effCam: (FieldView | null)[] = []
+  for (let i = 0; i < frames.length; i++) effCam.push(frames[i].camera ?? (i === 0 ? preCamera : effCam[i - 1]))
+  const spd = Math.min(2, Math.max(0.25, doc0.animation.speed))
+  const durs: number[] = []
+  for (let i = 0; i < frames.length - 1; i++) durs.push(segmentDuration(frames[i], frames[i + 1], preCamera, i > 0 ? { elements: frames[i - 1].elements, paths: frames[i].paths } : undefined))
+  const realDur = durs.reduce((a, b) => a + b, 0) / spd
+  const total = Math.max(2, Math.round(realDur * fps) + 1)
+  if (frames.some((f) => f.elements.some((e) => e.type === 'object3d' && isObject3DPlayer(e.objectId)))) ensurePlayerAnimLoaded()
+  renderCtrls.set(store, { preElements: doc0.elements, preCamera, effCam, durs, realDur, spd, total, prevLoop: doc0.animation.loop, prevFrame })
+  store.setState({ playing: true, playhead: 0 })
+  return total
+}
+
+/** Total sample frames without entering render mode (same value beginAnimationRender returns). */
+export function animationFrameCount(store: EditorStore, fps = 30): number {
+  const s = store.getState()
+  const frames = s.doc.animation.frames
+  if (frames.length < 2) return 0
+  const preCamera = s.doc.background.field3d
+  const spd = Math.min(2, Math.max(0.25, s.doc.animation.speed))
+  let base = 0
+  for (let i = 0; i < frames.length - 1; i++) base += segmentDuration(frames[i], frames[i + 1], preCamera, i > 0 ? { elements: frames[i - 1].elements, paths: frames[i].paths } : undefined)
+  return Math.max(2, Math.round((base / spd) * fps) + 1)
+}
+
+/** Render sample frame `n` (0‥total−1) into the doc — the animation state at
+ *  playback time n∕(total−1)·duration. Deterministic (no wall-clock); the caller
+ *  waits for the layers to paint, then captures. */
+export function seekAnimationFrame(store: EditorStore, n: number): void {
+  const ctrl = renderCtrls.get(store)
+  if (!ctrl) return
+  const { effCam, durs, spd, preCamera, realDur, total } = ctrl
+  const fr = store.getState().doc.animation.frames
+  const tr = total > 1 ? Math.min(realDur, Math.max(0, (n / (total - 1)) * realDur)) : 0
+  // Locate the segment (real-time offsets) and the local 0‥1 progress within it.
+  let acc = 0
+  let seg = 0
+  let t = 0
+  for (let i = 0; i < durs.length; i++) {
+    const segReal = durs[i] / spd
+    if (i === durs.length - 1 || tr <= acc + segReal) {
+      seg = i
+      t = segReal > 0 ? Math.min(1, Math.max(0, (tr - acc) / segReal)) : 1
+      break
+    }
+    acc += segReal
+  }
+  const anim = store.getState().doc.animation
+  const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
+  const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
+  const els = lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, preCamera, store.getState().doc.background.tokens3d, durs[seg] / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, tr, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths, effects: fr[seg + 2].effects } : undefined)
+  applyPlaybackState(store, preCamera, els, pose, seg + t)
+}
+
+/** Leave deterministic render mode and restore the pre-render editing state. */
+export function endAnimationRender(store: EditorStore): void {
+  const ctrl = renderCtrls.get(store)
+  if (!ctrl) return
+  renderCtrls.delete(store)
+  // Restore the doc directly: setCurrentFrame is a no-op when the frame index is
+  // unchanged, so it wouldn't undo the seeked elements. Snap back to the frame the
+  // user was on (its snapshot) at the resting camera.
+  const st = store.getState()
+  const frames = st.doc.animation.frames
+  const els = frames[ctrl.prevFrame]?.elements ?? ctrl.preElements
+  store.setState({ playing: false, playhead: null, currentFrame: ctrl.prevFrame, doc: { ...st.doc, elements: els, background: { ...st.doc.background, field3d: ctrl.preCamera } } })
+  st.setAnimationSettings({ loop: ctrl.prevLoop })
 }
 
 /** How long the transition INTO frame i+1 lasts at 1× speed, in seconds: the
