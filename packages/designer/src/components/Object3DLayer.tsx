@@ -10,7 +10,7 @@ import { applyViewCamera, makeCalibratedCamera, type PosedCamera } from '../lib/
 import { SUN_POSITION, SUN_TARGET, FLOODLIGHTS, makeFloodlight, buildGoalsOverlay } from '../lib/field3d'
 import type { FieldType, TrainingLayout } from '@youcoach-board/core'
 import { buildObject3D, buildTokenDisc, isObject3DColorable, isObject3DGoal, isObject3DMultiColor, isObject3DPlayer, object3dDefaultColor, object3dGlbReady, onObject3DAssetReady, playerKitTexture, recolorObject3DSlots, setTokenDiscFace, type TokenFaceStyle } from '../lib/objects3d'
-import { logoRect, logoUrl } from '../lib/logo'
+import { logoDarkUrl, logoRect, logoUrl } from '../lib/logo'
 import { applySkinnedPose, buildSkinnedPlayer, ensurePlayerAnimLoaded, playerAnimReady, setSkinnedPlayerKit, wantsSkinnedPlayer } from '../lib/player-anim'
 
 
@@ -68,6 +68,8 @@ interface Props {
   /** YouCoach watermark position (background.logo) — painted INTO the canvas
    *  as a HUD pass on 3D fields; null hides it. */
   logo?: LogoPosition | null
+  /** Use the dark logo artwork (light surface under it — see logoDarkFor). */
+  logoDark?: boolean
   svgRef: React.RefObject<SVGSVGElement | null>
   containerRef: React.RefObject<HTMLDivElement | null>
 }
@@ -92,6 +94,7 @@ interface Ctx {
   hudScene: THREE.Scene
   hudCam: THREE.OrthographicCamera
   logoMesh: THREE.Mesh
+  logoTex: { light: THREE.CanvasTexture | null; dark: THREE.CanvasTexture | null }
 }
 
 const SELECT_COLOR = 0x2a6cff
@@ -156,7 +159,7 @@ function setObjectDim(obj: THREE.Object3D, opacity: number) {
   })
 }
 
-export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, tokens = [], arrows = [], selectedIds, replaceTargetId = null, erasingIds, viewport, camera, objectScale, minScale = 1, fieldType, layout, showGoals, logo = null, svgRef, containerRef }, ref) {
+export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Object3DLayer({ elements, tokens = [], arrows = [], selectedIds, replaceTargetId = null, erasingIds, viewport, camera, objectScale, minScale = 1, fieldType, layout, showGoals, logo = null, logoDark = false, svgRef, containerRef }, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<Ctx | null>(null)
 
@@ -244,23 +247,25 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     const logoMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), logoMat)
     logoMesh.visible = false
     hudScene.add(logoMesh)
-    const img = new Image()
-    img.onload = () => {
-      const c = document.createElement('canvas')
-      c.width = 1120
-      c.height = Math.round(1120 * (img.height / img.width || 63 / 398))
-      const g = c.getContext('2d')
-      if (!g) return
-      g.drawImage(img, 0, 0, c.width, c.height)
-      const tex = new THREE.CanvasTexture(c)
-      tex.colorSpace = THREE.SRGBColorSpace
-      logoMat.map = tex
-      logoMat.needsUpdate = true
-      renderRef.current()
+    const logoTex: { light: THREE.CanvasTexture | null; dark: THREE.CanvasTexture | null } = { light: null, dark: null }
+    for (const variant of ['light', 'dark'] as const) {
+      const img = new Image()
+      img.onload = () => {
+        const c = document.createElement('canvas')
+        c.width = 1120
+        c.height = Math.round(1120 * (img.height / img.width || 63 / 398))
+        const g = c.getContext('2d')
+        if (!g) return
+        g.drawImage(img, 0, 0, c.width, c.height)
+        const tex = new THREE.CanvasTexture(c)
+        tex.colorSpace = THREE.SRGBColorSpace
+        logoTex[variant] = tex
+        renderRef.current()
+      }
+      img.src = variant === 'dark' ? logoDarkUrl : logoUrl
     }
-    img.src = logoUrl
 
-    ctxRef.current = { renderer, scene, fixedCam, calibCam, outlineCam: new THREE.PerspectiveCamera(), meshes: new Map(), tokenMeshes: new Map(), arrowMeshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '', hudScene, hudCam, logoMesh }
+    ctxRef.current = { renderer, scene, fixedCam, calibCam, outlineCam: new THREE.PerspectiveCamera(), meshes: new Map(), tokenMeshes: new Map(), arrowMeshes: new Map(), composer, renderPass, outlinePass, goals: null, goalsKey: '', hudScene, hudCam, logoMesh, logoTex }
     return ctxRef.current
   }
 
@@ -580,9 +585,15 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
     // YouCoach watermark: a HUD pass painted INTO the canvas bitmap on top of
     // everything (no DOM node to hide). 3D fields only — 2D boards keep the
     // SVG logo in BackgroundView.
-    const showLogo = !!camera && !!logo && !!(ctx.logoMesh.material as THREE.MeshBasicMaterial).map
+    const logoMap = logoDark ? ctx.logoTex.dark : ctx.logoTex.light
+    const showLogo = !!camera && !!logo && !!logoMap
     ctx.logoMesh.visible = showLogo
     if (showLogo) {
+      const mat = ctx.logoMesh.material as THREE.MeshBasicMaterial
+      if (mat.map !== logoMap) {
+        mat.map = logoMap
+        mat.needsUpdate = true
+      }
       const r = logoRect(logo!)
       ctx.logoMesh.position.set(r.x + r.w / 2, BOARD_HEIGHT - (r.y + r.h / 2), 0)
       ctx.logoMesh.scale.set(r.w, r.h, 1)
@@ -601,7 +612,7 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
   useEffect(() => {
     render()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, tokens, arrows, selectedIds, replaceTargetId, erasingIds, viewport, camera, objectScale, minScale, fieldType, layout, showGoals, logo])
+  }, [elements, tokens, arrows, selectedIds, replaceTargetId, erasingIds, viewport, camera, objectScale, minScale, fieldType, layout, showGoals, logo, logoDark])
 
   useEffect(() => {
     const container = containerRef.current

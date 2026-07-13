@@ -90,6 +90,7 @@ import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToke
 import { exportBoardImage, registerBoardExporter, registerBoardVideoExporter, loadExportFonts, drawBoardVideoFrame } from '../lib/export-image'
 import { GK_MISS_FACTOR, interactionReach, startPlayback, isPlaying, beginAnimationRender, seekAnimationFrame, endAnimationRender, animationFrameCount } from '../lib/animation-playback'
 import { gkCatchFor } from '../lib/player-anim'
+import { logoDarkFor } from '../lib/logo'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -3080,7 +3081,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           this layer only draws them in the legacy homography/fixed modes. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={fieldCamCfg ? [] : arrow3dLayerElements} selectedIds={selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
       {/* 3D objects ("Materials 3D") + tokens + arrows: WebGL overlay (pointer-transparent). */}
-      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} tokens={token3dList} arrows={fieldCamCfg ? arrow3dLayerElements : []} selectedIds={navigating ? [] : selectedIds} replaceTargetId={dropReplaceId} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} minScale={field3d ? 1 : 0.05} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} logo={doc.background.logo} />
+      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} tokens={token3dList} arrows={fieldCamCfg ? arrow3dLayerElements : []} selectedIds={navigating ? [] : selectedIds} replaceTargetId={dropReplaceId} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} minScale={field3d ? 1 : 0.05} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} logo={doc.background.logo} logoDark={logoDarkFor(doc.background)} />
       {/* 3D-token captions: the WebGL canvas sits above the SVG, so the discs would
           occlude their own labels — re-render them here, above the canvas, anchored
           just below each disc's camera-facing edge. Fixed on-screen size like the

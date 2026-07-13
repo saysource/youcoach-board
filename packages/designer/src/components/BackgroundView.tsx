@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { BOARD_WIDTH, BOARD_HEIGHT, type BoardDoc } from '@youcoach-board/core'
 import { useAssets } from '../lib/assets'
 import { loadSvgTemplate, recoloredInnerHtml, type SvgTemplate } from '../lib/figure-svg'
-import { logoRect, logoUrl } from '../lib/logo'
+import { logoDarkFor, logoDarkUrl, logoRect, logoUrl } from '../lib/logo'
 
 // Renders the document background into BoardCanvas's background layer: a solid
 // color (or the legacy grass image), the chosen field SVG (fetched, scaled and
@@ -72,7 +72,9 @@ export function BackgroundView({ doc }: { doc: BoardDoc }) {
           // logo glides + resizes.
           return (
             <motion.image
-              href={logoUrl}
+              // The white artwork vanishes on a light surface — swap to the
+              // dedicated dark variant there (see logoDarkFor).
+              href={logoDarkFor(bg) ? logoDarkUrl : logoUrl}
               initial={false}
               animate={{ attrX: r.x, attrY: r.y, width: r.w, height: r.h }}
               transition={{ type: 'spring', stiffness: 260, damping: 26 }}
