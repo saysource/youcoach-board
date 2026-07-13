@@ -88,7 +88,8 @@ import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-referen
 import { makeCalibratedCamera, type PitchType } from '../lib/field-camera'
 import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
 import { exportBoardImage, registerBoardExporter, registerBoardVideoExporter, loadExportFonts, drawBoardVideoFrame } from '../lib/export-image'
-import { interactionReach, startPlayback, isPlaying, beginAnimationRender, seekAnimationFrame, endAnimationRender, animationFrameCount } from '../lib/animation-playback'
+import { GK_MISS_FACTOR, interactionReach, startPlayback, isPlaying, beginAnimationRender, seekAnimationFrame, endAnimationRender, animationFrameCount } from '../lib/animation-playback'
+import { gkCatchFor } from '../lib/player-anim'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
 import { cn } from '../lib/cn'
 
@@ -2365,21 +2366,39 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       const pt = object3dToBoard(x + Math.cos(ang) * r, 0, z + Math.sin(ang) * r)
       return `${pt.x},${pt.y}`
     }).join(' ')
+  // A HALF-disc on the pitch: the arc from `from` to `to` (ground angles, the
+  // polygon closes across the diameter chord).
+  const groundArcPoints = (x: number, z: number, r: number, from: number, to: number): string =>
+    Array.from({ length: 19 }, (_, i) => {
+      const ang = from + ((to - from) * i) / 18
+      const pt = object3dToBoard(x + Math.cos(ang) * r, 0, z + Math.sin(ang) * r)
+      return `${pt.x},${pt.y}`
+    }).join(' ')
   // While DRAGGING a ball: a yellow ground ring around every player the ball
   // is in interaction proximity of (field players 1 m; keepers their pose's
   // catch reach) — the drop would read as a pass/shot/save to that player.
-  const interactionRings = ((): string[] => {
+  // Keepers with a CATCH pose split in two: the yellow FRONT half-disc is the
+  // successful save, the red BACK half-disc (×1.5 radius) the MISSED one —
+  // the dive plays but the ball passes him (specs/animation.md).
+  const interactionRings = ((): Array<{ pts: string; miss?: boolean }> => {
     if (!object3dGesture || object3dGesture.kind !== 'move') return []
     const ballIds = new Set(object3dGesture.moving.map((m) => m.id))
     const balls = doc.elements.filter((e): e is Object3DElement => e.type === 'object3d' && ballIds.has(e.id) && isObject3DBall(e.objectId))
     if (balls.length === 0) return []
-    const rings: string[] = []
+    const rings: Array<{ pts: string; miss?: boolean }> = []
     for (const e of doc.elements) {
       if (e.type !== 'object3d') continue
       const reach = interactionReach(e.objectId)
       if (reach == null) continue
+      if (gkCatchFor(e.objectId)) {
+        if (!balls.some((bl) => Math.hypot(bl.x - e.x, bl.z - e.z) <= reach * GK_MISS_FACTOR)) continue
+        // Ground dir (cos a, sin a) is in FRONT when sin(a + rotation) ≥ 0.
+        rings.push({ pts: groundArcPoints(e.x, e.z, reach, -e.rotation, Math.PI - e.rotation) })
+        rings.push({ pts: groundArcPoints(e.x, e.z, reach * GK_MISS_FACTOR, Math.PI - e.rotation, 2 * Math.PI - e.rotation), miss: true })
+        continue
+      }
       if (!balls.some((bl) => Math.hypot(bl.x - e.x, bl.z - e.z) <= reach)) continue
-      rings.push(groundRingPoints(e.x, e.z, reach))
+      rings.push({ pts: groundRingPoints(e.x, e.z, reach) })
     }
     return rings
   })()
@@ -2836,10 +2855,15 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
               <polygon key={`gm-${i}`} points={pts} fill="#6b7280" fillOpacity={0.3} stroke="#6b7280" strokeOpacity={0.6} strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />
             ))}
             {/* Ball-drag interaction proximity: a yellow ground ring around
-                each player the dragged ball would interact with. */}
-            {interactionRings.map((pts, i) => (
-              <polygon key={`ir-${i}`} points={pts} fill="#facc15" fillOpacity={0.15} stroke="#eab308" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
-            ))}
+                each player the dragged ball would interact with; keepers show
+                a red BACK half-disc = the missed-save zone. */}
+            {interactionRings.map((ring, i) =>
+              ring.miss ? (
+                <polygon key={`ir-${i}`} points={ring.pts} fill="#ef4444" fillOpacity={0.15} stroke="#dc2626" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+              ) : (
+                <polygon key={`ir-${i}`} points={ring.pts} fill="#facc15" fillOpacity={0.15} stroke="#eab308" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+              ),
+            )}
             {/* Object-snap alignment guides (red) while dragging a selection: a
                 line through the aligned coordinate plus a small × on each notable
                 point that triggered it. */}

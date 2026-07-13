@@ -620,6 +620,11 @@ const TURN_MIN_RAD = Math.PI / 4 // sharp corner: direction change ≥ 45° (int
 const GAIT_RAMP_S = 0.3 // idle↔locomotion envelope: ramp in from rest / out to rest
 const FACE_BLEND = 0.15 // transition fraction blending authored ↔ path tangent
 
+/** A ball ending BEHIND a keeper within his reach × this factor is a MISSED
+ *  save: the dive plays but the ball passes him (the drag highlight shows
+ *  this zone as the red back half-disc). */
+export const GK_MISS_FACTOR = 1.5
+
 /** How close a ball must land to this player to count as an interaction:
  *  the authored pose's catch reach for goalkeeper CATCH poses, the standard
  *  INTERACT_R for every other player pose (field players, GK deep kicks,
@@ -783,9 +788,21 @@ function detectSaves(aEls: BoardElement[], bEls: BoardElement[], paths: Animatio
       if (!ballA || ballA.type !== 'object3d') continue
       const run = groundRun(ballA, ballB, paths?.[ballB.id], paths?.[ballB.id]?.length ? cam() : null)
       if (run < KICK_MIN_RUN) continue
-      if (Math.hypot(gk.x - ballB.x, gk.z - ballB.z) <= meta.reach) {
+      const dx = ballB.x - gk.x
+      const dz = ballB.z - gk.z
+      const d = Math.hypot(dx, dz)
+      // Which side of the keeper the ball ENDS on: in FRONT (facing half)
+      // within reach = a successful catch; BEHIND within 1.5× reach = a
+      // MISSED save — the keeper attempts the dive but the ball passes him
+      // and continues to its authored spot (specs/animation.md).
+      const front = dx * Math.sin(gk.rotation) + dz * Math.cos(gk.rotation) >= 0
+      if (front && d <= meta.reach) {
         saves.set(gk.id, meta)
         if (!caught.has(ballB.id)) caught.set(ballB.id, { gk, meta })
+        break
+      }
+      if (!front && d <= meta.reach * GK_MISS_FACTOR) {
+        saves.set(gk.id, meta) // the dive plays; the ball is NOT caught
         break
       }
     }
