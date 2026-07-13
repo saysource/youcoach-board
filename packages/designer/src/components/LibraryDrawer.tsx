@@ -604,7 +604,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                               onClick={() => { onCategoryChange(id); setListOpen(false) }}
                               className={cn('flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground', selected && 'font-medium text-foreground')}
                             >
-                              <span className="truncate">{name}</span>
+                              <span className="truncate">{t(name)}</span>
                               {selected && <Check className="size-4 shrink-0 text-primary" />}
                             </button>
                           )

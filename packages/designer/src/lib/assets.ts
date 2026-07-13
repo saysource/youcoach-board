@@ -68,6 +68,10 @@ export interface Catalog {
   defaults: Record<string, Record<string, string>>
   groups: { id: string; name: string; categories: string[] }[]
   categories: Record<string, CatalogCategory>
+  /** Label translations travelling WITH the catalog: language → { English
+   *  label → translation }. Merged into the board's i18next instance on load,
+   *  so host-served catalogs localize their own names/labels. */
+  i18n?: Record<string, Record<string, string>>
 }
 
 /** Fill each `aggregate` category's figures from every other same-kind category

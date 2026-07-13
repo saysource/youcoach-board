@@ -257,8 +257,8 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             <div className="flex rounded-md border border-border p-0.5">
               {(
                 [
-                  ['all', 'Whole animation'],
-                  ['move', 'This move'],
+                  ['all', t('Whole animation')],
+                  ['move', t('This move')],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -270,7 +270,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
                     scope === value && 'bg-primary/20 text-foreground',
                   )}
                 >
-                  {t(label)}
+                  {label}
                 </button>
               ))}
             </div>

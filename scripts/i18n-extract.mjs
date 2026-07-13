@@ -34,16 +34,24 @@ for (const file of walk(SRC)) {
   for (const m of src.matchAll(CALL)) keys.add(m[2].replace(/\\'/g, "'").replace(/\\"/g, '"'))
 }
 
-// 2. Data-driven label sources rendered through t(variable).
-//    catalog.json: group/category names, figure labels, action/facet labels.
+// 2. CATALOG labels are NOT app keys: the catalog carries its own `i18n`
+//    block (language → { label → translation }), merged at load by
+//    AssetsProvider — so host-served catalogs localize themselves. Here we
+//    only VERIFY the bundled catalog's i18n block covers all its labels.
 const catalog = JSON.parse(readFileSync(join(root, 'packages/designer/public/catalog.json'), 'utf8'))
-for (const g of catalog.groups ?? []) if (g.name) keys.add(g.name)
+const catLabels = new Set()
+for (const g of catalog.groups ?? []) if (g.name) catLabels.add(g.name)
 for (const cat of Object.values(catalog.categories ?? {})) {
-  if (cat.name) keys.add(cat.name)
-  for (const a of cat.facets?.action ?? []) if (a.label) keys.add(a.label)
-  for (const f of cat.facets?.facing ?? []) if (f.label) keys.add(f.label)
-  for (const fig of cat.figures ?? []) if (fig.label) keys.add(fig.label)
+  if (cat.name) catLabels.add(cat.name)
+  for (const a of cat.facets?.action ?? []) if (a.label) catLabels.add(a.label)
+  for (const f of cat.facets?.facing ?? []) if (f.label) catLabels.add(f.label)
+  for (const fig of cat.figures ?? []) if (fig.label) catLabels.add(fig.label)
 }
+const catMissing = []
+for (const [lng, bundle] of Object.entries(catalog.i18n ?? {})) {
+  for (const l of catLabels) if (!(l in bundle)) catMissing.push(`${lng}: ${l}`)
+}
+if (!Object.keys(catalog.i18n ?? {}).length) catMissing.push('catalog has no i18n block')
 //    label/name/title fields of in-code data tables (tool lists, hotkey
 //    tables, zone/layout names …) — rendered through t(item.label) etc.
 //    Filtered to English-looking labels (leading capital, no ALL_CAPS ids).
@@ -69,7 +77,8 @@ const stale = Object.keys(it).filter((k) => !keys.has(k))
 const check = process.argv.includes('--check')
 if (!check) writeFileSync(enPath, JSON.stringify(en, null, 1) + '\n')
 
-console.log(`${sorted.length} keys (${check ? 'check only' : 'en.json rewritten'})`)
+console.log(`${sorted.length} app keys (${check ? 'check only' : 'en.json rewritten'}); catalog i18n: ${catLabels.size} labels`)
 if (missing.length) console.log(`it.json MISSING ${missing.length}:\n  ` + missing.join('\n  '))
 if (stale.length) console.log(`it.json STALE ${stale.length}:\n  ` + stale.join('\n  '))
-if (check && (missing.length || stale.length || JSON.stringify(en) !== JSON.stringify(JSON.parse(readFileSync(enPath, 'utf8'))))) process.exit(1)
+if (catMissing.length) console.log(`catalog i18n MISSING ${catMissing.length}:\n  ` + catMissing.join('\n  '))
+if (check && (missing.length || stale.length || catMissing.length || JSON.stringify(en) !== JSON.stringify(JSON.parse(readFileSync(enPath, 'utf8'))))) process.exit(1)
