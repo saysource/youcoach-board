@@ -1113,12 +1113,13 @@ function playerAnimFor(a: Obj3D, b: Obj3D, el: Obj3D, posAt: (q: number) => { x:
       if (rt < GAIT_FADE_S) anim = { ...anim, prev: { clip: gaitClip, time: elapsedS * gait.rate }, fade: rt / GAIT_FADE_S }
     }
   } else if (rules?.prevTurnOf?.has(b.id) && gait.moving) {
-    // …and the turn's EXIT plays into the new leg, then fades to the gait.
+    // …and the turn's EXIT plays into the new leg, then a HARD cut to the
+    // gait: the clip's end pose is ~150° body-turned, so crossfading it at
+    // the NEW facing would visibly sweep the player back through the old
+    // direction before settling.
     const meta = PLAYER_CLIPS.changeDir
-    const dur = clipDuration(meta.clip)
     const ct = (meta.contactTime ?? 0.833) + wall
-    if (ct < dur) anim = { clip: meta.clip, time: ct }
-    else if (ct < dur + GAIT_FADE_S) anim = { ...anim, prev: { clip: meta.clip, time: dur - 1e-3 }, fade: (ct - dur) / GAIT_FADE_S }
+    if (ct < clipDuration(meta.clip)) anim = { clip: meta.clip, time: ct }
   }
   // Blending. A LOCOMOTION segment gets an idle↔motion ENVELOPE: starting
   // from rest ramps the gait in against idle, and coming to rest next turn
