@@ -1269,7 +1269,7 @@ function applyObject3DMove(
   if (caught) b = { ...b, ...handPoint(caught.gk, caught.meta.hand) }
   // A ball caught LAST turn starts from the keeper's hands (whether held —
   // gliding down to its authored spot — or distributed onward).
-  const handoff = isObject3DBall(b.objectId) && !caught ? rules?.prevCaughtBy?.get(b.id) : undefined
+  const handoff = isObject3DBall(b.objectId) ? rules?.prevCaughtBy?.get(b.id) : undefined
   if (handoff) a = { ...a, ...handPoint(handoff.gk, handoff.meta.hand) }
   // A THROWN ball starts at the thrower's overhead release point, oriented
   // toward the target (the thrower faces it for the whole throw).
@@ -1338,7 +1338,11 @@ function applyObject3DMove(
   // straight line, a lofted one morphs its parabola into the catch height);
   // a ball caught LAST turn descends from the hands as it's put down/played.
   if (caught) {
-    el = { ...el, elevation: (el.elevation ?? 0) * (1 - te) + caught.meta.hand[1] * gkScale(caught.gk) * te }
+    // If the ball ALSO leaves from an in-air point (a header chain, a ball
+    // held by the keeper), fly the DIRECT line between the two air points
+    // instead of dipping to the ground and climbing back.
+    const hStart = handoff ? handoff.meta.hand[1] * gkScale(handoff.gk) : 0
+    el = { ...el, elevation: ((el.elevation ?? 0) + hStart) * (1 - te) + caught.meta.hand[1] * gkScale(caught.gk) * te }
   } else if (handoff) {
     el = { ...el, elevation: Math.max(el.elevation ?? 0, handoff.meta.hand[1] * gkScale(handoff.gk) * (1 - te)) }
   } else if (thrown) {
