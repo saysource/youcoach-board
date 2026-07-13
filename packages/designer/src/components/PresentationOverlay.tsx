@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Slider } from './ui/slider'
 import { cn } from '../lib/cn'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
-import { startPlayback, stopPlayback, isPlaying } from '../lib/animation-playback'
+import { startPlayback, stopPlayback, pausePlayback, resumePlayback, isPlaying, isPaused } from '../lib/animation-playback'
 
 // The bar auto-hides after this long with no pointer/keyboard activity; the laser
 // trail fades each stroke to nothing over the same window.
@@ -22,7 +22,8 @@ const isTypingTarget = (t: EventTarget | null): boolean => {
 // events (so the board underneath isn't edited); the controls bar sits above it.
 function LaserTrail() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const points = useRef<{ x: number; y: number; t: number }[]>([])
+  const points = useRef<{ x: number; y: number; t: number; brk?: boolean }[]>([])
+  const drawing = useRef(false)
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
@@ -47,6 +48,7 @@ function LaserTrail() {
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1]
         const b = pts[i]
+        if (b.brk) continue // start of a new stroke — don't connect it to the last one
         const op = Math.max(0, 1 - (now - b.t) / FADE_MS)
         if (op <= 0) continue
         ctx.strokeStyle = `rgba(255,90,90,${op * 0.35})` // soft glow
@@ -76,16 +78,25 @@ function LaserTrail() {
       window.removeEventListener('resize', resize)
     }
   }, [])
-  const add = (e: React.PointerEvent) => points.current.push({ x: e.clientX, y: e.clientY, t: performance.now() })
+  // Draw only while dragging (pointer held): press starts a fresh stroke (`brk`),
+  // move extends it, release ends it.
+  const end = () => {
+    drawing.current = false
+  }
   return (
     <div
       className="fixed inset-0 z-40 cursor-crosshair"
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
         ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
-        add(e)
+        drawing.current = true
+        points.current.push({ x: e.clientX, y: e.clientY, t: performance.now(), brk: true })
       }}
-      onPointerMove={add}
+      onPointerMove={(e) => {
+        if (drawing.current) points.current.push({ x: e.clientX, y: e.clientY, t: performance.now() })
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
     >
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
     </div>
@@ -151,7 +162,14 @@ export function PresentationOverlay({ onExit }: { onExit: () => void }) {
     }
   }, [])
 
-  const togglePlay = () => (isPlaying(storeApi) ? stopPlayback(storeApi) : startPlayback(storeApi))
+  const togglePlay = () => {
+    if (isPaused(storeApi)) resumePlayback(storeApi) // resume from the frozen frame
+    else if (isPlaying(storeApi)) pausePlayback(storeApi) // freeze in place
+    else startPlayback(storeApi)
+  }
+
+  // Leaving presentation stops any running/paused playback (resets to a clean frame).
+  useEffect(() => () => stopPlayback(storeApi), [storeApi])
 
   // Space bar = play/pause.
   useEffect(() => {

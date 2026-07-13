@@ -328,7 +328,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {}, animMode = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void; animMode?: boolean }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {}, animMode = false, presenting = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void; animMode?: boolean; presenting?: boolean }) {
   const doc = useEditorStore((s) => s.doc)
   const playing = useEditorStore((s) => s.playing)
   const currentFrame = useEditorStore((s) => s.currentFrame)
@@ -2435,7 +2435,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // Onion view + movement paths: animation editing on frame ≥ 2, outside the
   // special camera modes and playback (specs/animation.md Phase 2).
   const onionActive =
-    animMode && !playing && !backgroundMode && !homographyMode && !cameraMode && !zoneMode && !navigating &&
+    animMode && !playing && !presenting && !backgroundMode && !homographyMode && !cameraMode && !zoneMode && !navigating &&
     currentFrame > 0 && currentFrame < doc.animation.frames.length
   const liveIds = new Set(doc.elements.map((e) => e.id))
   const onionElements = onionActive

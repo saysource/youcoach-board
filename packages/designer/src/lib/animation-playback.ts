@@ -1415,6 +1415,12 @@ interface Playback {
   preElements: BoardElement[]
   preCamera: FieldView | null
   stopped: boolean
+  // Pause holds the loop in place (frozen on the exact interpolated frame) without
+  // resetting; `pausedAccum` is total paused wall-time, subtracted from the clock so
+  // the timeline resumes seamlessly.
+  paused: boolean
+  pauseStart: number
+  pausedAccum: number
 }
 
 const players = new WeakMap<EditorStore, Playback>()
@@ -1442,9 +1448,34 @@ function applyPlaybackState(store: EditorStore, from: FieldView | null, elements
   store.setState({ playhead, doc: { ...doc, elements: els, background: { ...doc.background, field3d: pose ?? doc.background.field3d } } })
 }
 
-/** Whether playback is running for this store. */
+/** Whether a playback session is active (running OR paused). */
 export function isPlaying(store: EditorStore): boolean {
   return players.has(store)
+}
+
+/** Whether playback is paused (frozen on the current frame, resumable). */
+export function isPaused(store: EditorStore): boolean {
+  const pb = players.get(store)
+  return !!pb && pb.paused
+}
+
+/** Pause in place: the exact interpolated frame stays on screen (unlike
+ *  stopPlayback, which resets to the pre-play frame). Resume with resumePlayback. */
+export function pausePlayback(store: EditorStore): void {
+  const pb = players.get(store)
+  if (!pb || pb.paused) return
+  pb.paused = true
+  pb.pauseStart = performance.now()
+  store.setState({ playing: false })
+}
+
+/** Resume from a pause, continuing the timeline from where it froze. */
+export function resumePlayback(store: EditorStore): void {
+  const pb = players.get(store)
+  if (!pb || !pb.paused) return
+  pb.pausedAccum += performance.now() - pb.pauseStart
+  pb.paused = false
+  store.setState({ playing: true })
 }
 
 /** Start looping playback (no-op with fewer than 2 frames). */
@@ -1459,7 +1490,7 @@ export function startPlayback(store: EditorStore): void {
   // Sync the edited frame one last time, then snapshot the pre-play state.
   s.setCurrentFrame(s.currentFrame)
   const doc0 = store.getState().doc
-  const pb: Playback = { raf: 0, preElements: doc0.elements, preCamera: doc0.background.field3d, stopped: false }
+  const pb: Playback = { raf: 0, preElements: doc0.elements, preCamera: doc0.background.field3d, stopped: false, paused: false, pauseStart: 0, pausedAccum: 0 }
   players.set(store, pb)
   store.setState({ playing: true, playhead: 0 })
   // Warm the skinned-players asset (async 4 MB parse) as soon as a play with
@@ -1489,8 +1520,15 @@ export function startPlayback(store: EditorStore): void {
   // (the players' clip clock; resets on wrap).
   let curD = TRANSITION_MS / 1000
   let elapsedBase = 0
-  const step = (now: number) => {
+  const step = (raw: number) => {
     if (players.get(store) !== pb || pb.stopped) return
+    // Paused: hold the loop (the last frame stays on screen) and don't advance.
+    if (pb.paused) {
+      pb.raf = requestAnimationFrame(step)
+      return
+    }
+    // Subtract time spent paused so the animation clock resumes where it left off.
+    const now = raw - pb.pausedAccum
     const fr = store.getState().doc.animation.frames
     if (fr.length < 2) {
       stopPlayback(store)
