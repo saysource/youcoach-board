@@ -998,17 +998,30 @@ export function tokenPuckThumb(style: Omit<TokenFaceStyle, 'text' | 'textScale'>
   const c = document.createElement('canvas')
   c.width = c.height = S
   const g = c.getContext('2d')!
-  const r = S / 2 - 3
+  const r = S * 0.36 // a little air around the puck (the cell isn't wall-to-wall)
+  const cx = S / 2
+  const cy = S / 2 - S * 0.03 // shifted up a touch to make room for the shadow
+  // Soft contact shadow under the puck.
+  g.save()
+  g.translate(cx, cy + r * 0.92)
+  g.scale(1, 0.32)
+  g.beginPath()
+  g.arc(0, 0, r * 0.9, 0, Math.PI * 2)
+  g.filter = 'blur(4px)'
+  g.fillStyle = 'rgba(0, 0, 0, 0.35)'
+  g.fill()
+  g.restore()
+  g.filter = 'none'
   g.save()
   g.beginPath()
-  g.arc(S / 2, S / 2, r, 0, Math.PI * 2)
+  g.arc(cx, cy, r, 0, Math.PI * 2)
   g.clip()
-  g.drawImage(facec, S / 2 - r, S / 2 - r, r * 2, r * 2)
+  g.drawImage(facec, cx - r, cy - r, r * 2, r * 2)
   g.restore()
   // The pucks' ink silhouette.
   g.beginPath()
-  g.arc(S / 2, S / 2, r, 0, Math.PI * 2)
-  g.lineWidth = 3.5
+  g.arc(cx, cy, r, 0, Math.PI * 2)
+  g.lineWidth = 3
   g.strokeStyle = 'rgba(17, 17, 17, 0.9)'
   g.stroke()
   const url = c.toDataURL('image/png')
