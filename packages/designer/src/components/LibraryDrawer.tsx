@@ -10,7 +10,7 @@ import { useAssets, buildFigureElement, buildObject3DElement, figureIndex, figur
 import { boardTokenStyles, clientToBoard, makeToken, nextTokenText, TOKEN_SIZE, tokenLookKey } from '../lib/draw'
 import { pinNewToken } from '../lib/field-anchor'
 import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
-import { isObject3DPlayer, PLAYER_NEUTRAL_SLOTS, tokenPuckThumb } from '../lib/objects3d'
+import { isObject3DPlayer, onObject3DAssetReady, PLAYER_NEUTRAL_SLOTS, tokenPuckThumb } from '../lib/objects3d'
 import { makeCalibratedCamera } from '../lib/field-camera'
 import { fieldCamera } from '../lib/field-reference'
 import { legacyObjectScale, TOKEN_DEFAULT_SIZE_M } from '../lib/field-anchor'
@@ -81,6 +81,10 @@ interface LibraryDrawerProps {
 // figure centered on the board. Categories come from the catalog (assets).
 export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, orbitActive = false }: LibraryDrawerProps) {
   const { t } = useTranslation()
+  // Re-render when a lazily-decoded asset lands (e.g. the token faces' shading
+  // overlay — the puck thumbnails first draw flat, then glossy).
+  const [, bumpAssets] = useState(0)
+  useEffect(() => onObject3DAssetReady(() => bumpAssets((n) => n + 1)), [])
   const storeApi = useEditorStoreApi()
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)

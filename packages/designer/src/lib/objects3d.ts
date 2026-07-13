@@ -981,49 +981,41 @@ export function buildTokenDisc(style: TokenFaceStyle): THREE.Mesh {
 }
 
 // ── Token puck thumbnails (drawer palette) ───────────────────────────────────
-// Renders the REAL 3D token disc into a small offscreen canvas, once per style
-// (cached as a data URL). One shared 128×128 renderer is reused across thumbs;
-// a render costs ~1–2 ms, so the palette needs no pre-baked PNG assets and can
-// show arbitrary styles (e.g. the looks already used on the board).
-let tokenThumbCtx: { renderer: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; holder: THREE.Group } | null = null
+// The drawer previews token styles with the SAME face art the 3D pucks wear:
+// drawTokenFace already bakes the top-light + dark-rim shading (hard-light
+// overlay), so a plain 2D circle-clip of it + the ink outline reproduces the
+// puck look — no WebGL pass needed. Rendered once per style, cached data URL.
 const tokenThumbCache = new Map<string, string>()
 export function tokenPuckThumb(style: Omit<TokenFaceStyle, 'text' | 'textScale'> & Partial<Pick<TokenFaceStyle, 'text' | 'textScale'>>): string {
   const face: TokenFaceStyle = { text: '1', textScale: 1, ...style }
   const key = tokenFaceKey(face)
   const hit = tokenThumbCache.get(key)
   if (hit) return hit
-  if (!tokenThumbCtx) {
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true })
-    renderer.setSize(128, 128)
-    renderer.setClearColor(0x000000, 0)
-    renderer.outputColorSpace = THREE.SRGBColorSpace
-    const scene = new THREE.Scene()
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x778877, 1.1))
-    const sun = new THREE.DirectionalLight(0xffffff, 2.2)
-    sun.position.set(-2, 4, 2)
-    scene.add(sun)
-    const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 20)
-    const holder = new THREE.Group()
-    scene.add(holder)
-    tokenThumbCtx = { renderer, scene, cam, holder }
-  }
-  const { renderer, scene, cam, holder } = tokenThumbCtx
-  holder.clear()
-  const disc = buildTokenDisc(face)
-  const shadow = disc.getObjectByName('token-contact-shadow')
-  if (shadow) disc.remove(shadow) // clean cutout — no grass contact shadow
-  holder.add(disc)
-  // Frame the disc from a steep three-quarter view (the number reads upright).
-  const box = new THREE.Box3().setFromObject(disc)
-  const c = box.getCenter(new THREE.Vector3())
-  const r = box.getSize(new THREE.Vector3()).length() / 2
-  cam.position.set(c.x, c.y + r * 2.6, c.z + r * 1.15)
-  cam.lookAt(c)
-  renderer.render(scene, cam)
-  const url = renderer.domElement.toDataURL('image/png')
-  tokenThumbCache.set(key, url)
-  holder.clear()
-  ;(disc.material as THREE.Material).dispose()
+  const S = 128
+  const facec = document.createElement('canvas')
+  facec.width = facec.height = 256
+  drawTokenFace(facec, face)
+  const c = document.createElement('canvas')
+  c.width = c.height = S
+  const g = c.getContext('2d')!
+  const r = S / 2 - 3
+  g.save()
+  g.beginPath()
+  g.arc(S / 2, S / 2, r, 0, Math.PI * 2)
+  g.clip()
+  g.drawImage(facec, S / 2 - r, S / 2 - r, r * 2, r * 2)
+  g.restore()
+  // The pucks' ink silhouette.
+  g.beginPath()
+  g.arc(S / 2, S / 2, r, 0, Math.PI * 2)
+  g.lineWidth = 3.5
+  g.strokeStyle = 'rgba(17, 17, 17, 0.9)'
+  g.stroke()
+  const url = c.toDataURL('image/png')
+  // The shading overlay image loads async: until it's in, the face draws FLAT —
+  // serve the flat thumb but don't cache it, and the overlay's onload fires
+  // notifyAssetReady so subscribers (the drawer) re-render with the glossy one.
+  if (tokenOverlayReady) tokenThumbCache.set(key, url)
   return url
 }
 
