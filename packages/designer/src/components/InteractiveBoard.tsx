@@ -696,7 +696,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     editArrow3D(g, pl)
   }
 
-  // ── 3D objects (balls, cubes … the "3D materials" palette) ─────────────────
+  // ── 3D objects (balls, cubes … the "Materials 3D" palette) ─────────────────
   // In-progress edit of one object: drag its body (move on the ground) or its
   // rotate handle (spin about Y). Placement is intrinsic (x/z ground + rotation).
   // `start`/`engaged` add a small drag threshold (resistance) before a move takes;
@@ -3078,7 +3078,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           (one depth buffer with objects/tokens/goals, so occlusion is correct);
           this layer only draws them in the legacy homography/fixed modes. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={fieldCamCfg ? [] : arrow3dLayerElements} selectedIds={selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
-      {/* 3D objects ("3D materials") + tokens + arrows: WebGL overlay (pointer-transparent). */}
+      {/* 3D objects ("Materials 3D") + tokens + arrows: WebGL overlay (pointer-transparent). */}
       <Object3DLayer ref={object3dLayerRef} elements={object3dElements} tokens={token3dList} arrows={fieldCamCfg ? arrow3dLayerElements : []} selectedIds={navigating ? [] : selectedIds} replaceTargetId={dropReplaceId} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} minScale={field3d ? 1 : 0.05} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} />
       {/* 3D-token captions: the WebGL canvas sits above the SVG, so the discs would
           occlude their own labels — re-render them here, above the canvas, anchored

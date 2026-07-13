@@ -196,7 +196,7 @@ export interface FigureDragData {
   colors?: Record<string, string>
   /** Marks the figure as a ball (special-cased later, e.g. animation). */
   ball?: boolean
-  /** Set for a "3D materials" item: the object3d id ('ball' | 'cube'); when
+  /** Set for a "Materials 3D" item: the object3d id ('ball' | 'cube'); when
    *  present the drop creates an `object3d` element on the pitch, not a figure. */
   object3d?: string
 }

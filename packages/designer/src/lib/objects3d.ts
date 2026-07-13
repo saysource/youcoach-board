@@ -1,4 +1,4 @@
-// The "3D materials" registry: real three.js objects placed on the pitch
+// The "Materials 3D" registry: real three.js objects placed on the pitch
 // (Object3DElement). Each builder returns a UNIT-sized mesh centered at the
 // origin (nominal size 1 m); Object3DLayer scales it by the element's `size` and
 // lifts it so it rests on the ground. Toon-shaded to match the goal's look.
