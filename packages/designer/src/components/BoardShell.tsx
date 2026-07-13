@@ -32,6 +32,7 @@ import { AnimationBar } from './AnimationBar'
 import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
 import { GameSystemDialog } from './GameSystemDialog'
+import { PresentationOverlay } from './PresentationOverlay'
 import { PropertiesPanel, MobileBar } from './properties/PropertiesPanel'
 
 // Board area padding (px) and the space reserved on the left for the full
@@ -709,6 +710,8 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           />
             </>
           )}
+
+          {presenting && <PresentationOverlay onExit={() => setPresenting(false)} />}
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
           <GameSystemDialog code={formation} onClose={() => setFormation(null)} />
