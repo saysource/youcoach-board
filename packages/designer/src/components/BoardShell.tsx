@@ -32,6 +32,7 @@ import { NavHints, EditHints } from './NavHints'
 import { AnimationBar } from './AnimationBar'
 import { InteractiveBoard } from './InteractiveBoard'
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog'
+import { ExportVideoDialog } from './ExportVideoDialog'
 import { GameSystemDialog } from './GameSystemDialog'
 import { PresentationOverlay } from './PresentationOverlay'
 import { PropertiesPanel, MobileBar } from './properties/PropertiesPanel'
@@ -60,12 +61,14 @@ export interface BoardShellProps {
   theme?: ThemeSetting
   /** Whether the theme switch is shown. Later driven by embed config. */
   showThemeControl?: boolean
+  /** Host endpoint for server-side MP4 exports; enables "Export video…". */
+  exportUrl?: string
 }
 
 // The editor shell: floating chrome around the interactive board. Document /
 // selection / tool / history live in the editor store; theme, drawer and
 // fullscreen are local view chrome (not part of the drawing).
-export function BoardShell({ initialTheme, theme: controlledTheme, showThemeControl }: BoardShellProps) {
+export function BoardShell({ initialTheme, theme: controlledTheme, showThemeControl, exportUrl }: BoardShellProps) {
   const { t } = useTranslation()
   const { theme, setTheme, isDark } = useTheme(initialTheme, controlledTheme)
   // The drawer is auto-managed by width until the user opens/closes it; then
@@ -78,6 +81,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
   // editing chrome hidden; Esc exits. Enter from the main menu.
   const [presenting, setPresenting] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [exportVideoOpen, setExportVideoOpen] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
   const [formation, setFormation] = useState<string | null>(null)
 
@@ -581,7 +585,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             <>
           {/* Top-left menu (+ the navigation control below it on mobile). */}
           <div className="absolute left-3 top-3 z-30 flex flex-col items-start gap-2">
-            <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} onFieldHomography={fieldHomography} onFieldCamera={startFieldCamera} onFieldZones={startFieldZones} onPresent={() => { store.getState().setSelection([]); setPresenting(true) }} />
+            <MainMenu theme={theme} onThemeChange={setTheme} showThemeControl={showThemeControl} onShowShortcuts={() => setShortcutsOpen(true)} onFieldHomography={fieldHomography} onFieldCamera={startFieldCamera} onFieldZones={startFieldZones} onPresent={() => { store.getState().setSelection([]); setPresenting(true) }} onExportVideo={exportUrl ? () => setExportVideoOpen(true) : undefined} />
             {mobile && <NavBar vertical available={navAvailable || navigating || (bgEditing && !!savedField3d)} navigating={navigating} onToggle={toggleNav} onTopViewH={() => topViewNav('landscape')} onTopViewV={() => topViewNav('portrait')} markers={navMarkers} onToggleMarkers={() => setNavMarkers((v) => !v)} flat={flatNav} zoom={viewZoom} onZoomIn={() => zoomViewport(1)} onZoomOut={() => zoomViewport(-1)} onResetZoom={resetZoom} panning={panning} onTogglePan={() => setPanMode((v) => !v)} editingBg={bgEditing} onZoom3d={zoomFieldButton} pan3d={fieldPanning} onTogglePan3d={() => setFieldPan((v) => !v)} showPan3d={navigating || bgEditing} />}
           </div>
 
@@ -735,6 +739,7 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
           )}
 
           <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+          {exportUrl && <ExportVideoDialog open={exportVideoOpen} onOpenChange={setExportVideoOpen} exportUrl={exportUrl} />}
           <GameSystemDialog code={formation} onClose={() => setFormation(null)} />
         </BoardRootProvider>
       </TooltipPrimitive.Provider>

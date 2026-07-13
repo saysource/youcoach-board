@@ -1074,6 +1074,14 @@ export function object3dGlbReady(objectId: string): boolean {
   return !(objectId in PLAYER_GLBS) || playerGlbCache.has(objectId)
 }
 
+/** Kick the objectId's async GLB chunk load without building a mesh
+ *  (idempotent, no-op for procedural/inline objects). The headless render
+ *  page preloads every model the animation will need before signalling
+ *  readiness, so no frame is captured with a stub. */
+export function preloadObject3D(objectId: string): void {
+  playerGlbData(objectId)
+}
+
 /** The transient placeholder while a model's chunk downloads: invisible,
  *  nothing to dispose. `originAtGround` keeps the layer's ground-resting
  *  math finite on the empty bounding box. */

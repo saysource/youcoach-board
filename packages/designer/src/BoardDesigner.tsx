@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { type BoardDoc } from '@youcoach-board/core'
 import { I18nextProvider } from 'react-i18next'
 import { BoardShell } from './components/BoardShell'
+import { RenderShell } from './components/RenderShell'
 import { EditorStoreProvider } from './store/EditorStoreProvider'
 import { AssetsProvider } from './lib/AssetsProvider'
 import { type AssetsConfig } from './lib/assets'
@@ -35,11 +36,17 @@ export interface BoardDesignerProps {
   assets?: AssetsConfig
   /** Called whenever the document changes (create / delete / undo / redo). */
   onChange?: (doc: BoardDoc) => void
+  /** Headless video-render page: mounts the chrome-less RenderShell (driven by
+   *  the server's puppeteer through window.ycbRender) instead of the editor. */
+  renderMode?: boolean
+  /** Host endpoint for server-side MP4 exports (POST doc → token → poll). The
+   *  "Export video…" menu action appears only when this is set. */
+  exportUrl?: string
 }
 
 // The editor's public entry point: a per-instance editor store wrapping the
 // floating-chrome shell + interactive board.
-export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, language, assets, onChange }: BoardDesignerProps) {
+export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, language, assets, onChange, renderMode, exportUrl }: BoardDesignerProps) {
   // UI language: host prop → URL ?lang → English (see lib/i18n.ts).
   useEffect(() => {
     const lang = resolveLanguage(language)
@@ -63,7 +70,7 @@ export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeContro
     <I18nextProvider i18n={i18n}>
       <AssetsProvider config={assets}>
         <EditorStoreProvider initialDoc={docWithBackground} onChange={onChange}>
-          <BoardShell initialTheme={initialTheme} theme={theme} showThemeControl={showThemeControl} />
+          {renderMode ? <RenderShell /> : <BoardShell initialTheme={initialTheme} theme={theme} showThemeControl={showThemeControl} exportUrl={exportUrl} />}
         </EditorStoreProvider>
       </AssetsProvider>
     </I18nextProvider>

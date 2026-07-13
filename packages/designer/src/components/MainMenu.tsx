@@ -56,9 +56,11 @@ interface MainMenuProps {
   onFieldZones?: () => void
   /** Enter presentation mode (full-page board, chrome hidden; Esc exits). */
   onPresent?: () => void
+  /** Server-side MP4 export (set only when the host provides the endpoint). */
+  onExportVideo?: () => void
 }
 
-export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts, onFieldHomography, onFieldCamera, onFieldZones, onPresent }: MainMenuProps) {
+export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts, onFieldHomography, onFieldCamera, onFieldZones, onPresent, onExportVideo }: MainMenuProps) {
   const { t } = useTranslation()
   const storeApi = useEditorStoreApi()
   const snapToObjects = useEditorStore((s) => s.snapToObjects)
@@ -106,6 +108,13 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
                 <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(960, 720)}><Video /> {t('Video (960×720)')}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(1920, 1080)}><Video /> {t('Video (1920×1080)')}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(1080, 1920)}><Video /> {t('Video (1080×1920)')}</DropdownMenuItem>
+              </>
+            )}
+            {/* Server-rendered MP4 (Drupal-hosted only) — real animations only. */}
+            {hasAnimation && onExportVideo && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => onExportVideo()}><Video /> {t('Export video (MP4)…')}</DropdownMenuItem>
               </>
             )}
           </DropdownMenuSubContent>
