@@ -127,9 +127,9 @@ export const GK_KICK: PlayerClipMeta = { clip: 'Goalkeeper Drop Kick', loop: fal
 export const SCISSOR_KICK: GkCatchMeta = { clip: 'Scissor Kick', loop: false, contactTime: 26 / 30, reach: 1.0, hand: [-0.47, 1.7, 0] }
 
 // HEADER: same trigger and machinery as the scissor — the inbound ball meets
-// the head at frame 20 (user-measured (-0.03, -0.65, 1.4), raw mapping: the
-// clip's hips barely move) exactly ON the frame boundary.
-export const HEADER: GkCatchMeta = { clip: 'Header', loop: false, contactTime: 20 / 30, reach: 1.0, hand: [-0.03, 1.4, 0.65] }
+// the head at frame 18 (user-measured point (-0.03, -0.65, 1.4), raw mapping:
+// the clip's hips barely move) exactly ON the frame boundary.
+export const HEADER: GkCatchMeta = { clip: 'Header', loop: false, contactTime: 18 / 30, reach: 1.0, hand: [-0.03, 1.4, 0.65] }
 // JUMPING HEADER: the ball meets the head at the top of the jump — frame 38,
 // user-measured (0.02, -0.4, 1.75), raw mapping (a pure vertical jump, no
 // ground drift).
