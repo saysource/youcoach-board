@@ -980,6 +980,53 @@ export function buildTokenDisc(style: TokenFaceStyle): THREE.Mesh {
   return mesh
 }
 
+// ── Token puck thumbnails (drawer palette) ───────────────────────────────────
+// Renders the REAL 3D token disc into a small offscreen canvas, once per style
+// (cached as a data URL). One shared 128×128 renderer is reused across thumbs;
+// a render costs ~1–2 ms, so the palette needs no pre-baked PNG assets and can
+// show arbitrary styles (e.g. the looks already used on the board).
+let tokenThumbCtx: { renderer: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; holder: THREE.Group } | null = null
+const tokenThumbCache = new Map<string, string>()
+export function tokenPuckThumb(style: Omit<TokenFaceStyle, 'text' | 'textScale'> & Partial<Pick<TokenFaceStyle, 'text' | 'textScale'>>): string {
+  const face: TokenFaceStyle = { text: '1', textScale: 1, ...style }
+  const key = tokenFaceKey(face)
+  const hit = tokenThumbCache.get(key)
+  if (hit) return hit
+  if (!tokenThumbCtx) {
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true })
+    renderer.setSize(128, 128)
+    renderer.setClearColor(0x000000, 0)
+    renderer.outputColorSpace = THREE.SRGBColorSpace
+    const scene = new THREE.Scene()
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x778877, 1.1))
+    const sun = new THREE.DirectionalLight(0xffffff, 2.2)
+    sun.position.set(-2, 4, 2)
+    scene.add(sun)
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 20)
+    const holder = new THREE.Group()
+    scene.add(holder)
+    tokenThumbCtx = { renderer, scene, cam, holder }
+  }
+  const { renderer, scene, cam, holder } = tokenThumbCtx
+  holder.clear()
+  const disc = buildTokenDisc(face)
+  const shadow = disc.getObjectByName('token-contact-shadow')
+  if (shadow) disc.remove(shadow) // clean cutout — no grass contact shadow
+  holder.add(disc)
+  // Frame the disc from a steep three-quarter view (the number reads upright).
+  const box = new THREE.Box3().setFromObject(disc)
+  const c = box.getCenter(new THREE.Vector3())
+  const r = box.getSize(new THREE.Vector3()).length() / 2
+  cam.position.set(c.x, c.y + r * 2.6, c.z + r * 1.15)
+  cam.lookAt(c)
+  renderer.render(scene, cam)
+  const url = renderer.domElement.toDataURL('image/png')
+  tokenThumbCache.set(key, url)
+  holder.clear()
+  ;(disc.material as THREE.Material).dispose()
+  return url
+}
+
 /** Swap the disc's face texture when the token's style changes (cached looks). */
 export function setTokenDiscFace(mesh: THREE.Mesh, style: TokenFaceStyle): void {
   const key = tokenFaceKey(style)

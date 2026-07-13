@@ -1,16 +1,16 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Sparkles, Maximize, Minimize, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, Camera, type LucideIcon } from 'lucide-react'
-import { BOARD_WIDTH, BOARD_HEIGHT, ElementView } from '@youcoach-board/core'
+import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '../lib/cn'
 import { useAssets, buildFigureElement, buildObject3DElement, figureIndex, figureBaseSize, type CatalogCategory, type CatalogFigure, type FigureDragData, type FieldDragData } from '../lib/assets'
-import { clientToBoard, makeToken, nextTokenText, TOKEN_SIZE } from '../lib/draw'
+import { boardTokenStyles, clientToBoard, makeToken, nextTokenText, TOKEN_SIZE, tokenLookKey } from '../lib/draw'
 import { pinNewToken } from '../lib/field-anchor'
 import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
-import { isObject3DPlayer, PLAYER_NEUTRAL_SLOTS } from '../lib/objects3d'
+import { isObject3DPlayer, PLAYER_NEUTRAL_SLOTS, tokenPuckThumb } from '../lib/objects3d'
 import { makeCalibratedCamera } from '../lib/field-camera'
 import { fieldCamera } from '../lib/field-reference'
 import { legacyObjectScale, TOKEN_DEFAULT_SIZE_M } from '../lib/field-anchor'
@@ -183,6 +183,16 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
   const actions = cat?.facets?.action ?? null
   const facings = cat?.facets?.facing ? [...cat.facets.facing].sort((a, b) => FACING_ORDER.indexOf(a.id) - FACING_ORDER.indexOf(b.id)) : null
   const inFacing = (f: CatalogFigure) => !facings || !facing || (f.facing ?? null) === facing
+  // The Tokens palette also offers the token LOOKS already used on the board
+  // (like the properties panel's copy-style buttons), after the built-ins and
+  // deduped against them.
+  const boardTokenFigures: CatalogFigure[] = (() => {
+    if (catId !== 'tokens' || !cat) return []
+    const builtin = new Set(cat.figures.map((f) => f.token && tokenLookKey({ shape: 'token', ...f.token })))
+    return boardTokenStyles(elements)
+      .filter((st) => st.shape === 'token' && !builtin.has(tokenLookKey(st)))
+      .map((st) => ({ label: 'From the board', thumb: '', w: 64, h: 64, token: { tokenFill: st.tokenFill, color1: st.color1, color2: st.color2, textColor: st.textColor } }))
+  })()
   const sections = isLegacyCat
     ? // Legacy Backgrounds: every catalog field category as a titled section of
       // one merged panel (catalog order). 'fields_all' is skipped — it just
@@ -195,7 +205,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
       ? actions
           .map((a) => ({ id: a.id, label: a.label, separatorBefore: a.separatorBefore, figures: (cat?.figures ?? []).filter((f) => inFacing(f) && (f.actions ?? []).includes(a.id)) }))
           .filter((sec) => sec.figures.length)
-      : [{ id: 'all', label: '', separatorBefore: false, figures: (cat?.figures ?? []).filter(inFacing) }]
+      : [{ id: 'all', label: '', separatorBefore: false, figures: [...(cat?.figures ?? []).filter(inFacing), ...boardTokenFigures] }]
   // The "Jump to…" dropdown items: the category's action facets, the legacy
   // panel's field-category sections, or a Fields zone grid's view categories.
   const zoneJump = fields3dCat ? categoriesForField(fields3dCat.type).map((c) => ({ id: `zcat-${c.id}`, label: c.label, separatorBefore: false })) : null
@@ -780,15 +790,11 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
   )
 }
 
-/** Drawer preview of a token TEMPLATE: the real token rendering (ElementView)
- *  at thumbnail size, so the drawer shows exactly what a drop creates. */
+/** Drawer preview of a token TEMPLATE: the REAL 3D puck, rendered once per
+ *  style into a cached data-URL (see tokenPuckThumb — ~1–2 ms a style, no
+ *  pre-baked images). */
 function TokenThumb({ token }: { token: NonNullable<CatalogFigure['token']> }) {
-  const el = makeToken('token-thumb', 32, 32, { shape: 'token', showLabel: false, ...token }, '1', 46)
-  return (
-    <svg viewBox="0 0 64 64" className="max-h-full max-w-full">
-      <ElementView element={el} />
-    </svg>
-  )
+  return <img src={tokenPuckThumb(token)} alt="" draggable={false} className="max-h-full max-w-full object-contain" />
 }
 
 function HeaderButton({

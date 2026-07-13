@@ -60,6 +60,7 @@ import { ClosePathIcon, LineStylePlainIcon, LineStyleCurvedIcon, LineStyleZigzag
 import { PropertyControls, Segmented } from './PropertyControls'
 import { ColorPickerWidget } from './ColorPickerWidget'
 import { usePropertyEditing, type TokenVisualStyle } from './usePropertyEditing'
+import { boardTokenStyles, tokenLookKey } from '../../lib/draw'
 import { EffectsButton } from './EffectsButton'
 import { PlayerSettingsButton } from './PlayerSettings'
 import { SubjectHeader } from './SubjectHeader'
@@ -653,24 +654,7 @@ function TokenPreview({ shape, fill, color1, color2, textColor, text = '00', siz
   )
 }
 
-const tokenStyleKey = (s: TokenVisualStyle) => `${s.shape}|${s.tokenFill}|${s.color1}|${s.color2}|${s.textColor}`
-
-// The distinct token "looks" (shape + fill + colors, ignoring text/label) present
-// on the board, in z-order, capped at 4 — the teams the copy-style buttons offer.
-function boardTokenStyles(elements: readonly BoardElement[]): TokenVisualStyle[] {
-  const seen = new Set<string>()
-  const out: TokenVisualStyle[] = []
-  for (const e of elements) {
-    if (e.type !== 'token') continue
-    const style: TokenVisualStyle = { shape: e.shape, tokenFill: e.tokenFill, color1: e.color1, color2: e.color2, textColor: e.textColor }
-    const key = tokenStyleKey(style)
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(style)
-    if (out.length === 4) break
-  }
-  return out
-}
+const tokenStyleKey = tokenLookKey
 
 // One copy-style button: a text-less preview of a board token's look; clicking it
 // restyles the selected token(s) to match (a one-click "paste style"). When the

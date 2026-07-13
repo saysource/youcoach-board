@@ -275,6 +275,34 @@ export interface TokenDefaults extends TokenStyle {
 }
 export const DEFAULT_TOKEN_DEFAULTS: TokenDefaults = { ...DEFAULT_TOKEN_STYLE, text: '1', label: '' }
 
+/** A token's visual identity (shape + fill + colors, ignoring text/label). */
+export interface TokenLook {
+  shape: TokenShape
+  tokenFill: TokenFill
+  color1: string
+  color2: string
+  textColor: string
+}
+export const tokenLookKey = (s: TokenLook): string => `${s.shape}|${s.tokenFill}|${s.color1}|${s.color2}|${s.textColor}`
+
+/** The distinct token looks present on the board, in z-order, capped at 4 —
+ *  offered by the properties panel's copy-style buttons AND the drawer's
+ *  Tokens palette. */
+export function boardTokenStyles(elements: readonly BoardElement[]): TokenLook[] {
+  const seen = new Set<string>()
+  const out: TokenLook[] = []
+  for (const e of elements) {
+    if (e.type !== 'token') continue
+    const style: TokenLook = { shape: e.shape, tokenFill: e.tokenFill, color1: e.color1, color2: e.color2, textColor: e.textColor }
+    const key = tokenLookKey(style)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(style)
+    if (out.length === 4) break
+  }
+  return out
+}
+
 /** Build a token of edge `size` centered at (cx, cy) with the given style + label. */
 export function makeToken(id: string, cx: number, cy: number, style: TokenStyle = DEFAULT_TOKEN_STYLE, text = '1', size = TOKEN_SIZE): BoardElement {
   return {
