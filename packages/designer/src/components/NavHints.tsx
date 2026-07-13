@@ -1,4 +1,5 @@
 import { MouseLeft, Mouse, ArrowBigUp } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 // A small keycap for the edit-mode hints.
 function Kbd({ children }: { children: string }) {
@@ -9,15 +10,16 @@ function Kbd({ children }: { children: string }) {
 // Space toggles orbit navigation, ⌥ + wheel zooms toward the cursor, and — with
 // nothing selected — the arrow keys orbit (⇧ pans). Compact so it fits the board.
 export function EditHints() {
+  const { t } = useTranslation()
   return (
     <div className="pointer-events-none flex items-center gap-2 text-[11px] text-muted-foreground [&_svg]:size-3.5 [&_svg]:text-foreground/70">
-      <span className="flex items-center gap-1"><Kbd>Space</Kbd> rotate 3D</span>
+      <span className="flex items-center gap-1"><Kbd>Space</Kbd> {t('rotate 3D')}</span>
       <span className="text-border">·</span>
-      <span className="flex items-center gap-1"><Kbd>⌥</Kbd>+<Mouse /> zoom</span>
+      <span className="flex items-center gap-1"><Kbd>⌥</Kbd>+<Mouse /> {t('zoom')}</span>
       <span className="text-border">·</span>
-      <span className="flex items-center gap-1"><Kbd>↑↓←→</Kbd> orbit</span>
+      <span className="flex items-center gap-1"><Kbd>↑↓←→</Kbd> {t('orbit')}</span>
       <span className="text-border">·</span>
-      <span className="flex items-center gap-1"><Kbd>⇧</Kbd>+<Kbd>↑↓←→</Kbd> pan</span>
+      <span className="flex items-center gap-1"><Kbd>⇧</Kbd>+<Kbd>↑↓←→</Kbd> {t('pan')}</span>
     </div>
   )
 }
@@ -26,13 +28,14 @@ export function EditHints() {
 // only — touch gestures come later). Blender-style content, Excalidraw-style look:
 // left-mouse drag = rotate, wheel = zoom, Shift + left-mouse drag = pan.
 export function NavHints() {
+  const { t } = useTranslation()
   return (
     <div className="pointer-events-none flex items-center gap-3 px-3 py-1.5 text-[11px] text-muted-foreground [&_svg]:size-4 [&_svg]:text-foreground/80">
-      <span className="flex items-center gap-1"><MouseLeft /> rotate</span>
+      <span className="flex items-center gap-1"><MouseLeft /> {t('rotate')}</span>
       <span className="text-border">·</span>
-      <span className="flex items-center gap-1"><Mouse /> zoom</span>
+      <span className="flex items-center gap-1"><Mouse /> {t('zoom')}</span>
       <span className="text-border">·</span>
-      <span className="flex items-center gap-1"><ArrowBigUp />+<MouseLeft /> pan</span>
+      <span className="flex items-center gap-1"><ArrowBigUp />+<MouseLeft /> {t('pan')}</span>
     </div>
   )
 }

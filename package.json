@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "YouCoach Board — embeddable, backend-free React tactics/drill designer (workspace skeleton).",
+  "description": "YouCoach Board \u2014 embeddable, backend-free React tactics/drill designer (workspace skeleton).",
   "workspaces": [
     "packages/*"
   ],
@@ -12,9 +12,11 @@
     "dev": "yarn workspace @youcoach-board/designer dev",
     "dev:trace": "node scripts/dev-trace.mjs",
     "glb": "node scripts/bundle-glbs.mjs",
+    "deploy:drupal": "node scripts/deploy-drupal.mjs",
     "typecheck": "tsc --build --verbose",
     "lint": "eslint .",
-    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo"
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo",
+    "i18n": "node scripts/i18n-extract.mjs --check"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

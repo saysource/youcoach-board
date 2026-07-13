@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { isLegacyBackground, type LogoPosition, type FieldBands } from '@youcoach-board/core'
 import { useEditorStore } from '../../store/context'
 import { cn } from '../../lib/cn'
@@ -91,6 +92,7 @@ export function SurfaceColorPicker() {
 // the shared token size, and the 3D-tokens toggle. (Token size + 3D tokens are also
 // in the token settings' global section — same store state.)
 export function ObjectTokenSettings() {
+  const { t } = useTranslation()
   const bg = useEditorStore((s) => s.doc.background)
   const setBackground = useEditorStore((s) => s.setBackground)
   const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
@@ -100,8 +102,8 @@ export function ObjectTokenSettings() {
     <div className="grid gap-3">
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground">Object size</span>
-          <span className="text-[11px] tabular-nums text-muted-foreground">{bg.objectScale}× {bg.objectScale === 1 ? '(real)' : ''}</span>
+          <span className="text-[11px] font-medium text-muted-foreground">{t('Object size')}</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{bg.objectScale}× {bg.objectScale === 1 ? t('(real)') : ''}</span>
         </div>
         {/* Stepped 1×–8×: models (and players) are real-size — this scales them up for a top-down board. */}
         <Slider min={1} max={8} step={1} value={[bg.objectScale]} onValueChange={([v]) => { arm(); setBackground({ objectScale: v }) }} />
@@ -109,7 +111,7 @@ export function ObjectTokenSettings() {
 
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground">Token size</span>
+          <span className="text-[11px] font-medium text-muted-foreground">{t('Token size')}</span>
           <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round(tokenSizeM)} m</span>
         </div>
         {/* Global token diameter (2–10 m), shared with every token on the board. */}
@@ -117,7 +119,7 @@ export function ObjectTokenSettings() {
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-muted-foreground">3D tokens</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('3D tokens')}</span>
         <Switch checked={bg.tokens3d} onCheckedChange={(v) => setBackground({ tokens3d: v })} />
       </div>
     </div>
@@ -127,6 +129,7 @@ export function ObjectTokenSettings() {
 // Background settings — field/pitch appearance. Object + token sizing live in their
 // own (cube) popover; the surface colour is its own toolbar button.
 export function BackgroundSettings() {
+  const { t } = useTranslation()
   const bg = useEditorStore((s) => s.doc.background)
   const setBackground = useEditorStore((s) => s.setBackground)
   const arm = useDragTransaction()
@@ -139,21 +142,21 @@ export function BackgroundSettings() {
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-muted-foreground">Goals</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('Goals')}</span>
         <Switch checked={bg.showGoals} onCheckedChange={(v) => setBackground({ showGoals: v })} />
       </div>
 
       <div className={cn('flex items-center justify-between', dim(legacy))}>
-        <span className="text-[11px] font-medium text-muted-foreground">Field lines</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('Field lines')}</span>
         <Switch disabled={legacy} checked={bg.showLines} onCheckedChange={(v) => setBackground({ showLines: v })} />
       </div>
 
       <div className={cn('flex items-center justify-between', dim(legacy))}>
-        <span className="text-[11px] font-medium text-muted-foreground">Line color</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('Line color')}</span>
         {/* Field markings colour (not the mowing bands); default white. */}
         <Popover>
           <PopoverTrigger asChild>
-            <button type="button" aria-label="Line color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+            <button type="button" aria-label={t('Line color')} className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
               <span className="block size-full" style={{ background: bg.lineColor }} />
             </button>
           </PopoverTrigger>
@@ -173,10 +176,10 @@ export function BackgroundSettings() {
       {futsal && (
         <>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Court</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t('Court')}</span>
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" aria-label="Court color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+                <button type="button" aria-label={t('Court color')} className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
                   <span className="block size-full" style={{ background: bg.courtColor }} />
                 </button>
               </PopoverTrigger>
@@ -191,10 +194,10 @@ export function BackgroundSettings() {
             </Popover>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Border</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t('Border')}</span>
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" aria-label="Border color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+                <button type="button" aria-label={t('Border color')} className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
                   <span className="block size-full" style={{ background: bg.borderColor }} />
                 </button>
               </PopoverTrigger>
@@ -209,10 +212,10 @@ export function BackgroundSettings() {
             </Popover>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Areas</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t('Areas')}</span>
             <Popover>
               <PopoverTrigger asChild>
-                <button type="button" aria-label="Areas color" className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
+                <button type="button" aria-label={t('Areas color')} className="size-7 shrink-0 overflow-hidden rounded-md border border-border p-0">
                   <span className="block size-full" style={{ background: bg.areasColor }} />
                 </button>
               </PopoverTrigger>
@@ -231,20 +234,20 @@ export function BackgroundSettings() {
 
       <div className={cn('grid gap-1.5', dim(legacy || futsal))}>
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground">Mowing opacity</span>
+          <span className="text-[11px] font-medium text-muted-foreground">{t('Mowing opacity')}</span>
           <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round(bg.bandsOpacity * 100)}%</span>
         </div>
         <Slider disabled={legacy || futsal} min={0} max={100} step={5} value={[Math.round(bg.bandsOpacity * 100)]} onValueChange={([v]) => { arm(); setBackground({ bandsOpacity: v / 100 }) }} />
       </div>
 
       <div className={cn('grid gap-1.5', dim(legacy || futsal))}>
-        <span className="text-[11px] font-medium text-muted-foreground">Mowing</span>
-        <Segmented items={BANDS_OPTIONS} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
+        <span className="text-[11px] font-medium text-muted-foreground">{t('Mowing')}</span>
+        <Segmented items={BANDS_OPTIONS.map((o) => ({ ...o, label: t(o.label) }))} value={bg.bands} onChange={(v) => setBackground({ bands: v })} />
       </div>
 
       <div className={cn('grid gap-1.5', dim(legacy))}>
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground">Central light</span>
+          <span className="text-[11px] font-medium text-muted-foreground">{t('Central light')}</span>
           <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round((bg.centerLight ?? 1) * 100)}%</span>
         </div>
         {/* Central point-light intensity: 0 … 125 % of the default (1 = default). */}
@@ -252,10 +255,10 @@ export function BackgroundSettings() {
       </div>
 
       <div className="grid gap-1.5">
-        <span className="text-[11px] font-medium text-muted-foreground">Logo</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('Logo')}</span>
         {/* Segmented like Stroke width/style; click the active one again to remove. */}
         <Segmented
-          items={LOGO_OPTIONS}
+          items={LOGO_OPTIONS.map((o) => ({ ...o, label: t(o.label) }))}
           value={bg.logo ?? undefined}
           onChange={(v) => setBackground({ logo: bg.logo === v ? null : v })}
         />

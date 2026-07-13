@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Play, Pause, SkipBack, SkipForward, Gauge, Highlighter, Rotate3d, Move, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
@@ -118,10 +119,11 @@ function LaserTrail() {
 }
 
 function SpeedControl({ speed, onChange, disabled }: { speed: number; onChange: (v: number) => void; disabled: boolean }) {
+  const { t } = useTranslation()
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button size="icon-sm" aria-label="Playback speed" disabled={disabled} className="w-auto gap-1 px-2">
+        <Button size="icon-sm" aria-label={t('Playback speed')} disabled={disabled} className="w-auto gap-1 px-2">
           <Gauge />
           <span className="text-xs tabular-nums">{speed}×</span>
         </Button>
@@ -129,7 +131,7 @@ function SpeedControl({ speed, onChange, disabled }: { speed: number; onChange: 
       <PopoverContent side="top" align="center" className="w-52">
         <div className="grid gap-2">
           <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-            <span>Speed</span>
+            <span>{t('Speed')}</span>
             <span className="tabular-nums text-foreground">{speed}×</span>
           </div>
           <Slider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => onChange(v)} />
@@ -167,6 +169,7 @@ export function PresentationOverlay({
   /** Leave orbit/pan mode (called before playback resumes, or when the laser turns on). */
   onExitNav?: () => void
 }) {
+  const { t } = useTranslation()
   const storeApi = useEditorStoreApi()
   const playing = useEditorStore((s) => s.playing)
   const currentFrame = useEditorStore((s) => s.currentFrame)
@@ -234,13 +237,13 @@ export function PresentationOverlay({
       {laser && <LaserTrail />}
       <div className={cn('pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 pb-4 transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}>
         <div className={cn('flex items-center gap-1 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
-          <Button size="icon-sm" aria-label={playing ? 'Pause' : 'Play'} disabled={!hasAnim} onClick={togglePlay} className="hover:bg-primary/25">
+          <Button size="icon-sm" aria-label={playing ? t('Pause') : t('Play')} disabled={!hasAnim} onClick={togglePlay} className="hover:bg-primary/25">
             {playing ? <Pause /> : <Play />}
           </Button>
-          <Button size="icon-sm" aria-label="Previous frame" disabled={!hasAnim || currentFrame <= 0} onClick={() => step(-1)}>
+          <Button size="icon-sm" aria-label={t('Previous frame')} disabled={!hasAnim || currentFrame <= 0} onClick={() => step(-1)}>
             <SkipBack />
           </Button>
-          <Button size="icon-sm" aria-label="Next frame" disabled={!hasAnim || currentFrame >= frameCount - 1} onClick={() => step(1)}>
+          <Button size="icon-sm" aria-label={t('Next frame')} disabled={!hasAnim || currentFrame >= frameCount - 1} onClick={() => step(1)}>
             <SkipForward />
           </Button>
           <SpeedControl speed={speed} onChange={(v) => setAnimationSettings({ speed: v })} disabled={!hasAnim} />
@@ -250,24 +253,24 @@ export function PresentationOverlay({
               {/* Orbit / pan the 3D camera to inspect the scene from another angle.
                   Disabled while playing (the animation drives the camera); available
                   when paused or stopped. */}
-              <Button size="icon-sm" aria-label="Orbit camera" aria-pressed={orbiting} disabled={playing} onClick={() => { setLaser(false); onOrbit?.() }} className={cn('hover:bg-primary/25', orbiting && 'bg-primary/20 text-primary')}>
+              <Button size="icon-sm" aria-label={t('Orbit camera')} aria-pressed={orbiting} disabled={playing} onClick={() => { setLaser(false); onOrbit?.() }} className={cn('hover:bg-primary/25', orbiting && 'bg-primary/20 text-primary')}>
                 <Rotate3d />
               </Button>
-              <Button size="icon-sm" aria-label="Pan camera" aria-pressed={panning} disabled={playing} onClick={() => { setLaser(false); onPan?.() }} className={cn('hover:bg-primary/25', panning && 'bg-primary/20 text-primary')}>
+              <Button size="icon-sm" aria-label={t('Pan camera')} aria-pressed={panning} disabled={playing} onClick={() => { setLaser(false); onPan?.() }} className={cn('hover:bg-primary/25', panning && 'bg-primary/20 text-primary')}>
                 <Move />
               </Button>
             </>
           )}
           <span className="mx-0.5 h-5 w-px bg-border" />
-          <Button size="icon-sm" aria-label="Laser pointer" aria-pressed={laser} onClick={() => setLaser((v) => { const next = !v; if (next) onExitNav(); return next })} className={cn('hover:bg-primary/25', laser && 'bg-red-500/15 text-red-500 hover:bg-red-500/25')}>
+          <Button size="icon-sm" aria-label={t('Laser pointer')} aria-pressed={laser} onClick={() => setLaser((v) => { const next = !v; if (next) onExitNav(); return next })} className={cn('hover:bg-primary/25', laser && 'bg-red-500/15 text-red-500 hover:bg-red-500/25')}>
             <Highlighter />
           </Button>
           <span className="mx-0.5 h-5 w-px bg-border" />
-          <Button size="icon-sm" aria-label="Exit presentation (Esc)" onClick={onExit}>
+          <Button size="icon-sm" aria-label={t('Exit presentation (Esc)')} onClick={onExit}>
             <X />
           </Button>
         </div>
-        {!isTouch && <div className="select-none text-xs text-muted-foreground">Press ESC to exit presentation mode</div>}
+        {!isTouch && <div className="select-none text-xs text-muted-foreground">{t('Press ESC to exit presentation mode')}</div>}
       </div>
     </>
   )

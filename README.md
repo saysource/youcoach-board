@@ -17,6 +17,15 @@ Yarn (classic) workspace of three packages:
 React / React-DOM are **peer** dependencies and are kept **external** in every library
 build, so a host app always supplies the single React instance (never two).
 
+### UI language (i18n)
+
+The designer ships English + Italian catalogs (i18next, embedded JSON — no fetch).
+Pick the language with the `language` prop (`<BoardDesigner language="it" />`) or,
+when the prop is omitted, with the page URL's `?lang=it` parameter; anything
+unsupported falls back to English. Locale forms like `it-IT` resolve to `it`.
+`yarn i18n` checks the catalogs against the sources (`scripts/i18n-extract.mjs`
+regenerates `en.json` and reports missing/stale Italian keys).
+
 ## Commands
 
 ```bash

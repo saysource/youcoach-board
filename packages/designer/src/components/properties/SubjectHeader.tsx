@@ -1,4 +1,5 @@
 import { type ComponentType } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Square, Circle, Diamond, Pentagon, Triangle, Minus, MoveRight, Spline, Shapes, MousePointer2, Pencil, Eraser, Type, Lasso, RulerDimensionLine } from 'lucide-react'
 import { TrapezoidIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from '../icons'
 import type { BoardElement } from '@youcoach-board/core'
@@ -75,11 +76,13 @@ function subjectFor(els: BoardElement[], activeTool: ToolId): Subject {
 // mixed selection, or the active tool when nothing is selected. With a tool
 // selected (no selection) the panel below shows the FUTURE element's style.
 export function SubjectHeader({ compact = false }: { compact?: boolean }) {
+  const { t } = useTranslation()
   const doc = useEditorStore((s) => s.doc)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const activeTool = useEditorStore((s) => s.activeTool)
   const els = doc.elements.filter((e) => selectedIds.includes(e.id))
-  const { icon: Icon, label } = subjectFor(els, activeTool)
+  const { icon: Icon, label: rawLabel } = subjectFor(els, activeTool)
+  const label = t(rawLabel)
 
   if (compact) {
     return (

@@ -21,6 +21,7 @@ import {
   Presentation,
   type LucideIcon,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from './ui/button'
 import {
   DropdownMenu,
@@ -58,6 +59,7 @@ interface MainMenuProps {
 }
 
 export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShowShortcuts, onFieldHomography, onFieldCamera, onFieldZones, onPresent }: MainMenuProps) {
+  const { t } = useTranslation()
   const storeApi = useEditorStoreApi()
   const snapToObjects = useEditorStore((s) => s.snapToObjects)
   const toggleSnapToObjects = useEditorStore((s) => s.toggleSnapToObjects)
@@ -72,26 +74,26 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="outline" aria-label="Menu" className="bg-card shadow-md">
+            <Button size="icon" variant="outline" aria-label={t('Menu')} className="bg-card shadow-md">
               <Menu />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>Menu</TooltipContent>
+        <TooltipContent>{t('Menu')}</TooltipContent>
       </Tooltip>
 
       <DropdownMenuContent align="start" className="min-w-60">
         <DropdownMenuItem onSelect={() => openBoardFromFile(storeApi)}>
-          <FolderOpen /> Open…
+          <FolderOpen /> {t('Open…')}
           <DropdownMenuShortcut>⌘O</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => saveBoardToFile(storeApi.getState().doc)}>
-          <Save /> Save to…
+          <Save /> {t('Save to…')}
           <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <ImageDown /> Export as…
+            <ImageDown /> {t('Export as…')}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuItem onSelect={() => void boardExporter()?.(1440, 1080)}><Image /> 4:3 (1440×1080)</DropdownMenuItem>
@@ -101,9 +103,9 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
             {hasAnimation && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(960, 720)}><Video /> Video (960×720)</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(1920, 1080)}><Video /> Video (1920×1080)</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(1080, 1920)}><Video /> Video (1080×1920)</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(960, 720)}><Video /> {t('Video (960×720)')}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(1920, 1080)}><Video /> {t('Video (1920×1080)')}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void boardVideoExporter()?.(1080, 1920)}><Video /> {t('Video (1080×1920)')}</DropdownMenuItem>
               </>
             )}
           </DropdownMenuSubContent>
@@ -111,29 +113,29 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
 
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => onPresent?.()}>
-          <Presentation /> Presentation mode
+          <Presentation /> {t('Presentation mode')}
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled>
-          <Command /> Command palette
+          <Command /> {t('Command palette')}
           <DropdownMenuShortcut>⌘/</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem disabled>
-          <Search /> Find on canvas
+          <Search /> {t('Find on canvas')}
           <DropdownMenuShortcut>⌘F</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onShowShortcuts?.()}>
-          <CircleHelp /> Keyboard Shortcuts
+          <CircleHelp /> {t('Keyboard Shortcuts')}
           <DropdownMenuShortcut>?</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <SlidersHorizontal /> Preferences
+            <SlidersHorizontal /> {t('Preferences')}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); toggleSnapToObjects() }}>
-              <Magnet /> Snap to objects
+              <Magnet /> {t('Snap to objects')}
               {snapToObjects && <Check className="ml-auto size-4" />}
               <DropdownMenuShortcut>⌥S</DropdownMenuShortcut>
             </DropdownMenuItem>
@@ -141,12 +143,12 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
                 compose an image export. */}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <ImageDown /> Export guide
+                <ImageDown /> {t('Export guide')}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 {(['off', '4:3', '16:9', '9:16'] as const).map((g) => (
                   <DropdownMenuItem key={g} onSelect={(e) => { e.preventDefault(); setExportGuide(g) }}>
-                    {g === 'off' ? 'Off' : g}
+                    {g === 'off' ? t('Off') : g}
                     {exportGuide === g && <Check className="ml-auto size-4" />}
                   </DropdownMenuItem>
                 ))}
@@ -157,7 +159,7 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
 
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => resetCanvas()}>
-          <Trash2 /> Reset the canvas
+          <Trash2 /> {t('Reset the canvas')}
         </DropdownMenuItem>
 
         {/* Admin: authoring-only field tools, hidden from final users. Toggled via
@@ -167,17 +169,17 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
             <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <Wrench /> Admin tools
+                <Wrench /> {t('Admin tools')}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem onSelect={() => onFieldHomography?.()}>
-                  <Grid3x3 /> Field homography
+                  <Grid3x3 /> {t('Field homography')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => onFieldCamera?.()}>
-                  <Video /> Field camera
+                  <Video /> {t('Field camera')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => onFieldZones?.()}>
-                  <MapPin /> Field zones
+                  <MapPin /> {t('Field zones')}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -187,7 +189,7 @@ export function MainMenu({ theme, onThemeChange, showThemeControl = true, onShow
         {showThemeControl && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Theme</DropdownMenuLabel>
+            <DropdownMenuLabel>{t('Theme')}</DropdownMenuLabel>
             <div className="px-1.5 pb-1">
               <ThemeSegmented value={theme} onChange={onThemeChange} />
             </div>
@@ -211,13 +213,14 @@ function ThemeSegmented({
   value: ThemeSetting
   onChange: (theme: ThemeSetting) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex gap-1 rounded-md bg-muted p-0.5">
       {THEME_OPTIONS.map((opt) => (
         <button
           key={opt.value}
           type="button"
-          aria-label={opt.label}
+          aria-label={t(opt.label)}
           aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(

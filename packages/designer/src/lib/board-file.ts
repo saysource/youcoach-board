@@ -6,7 +6,9 @@
 
 import { parseBoard, serializeBoard, type BoardDoc } from '@youcoach-board/core'
 import type { EditorStore } from '../store/editorStore'
+import { t } from './i18n'
 import { stopPlayback } from './animation-playback'
+import { resolveFieldImage } from './field-image'
 import { convertV2Board, isV1Board, isV2Board } from './v2-convert'
 
 /** Load a (raw, already JSON-parsed) document into the editor: stop playback,
@@ -16,6 +18,9 @@ export function loadBoard(store: EditorStore, raw: unknown): void {
   stopPlayback(store)
   const doc = parseBoard(raw)
   doc.animation.current = 0
+  // Repair a background image saved by a different build (e.g. dev's
+  // /src/assets/field0.jpg → this build's hashed default) so it doesn't 404.
+  doc.background.image = resolveFieldImage(doc.background.image)
   store.setState({ doc, selectedIds: [], stack: [], pointer: -1, currentFrame: 0 })
 }
 
@@ -26,7 +31,7 @@ export function applyOpenedBoard(store: EditorStore, text: string): string | nul
   try {
     raw = JSON.parse(text)
   } catch {
-    return 'This file is not a valid YouCoach Board document (invalid JSON).'
+    return t('This file is not a valid YouCoach Board document (invalid JSON).')
   }
   // Old drawings run through the dedicated converter first: v2 declares
   // `version: 2`, v1 has no version at all and is recognized by its structure.
@@ -35,7 +40,7 @@ export function applyOpenedBoard(store: EditorStore, text: string): string | nul
     return null
   }
   const version = (raw as { version?: unknown } | null)?.version
-  if (version === undefined || version === null) return 'This file is not a YouCoach Board document (missing "version").'
+  if (version === undefined || version === null) return t('This file is not a YouCoach Board document (missing "version").')
   loadBoard(store, raw)
   return null
 }

@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { type StrokeStyle, strokeDash } from '@youcoach-board/core'
 import { Slider } from '../ui/slider'
 import { cn } from '../../lib/cn'
@@ -28,6 +29,7 @@ export function Swatches({
   value: string | undefined
   onChange: (c: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center gap-1.5">
       {colors.map((c) => {
@@ -55,7 +57,7 @@ export function Swatches({
       <label
         className="size-6 cursor-pointer overflow-hidden rounded-md border border-border"
         style={{ background: value && !isTransparent(value) ? value : '#ffffff' }}
-        title="Custom color"
+        title={t('Custom color')}
       >
         <input
           type="color"
@@ -151,29 +153,30 @@ function OpacityControl({ value, onChange }: { value: number | undefined; onChan
 // Settings popover. Colors are edited through the dedicated Background/Border
 // color buttons, not here.
 export function PropertyControls() {
+  const { t } = useTranslation()
   const { values, setStrokeWidth, setStrokeStyle, setOpacity, allFigure } = usePropertyEditing()
   return (
     <div className="grid gap-3">
       {/* Figures ignore stroke — only opacity applies to them. */}
       {!allFigure && (
         <>
-          <Field label="Stroke width">
+          <Field label={t('Stroke width')}>
             <Segmented
-              items={STROKE_WIDTHS.map((w) => ({ value: w.value, label: w.label, render: <WidthIcon w={w.value} /> }))}
+              items={STROKE_WIDTHS.map((w) => ({ value: w.value, label: t(w.label), render: <WidthIcon w={w.value} /> }))}
               value={values.strokeWidth}
               onChange={setStrokeWidth}
             />
           </Field>
-          <Field label="Stroke style">
+          <Field label={t('Stroke style')}>
             <Segmented
-              items={STROKE_STYLES.map((s) => ({ value: s.value, label: s.label, render: <StyleIcon style={s.value} /> }))}
+              items={STROKE_STYLES.map((s) => ({ value: s.value, label: t(s.label), render: <StyleIcon style={s.value} /> }))}
               value={values.strokeStyle}
               onChange={setStrokeStyle}
             />
           </Field>
         </>
       )}
-      <Field label="Opacity">
+      <Field label={t('Opacity')}>
         <OpacityControl value={values.opacity} onChange={setOpacity} />
       </Field>
     </div>

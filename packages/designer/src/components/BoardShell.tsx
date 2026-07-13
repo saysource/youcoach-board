@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'motion/react'
 import '../styles/board.css'
 import { Check, Rotate3d, Square } from 'lucide-react'
@@ -65,6 +66,7 @@ export interface BoardShellProps {
 // selection / tool / history live in the editor store; theme, drawer and
 // fullscreen are local view chrome (not part of the drawing).
 export function BoardShell({ initialTheme, theme: controlledTheme, showThemeControl }: BoardShellProps) {
+  const { t } = useTranslation()
   const { theme, setTheme, isDark } = useTheme(initialTheme, controlledTheme)
   // The drawer is auto-managed by width until the user opens/closes it; then
   // `drawerTouched` pins their explicit `drawerUserOpen` choice. The effective
@@ -589,37 +591,37 @@ export function BoardShell({ initialTheme, theme: controlledTheme, showThemeCont
             {playing ? (
               <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={() => stopPlayback(store)} className="font-medium">
-                  <Square /> Stop animation
+                  <Square /> {t('Stop animation')}
                 </Button>
               </div>
             ) : bgEditing ? (
               <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishBackground} className="font-medium">
-                  <Check /> Finish editing background
+                  <Check /> {t('Finish editing background')}
                 </Button>
               </div>
             ) : navigating ? (
               <div key={navBounce} className={cn('pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md', navBounce > 0 && 'ycb-nav-bounce')}>
                 <Button size="sm" onClick={toggleNav} className="font-medium">
-                  <Rotate3d /> Exit navigation mode
+                  <Rotate3d /> {t('Exit navigation mode')}
                 </Button>
               </div>
             ) : homographyEditing ? (
               <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishHomography} className="font-medium">
-                  <Check /> Finish field homography
+                  <Check /> {t('Finish field homography')}
                 </Button>
               </div>
             ) : cameraEditing ? (
               <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishFieldCamera} className="font-medium">
-                  <Check /> Finish field camera
+                  <Check /> {t('Finish field camera')}
                 </Button>
               </div>
             ) : zoneEditing ? (
               <div className="pointer-events-auto select-none rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
                 <Button size="sm" onClick={finishFieldZones} className="font-medium">
-                  <Check /> Finish field zones
+                  <Check /> {t('Finish field zones')}
                 </Button>
               </div>
             ) : (

@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, Keyboard, Sparkles, UnfoldHorizontal } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -94,7 +95,9 @@ const LENGTH_EFFECTS_OUT: EffectDef[] = [
 ]
 
 function EffectGrid({ label, effects, current, onPick, collapsible, open, onToggle }: { label?: string; effects: EffectDef[]; current: string; onPick: (id: string) => void; collapsible?: boolean; open?: boolean; onToggle?: () => void }) {
-  const currentLabel = effects.find((fx) => fx.id === current)?.label ?? current
+  const { t } = useTranslation()
+  const currentEffect = effects.find((fx) => fx.id === current)
+  const currentLabel = currentEffect ? t(currentEffect.label) : current
   return (
     <div>
       {label &&
@@ -124,7 +127,7 @@ function EffectGrid({ label, effects, current, onPick, collapsible, open, onTogg
             <span className="flex h-[75px] w-full items-center justify-center overflow-hidden rounded bg-muted">
               {typeof fx.icon === 'string' ? <img src={fx.icon} alt="" className="size-16" style={fx.style} draggable={false} /> : fx.icon}
             </span>
-            <span className="w-full truncate text-center text-sm leading-tight text-muted-foreground">{fx.label}</span>
+            <span className="w-full truncate text-center text-sm leading-tight text-muted-foreground">{t(fx.label)}</span>
           </button>
         ))}
       </div>
@@ -134,6 +137,7 @@ function EffectGrid({ label, effects, current, onPick, collapsible, open, onTogg
 }
 
 export function EffectsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
+  const { t } = useTranslation()
   const elements = useEditorStore((s) => s.doc.elements)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const updateElements = useEditorStore((s) => s.updateElements)
@@ -218,12 +222,12 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button size={small ? 'icon-sm' : 'icon'} aria-label="Effects" className={cn(translucent && 'border border-border/60 bg-card/75 shadow-sm backdrop-blur-sm')}>
+            <Button size={small ? 'icon-sm' : 'icon'} aria-label={t('Effects')} className={cn(translucent && 'border border-border/60 bg-card/75 shadow-sm backdrop-blur-sm')}>
               <Sparkles />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Enter/exit effects</TooltipContent>
+        <TooltipContent>{t('Enter/exit effects')}</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-72 p-2">
         {/* In / Out (+ Between for tokens) tabs (VA's layout). */}
@@ -243,7 +247,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
                 tab === value && 'border-b-2 border-primary text-foreground',
               )}
             >
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
@@ -266,13 +270,13 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
                     scope === value && 'bg-primary/20 text-foreground',
                   )}
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
             {moveScope && override && (
               <button onClick={() => sel.forEach((e) => setFrameEffects(currentFrame, e.id, null))} className="w-full rounded-md border border-border py-1 text-xs text-muted-foreground hover:bg-primary/10">
-                Use animation settings for this move
+                {t('Use animation settings for this move')}
               </button>
             )}
             {/* Movement effects: independently toggleable, configured inline.
@@ -281,12 +285,12 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             {allMovable && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">Tail</span>
+                  <span className="text-sm font-medium text-foreground">{t('Tail')}</span>
                   <Switch checked={!!fv.effectTail} onCheckedChange={(v) => setField('effectTail', v)} />
                 </div>
                 {!!fv.effectTail && (
                   <div className="grid gap-1.5 pl-1">
-                    <span className="text-[11px] font-medium text-muted-foreground">Tail color</span>
+                    <span className="text-[11px] font-medium text-muted-foreground">{t('Tail color')}</span>
                     <ColorPickerWidget
                       value={(fv.effectTailColor as string) ?? (fv.color1 as string)}
                       onChange={(c) => setField('effectTailColor', c)}
@@ -297,12 +301,12 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
                 )}
                 <Separator />
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">Pulse</span>
+                  <span className="text-sm font-medium text-foreground">{t('Pulse')}</span>
                   <Switch checked={!!fv.effectPulse} onCheckedChange={(v) => setField('effectPulse', v)} />
                 </div>
                 {!!fv.effectPulse && (
                   <div className="grid gap-1.5 pl-1">
-                    <span className="text-[11px] font-medium text-muted-foreground">Pulse color</span>
+                    <span className="text-[11px] font-medium text-muted-foreground">{t('Pulse color')}</span>
                     <ColorPickerWidget
                       value={(fv.effectPulseColor as string) ?? (fv.color1 as string)}
                       onChange={(c) => setField('effectPulseColor', c)}
@@ -317,7 +321,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             {allBalls && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">Parabolic Shot</span>
+                  <span className="text-sm font-medium text-foreground">{t('Parabolic Shot')}</span>
                   <Switch checked={!!fv.effectParabolic} onCheckedChange={(v) => setField('effectParabolic', v)} />
                 </div>
                 <Separator />
@@ -326,7 +330,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             {/* Easy Easing applies to every element; the ball ALSO offers Power
                 Shot as an alternative easing — the two are mutually exclusive. */}
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">Easy Easing</span>
+              <span className="text-sm font-medium text-foreground">{t('Easy Easing')}</span>
               <Switch
                 checked={!!fv.effectEase}
                 onCheckedChange={(v) => {
@@ -337,7 +341,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             </div>
             {allBalls && (
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">Power Shot</span>
+                <span className="text-sm font-medium text-foreground">{t('Power Shot')}</span>
                 <Switch
                   checked={!!fv.effectPower}
                   onCheckedChange={(v) => {
@@ -351,21 +355,21 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
         ) : allClosed ? (
           <div className="max-h-[480px] space-y-1 divide-y divide-border overflow-y-auto">
             {/* Border first (it also offers Path — the outline forming). */}
-            <EffectGrid label="Border" effects={baseEffects.concat([pathTile])} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
-            <EffectGrid label="Fill" effects={baseEffects} current={currentOf('fill')} onPick={(id) => pick(id, 'fill')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
+            <EffectGrid label={t('Border')} effects={baseEffects.concat([pathTile])} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
+            <EffectGrid label={t('Fill')} effects={baseEffects} current={currentOf('fill')} onPick={(id) => pick(id, 'fill')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
           </div>
         ) : allArrows3d ? (
           <div className="max-h-[480px] space-y-1 divide-y divide-border overflow-y-auto">
             {/* Standard effect + the composed ARROW LENGTH category (so the
                 opacity ramp stays opt-in via the standard effect). */}
-            <EffectGrid label="Effect" effects={baseEffects} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
-            <EffectGrid label="Arrow Length" effects={tab === 'in' ? LENGTH_EFFECTS_IN : LENGTH_EFFECTS_OUT} current={currentOf('length')} onPick={(id) => pick(id, 'length')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
+            <EffectGrid label={t('Effect')} effects={baseEffects} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
+            <EffectGrid label={t('Arrow Length')} effects={tab === 'in' ? LENGTH_EFFECTS_IN : LENGTH_EFFECTS_OUT} current={currentOf('length')} onPick={(id) => pick(id, 'length')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
           </div>
         ) : allTexts ? (
           <div className="max-h-[480px] space-y-1 divide-y divide-border overflow-y-auto">
             {/* Standard effect + the composed TEXT effect (its own category). */}
-            <EffectGrid label="Effect" effects={baseEffects} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
-            <EffectGrid label="Text" effects={TEXT_EFFECTS} current={currentOf('text')} onPick={(id) => pick(id, 'text')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
+            <EffectGrid label={t('Effect')} effects={baseEffects} current={currentOf('main')} onPick={(id) => pick(id, 'main')} collapsible open={openSection === 'first'} onToggle={() => setOpenSection((s) => (s === 'first' ? null : 'first'))} />
+            <EffectGrid label={t('Text')} effects={TEXT_EFFECTS} current={currentOf('text')} onPick={(id) => pick(id, 'text')} collapsible open={openSection === 'second'} onToggle={() => setOpenSection((s) => (s === 'second' ? null : 'second'))} />
           </div>
         ) : (
           <EffectGrid effects={baseEffects.concat(allLines ? [pathTile] : [])} current={currentOf('main')} onPick={(id) => pick(id, 'main')} />

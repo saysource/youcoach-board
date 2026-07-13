@@ -13,7 +13,7 @@ import { getLocalBounds, curvedPathD, zigzagPathD, waveParams, doubleLinePaths, 
 // `viewScale` = screen px per board unit. When provided, the token caption renders
 // at a FIXED on-screen size (TOKEN_LABEL_PX) regardless of the board's fit-scale or
 // the token's size; without it (viewer/export) the caption falls back to board units.
-export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, tokenBadgeHidden = false }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number; tokenBadgeHidden?: boolean }) {
+export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, tokenBadgeHidden = false, tokenLabelPlaceholder = TOKEN_LABEL_PLACEHOLDER }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number; tokenBadgeHidden?: boolean; tokenLabelPlaceholder?: string }) {
   // 3D arrows/objects are drawn by the designer's WebGL overlay, never as SVG.
   if (element.type === 'arrow3d' || element.type === 'object3d') return null
   const { x, y, rotate, scale, opacity } = element.transform
@@ -33,7 +33,7 @@ export function ElementView({ element, viewScale, tokenTextScale = 1, tokenLabel
         <TokenMotionFx element={element} cx={cx + x} cy={cy + y} r={(element.width / 2) * (scale || 1)} opacity={opacity} />
       )}
       <g transform={transform} opacity={opacity}>
-        <Shape element={element} viewScale={viewScale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokenBadgeHidden} />
+        <Shape element={element} viewScale={viewScale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokenBadgeHidden} tokenLabelPlaceholder={tokenLabelPlaceholder} />
       </g>
     </>
   )
@@ -116,7 +116,7 @@ function freehandPath(pts: Array<[number, number]>): string {
 // color over transparent gaps.
 const STRIPE = 12
 
-function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, tokenBadgeHidden = false }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number; tokenBadgeHidden?: boolean }) {
+function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, tokenBadgeHidden = false, tokenLabelPlaceholder = TOKEN_LABEL_PLACEHOLDER }: { element: BoardElement; viewScale?: number; tokenTextScale?: number; tokenLabelScale?: number; tokenBadgeHidden?: boolean; tokenLabelPlaceholder?: string }) {
   // Unique per instance, so each element's marker/pattern/clip defs don't collide.
   const markerId = useId()
   const patternId = useId()
@@ -247,7 +247,7 @@ function Shape({ element, viewScale, tokenTextScale = 1, tokenLabelScale = 1, to
             fill="#000000"
             style={{ fontFamily: TOKEN_FONT }}
           >
-            {element.label || TOKEN_LABEL_PLACEHOLDER}
+            {element.label || tokenLabelPlaceholder}
           </text>
         )}
       </>

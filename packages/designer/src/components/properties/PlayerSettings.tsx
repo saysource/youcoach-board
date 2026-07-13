@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import { ElementView, IDENTITY_TRANSFORM, type TokenFill } from '@youcoach-board/core'
@@ -59,6 +60,7 @@ function Swatch({ color, active, onClick }: { color: string; active: boolean; on
 // The skin editor: simple mode (8 skin/hair presets) ↔ advanced (hair + skin
 // palettes around a live preview). No custom color picking.
 function SkinEditor() {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   const skin = p.values.skin ?? DEFAULT_SKIN
   const hair = p.values.hair ?? DEFAULT_HAIR
@@ -68,7 +70,7 @@ function SkinEditor() {
       {!advanced ? (
         <div className="grid grid-cols-4 gap-2">
           {SKIN_PRESETS.map((preset) => (
-            <button key={`${preset.skin}-${preset.hair}`} type="button" aria-label="Skin preset" onClick={() => p.setSkinHair(preset.skin, preset.hair)} className="flex items-center justify-center">
+            <button key={`${preset.skin}-${preset.hair}`} type="button" aria-label={t('Skin preset')} onClick={() => p.setSkinHair(preset.skin, preset.hair)} className="flex items-center justify-center">
               <FaceAvatar skin={preset.skin} hair={preset.hair} size={60} active={preset.skin === skin && preset.hair === hair} />
             </button>
           ))}
@@ -91,7 +93,7 @@ function SkinEditor() {
         </div>
       )}
       <button type="button" onClick={() => setAdvanced((a) => !a)} className="self-end text-[11px] font-medium text-muted-foreground hover:text-foreground">
-        {advanced ? '◂ Less options' : 'More options ▸'}
+        {advanced ? t('◂ Less options') : t('More options ▸')}
       </button>
     </div>
   )
@@ -101,6 +103,7 @@ function SkinEditor() {
 // skin and kit are mutually exclusive; closing happens via trigger or backdrop
 // (never Radix's own outside-click), so switching editors is a single click.
 function SkinButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   const skin = p.values.skin ?? DEFAULT_SKIN
   const hair = p.values.hair ?? DEFAULT_HAIR
@@ -109,12 +112,12 @@ function SkinButton({ open, onToggle }: { open: boolean; onToggle: () => void })
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverAnchor asChild>
-            <Button size="icon" aria-label="Skin & hair" className="p-0 size-18" onClick={onToggle}>
+            <Button size="icon" aria-label={t('Skin & hair')} className="p-0 size-18" onClick={onToggle}>
               <FaceAvatar skin={skin} hair={hair} size={60} />
             </Button>
           </PopoverAnchor>
         </TooltipTrigger>
-        <TooltipContent>Skin &amp; hair</TooltipContent>
+        <TooltipContent>{t('Skin & hair')}</TooltipContent>
       </Tooltip>
       {/* Open BELOW the settings popover (not over the canvas). */}
       <PopoverContent side="bottom" align="start" sideOffset={8} className="w-auto" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
@@ -125,11 +128,12 @@ function SkinButton({ open, onToggle }: { open: boolean; onToggle: () => void })
 }
 
 function OpacityRow() {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   const arm = useDragTransaction()
   return (
     <div className="grid gap-1.5">
-      <span className="text-[11px] font-medium text-muted-foreground">Opacity</span>
+      <span className="text-[11px] font-medium text-muted-foreground">{t('Opacity')}</span>
       <Slider
         min={0}
         max={100}
@@ -229,6 +233,7 @@ const KIT_STYLES: KitStyle[] = ['solid', 'vstripes', 'hstripes', 'checker']
 
 // The kit editor: big preview | controls (style + colors) | recent-kits grid.
 function KitEditor() {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   const derived = p.values.kit ?? EMPTY_KIT
   const history = useEditorStore((s) => s.kitHistory)
@@ -269,29 +274,29 @@ function KitEditor() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <KitColorButton color={kit.jersey} label="Jersey" onChange={(c) => set({ jersey: c })} {...colorProps('jersey')} />
-          <span className="text-xs text-muted-foreground">Jersey</span>
+          <KitColorButton color={kit.jersey} label={t('Jersey')} onChange={(c) => set({ jersey: c })} {...colorProps('jersey')} />
+          <span className="text-xs text-muted-foreground">{t('Jersey')}</span>
         </div>
         {kit.style !== 'solid' && (
           <div className="flex items-center gap-2">
-            <KitColorButton color={kit.stripe} label="Stripes" onChange={(c) => set({ stripe: c })} {...colorProps('stripe')} />
-            <span className="text-xs text-muted-foreground">Stripes</span>
+            <KitColorButton color={kit.stripe} label={t('Stripes')} onChange={(c) => set({ stripe: c })} {...colorProps('stripe')} />
+            <span className="text-xs text-muted-foreground">{t('Stripes')}</span>
           </div>
         )}
         <div className="flex items-center gap-2">
-          <KitColorButton color={kit.shorts} label="Shorts" onChange={(c) => set({ shorts: c })} {...colorProps('shorts')} />
-          <span className="text-xs text-muted-foreground">Shorts</span>
+          <KitColorButton color={kit.shorts} label={t('Shorts')} onChange={(c) => set({ shorts: c })} {...colorProps('shorts')} />
+          <span className="text-xs text-muted-foreground">{t('Shorts')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <KitColorButton color={kit.socks} label="Socks" onChange={(c) => set({ socks: c })} {...colorProps('socks')} />
-          <span className="text-xs text-muted-foreground">Socks</span>
+          <KitColorButton color={kit.socks} label={t('Socks')} onChange={(c) => set({ socks: c })} {...colorProps('socks')} />
+          <span className="text-xs text-muted-foreground">{t('Socks')}</span>
         </div>
       </div>
       <div className="grid grid-cols-2 grid-rows-2 gap-1 self-stretch border-l border-border pl-3">
         {Array.from({ length: KIT_HISTORY_SIZE }).map((_, i) => {
           const k = history[i]
           return (
-            <button key={i} type="button" aria-label="Recent kit" disabled={!k} onClick={() => k && loadKit(k)} className="flex items-center justify-center rounded-md disabled:cursor-default">
+            <button key={i} type="button" aria-label={t('Recent kit')} disabled={!k} onClick={() => k && loadKit(k)} className="flex items-center justify-center rounded-md disabled:cursor-default">
               <KitSvg kit={k ?? EMPTY_KIT} style={{ height: 114, width: 'auto', opacity: k ? 1 : 0.2 }} />
             </button>
           )
@@ -304,6 +309,7 @@ function KitEditor() {
 // The kit preview button → opens the kit editor. Controlled by the parent (which
 // pushes the kit to history when the editor closes).
 function KitButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   const kit = p.values.kit ?? EMPTY_KIT
   return (
@@ -311,12 +317,12 @@ function KitButton({ open, onToggle }: { open: boolean; onToggle: () => void }) 
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverAnchor asChild>
-            <Button size="icon" aria-label="Kit" className="p-0 size-18" onClick={onToggle}>
+            <Button size="icon" aria-label={t('Kit')} className="p-0 size-18" onClick={onToggle}>
               <KitFigure kit={kit} size={60} />
             </Button>
           </PopoverAnchor>
         </TooltipTrigger>
-        <TooltipContent>Kit</TooltipContent>
+        <TooltipContent>{t('Kit')}</TooltipContent>
       </Tooltip>
       <PopoverContent side="bottom" align="start" sideOffset={8} className="w-auto" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
         <KitEditor />
@@ -328,6 +334,7 @@ function KitButton({ open, onToggle }: { open: boolean; onToggle: () => void }) 
 // The player settings popover: skin + kit previews side by side, with the opacity
 // slider beneath.
 export function PlayerSettingsButton({ side }: { side: 'right' | 'top' }) {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   const pushKit = useEditorStore((s) => s.pushKit)
   const [editor, setEditor] = useState<'skin' | 'kit' | null>(null)
@@ -342,12 +349,12 @@ export function PlayerSettingsButton({ side }: { side: 'right' | 'top' }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button size="icon" aria-label="Player settings">
+            <Button size="icon" aria-label={t('Player settings')}>
               <SlidersHorizontal />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Player</TooltipContent>
+        <TooltipContent>{t('Player')}</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-50" onInteractOutside={keepOpenOnNested}>
         <div className="grid gap-3">

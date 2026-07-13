@@ -1,4 +1,5 @@
 import { type ComponentType, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   SlidersHorizontal,
   ChevronDown,
@@ -79,6 +80,7 @@ export function PropertiesPanel({ mode, backgroundMode = false }: { mode: Breakp
 // The background-edit toolbar: a left-side vertical cluster with the background
 // color, settings (scale + logo), and reset — shown only in background-edit mode.
 function BackgroundEditBar() {
+  const { t } = useTranslation()
   const bg = useEditorStore((s) => s.doc.background)
   const resetBackground = useEditorStore((s) => s.resetBackground)
   return (
@@ -87,14 +89,14 @@ function BackgroundEditBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <Button size="icon" aria-label="Surface color">
+              <Button size="icon" aria-label={t('Surface color')}>
                 <span className="size-6 flex items-center justify-center rounded-lg" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' }}>
                   <span className="size-6 rounded-lg border border-border/70" style={bg.surfaceColor === 'transparent' ? undefined : { background: bg.surfaceColor }} />
                 </span>
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>Surface color</TooltipContent>
+          <TooltipContent>{t('Surface color')}</TooltipContent>
         </Tooltip>
         <PopoverContent side="right" align="start" className="w-56">
           <SurfaceColorPicker />
@@ -104,12 +106,12 @@ function BackgroundEditBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <Button size="icon" aria-label="Background settings">
+              <Button size="icon" aria-label={t('Background settings')}>
                 <SlidersHorizontal />
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>Pitch settings</TooltipContent>
+          <TooltipContent>{t('Pitch settings')}</TooltipContent>
         </Tooltip>
         <PopoverContent side="right" align="start" className="w-52">
           <BackgroundSettings />
@@ -119,12 +121,12 @@ function BackgroundEditBar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <Button size="icon" aria-label="Object & token sizes">
+              <Button size="icon" aria-label={t('Object & token sizes')}>
                 <Box />
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>Object & token sizes</TooltipContent>
+          <TooltipContent>{t('Object & token sizes')}</TooltipContent>
         </Tooltip>
         <PopoverContent side="right" align="start" className="w-52">
           <ObjectTokenSettings />
@@ -132,17 +134,18 @@ function BackgroundEditBar() {
       </Popover>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon" aria-label="Reset background" onClick={resetBackground}>
+          <Button size="icon" aria-label={t('Reset background')} onClick={resetBackground}>
             <RotateCcw />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Reset background</TooltipContent>
+        <TooltipContent>{t('Reset background')}</TooltipContent>
       </Tooltip>
     </div>
   )
 }
 
 function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   if (backgroundMode) return <BackgroundEditBar />
   // Nothing to edit (the select/hand tool is active with no selection) → no panel.
@@ -161,8 +164,8 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
           // Text: color (stroke-style widget), background color (with opacity), and a
           // settings popover (font size + alignment).
           <>
-            <ColorButton kind="fill" label="Text color" value={p.values.textColor} onChange={p.setTextColor} side="right" />
-            <ColorButton kind="fill" label="Background" value={p.values.bgColor} onChange={p.setBgColor} side="right" />
+            <ColorButton kind="fill" label={t('Text color')} value={p.values.textColor} onChange={p.setTextColor} side="right" />
+            <ColorButton kind="fill" label={t('Background')} value={p.values.bgColor} onChange={p.setBgColor} side="right" />
             <TextSettingsButton side="right" />
           </>
         ) : p.allPlayer ? (
@@ -182,16 +185,16 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
         ) : p.allMaterialColor ? (
           // Material: a single custom color (yc-color-1), no opacity, + opacity settings.
           <>
-            <ColorButton kind="fill" label="Color" value={p.values.materialColor} onChange={p.setMaterialColor} side="right" showOpacity={false} />
+            <ColorButton kind="fill" label={t('Color')} value={p.values.materialColor} onChange={p.setMaterialColor} side="right" showOpacity={false} />
             <SettingsButton side="right" />
           </>
         ) : (
           <>
             {p.hasClosed && (
-              <ColorButton kind="fill" label="Background" value={p.values.fill} onChange={p.setFill} side="right" fillStyle={p.values.fillStyle} onFillStyleChange={p.setFillStyle} />
+              <ColorButton kind="fill" label={t('Background')} value={p.values.fill} onChange={p.setFill} side="right" fillStyle={p.values.fillStyle} onFillStyleChange={p.setFillStyle} />
             )}
             {/* Figures ignore stroke, so no Border color for them. */}
-            {!p.allFigure && <ColorButton kind="stroke" label="Border" value={p.values.stroke} onChange={p.setStroke} side="right" />}
+            {!p.allFigure && <ColorButton kind="stroke" label={t('Border')} value={p.values.stroke} onChange={p.setStroke} side="right" />}
             <SettingsButton side="right" />
           </>
         )}
@@ -295,6 +298,7 @@ function ColorButton({
 // 3D-arrow controls: a colour swatch + a settings popover for opacity and the
 // arrow geometry (thickness / widths / arc). Edits the selected arrow(s) directly.
 function Arrow3DControls({ side }: { side: 'right' | 'top' }) {
+  const { t } = useTranslation()
   const doc = useEditorStore((s) => s.doc)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const updateElements = useEditorStore((s) => s.updateElements)
@@ -304,39 +308,39 @@ function Arrow3DControls({ side }: { side: 'right' | 'top' }) {
   const setField = <K extends keyof Arrow3DElement>(k: K, v: Arrow3DElement[K]) => updateElements(arrows.map((a) => ({ id: a.id, before: { [k]: a[k] }, after: { [k]: v } })))
   return (
     <>
-      <ColorButton kind="fill" label="Color" value={first.fill} onChange={(c) => setField('fill', c)} side={side} showOpacity={false} />
+      <ColorButton kind="fill" label={t('Color')} value={first.fill} onChange={(c) => setField('fill', c)} side={side} showOpacity={false} />
       <Popover>
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <Button size="icon" aria-label="3D arrow settings">
+              <Button size="icon" aria-label={t('3D arrow settings')}>
                 <SlidersHorizontal />
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>Arrow settings</TooltipContent>
+          <TooltipContent>{t('Arrow settings')}</TooltipContent>
         </Tooltip>
         <PopoverContent side={side} align="start" className="w-56">
           <div className="grid gap-3">
-            <Field label={`Opacity (${Math.round(first.opacity * 100)}%)`}>
+            <Field label={t('Opacity ({{pct}}%)', { pct: Math.round(first.opacity * 100) })}>
               <WaveSlider min={0} max={100} value={Math.round(first.opacity * 100)} onChange={(v) => setField('opacity', v / 100)} />
             </Field>
-            <Field label="Curve height">
+            <Field label={t('Curve height')}>
               <WaveSlider min={0} max={240} value={Math.round(first.splineHeight * 10)} onChange={(v) => setField('splineHeight', v / 10)} />
             </Field>
-            <Field label="Completeness">
+            <Field label={t('Completeness')}>
               <WaveSlider min={10} max={100} value={Math.round(first.splineLength * 100)} onChange={(v) => setField('splineLength', v / 100)} />
             </Field>
-            <Field label="Thickness">
+            <Field label={t('Thickness')}>
               <WaveSlider min={1} max={200} value={Math.round(first.thickness * 100)} onChange={(v) => setField('thickness', v / 100)} />
             </Field>
-            <Field label="Stick width">
+            <Field label={t('Stick width')}>
               <WaveSlider min={5} max={1000} value={Math.round(first.stickWidth * 100)} onChange={(v) => setField('stickWidth', v / 100)} />
             </Field>
-            <Field label="Tip width">
+            <Field label={t('Tip width')}>
               <WaveSlider min={5} max={200} value={Math.round(first.tipWidth * 100)} onChange={(v) => setField('tipWidth', v / 100)} />
             </Field>
-            <Field label="Tip length">
+            <Field label={t('Tip length')}>
               <WaveSlider min={10} max={500} value={Math.round(first.tipLength * 100)} onChange={(v) => setField('tipLength', v / 100)} />
             </Field>
           </div>
@@ -350,6 +354,7 @@ function Arrow3DControls({ side }: { side: 'right' | 'top' }) {
 // (to unlock here) but not moved, resized, rotated, inline-edited or deleted on the
 // canvas. Shows an open padlock to lock, a closed one (highlighted) to unlock.
 function LockButton() {
+  const { t } = useTranslation()
   const doc = useEditorStore((s) => s.doc)
   const selectedIds = useEditorStore((s) => s.selectedIds)
   const toggleLock = useEditorStore((s) => s.toggleLock)
@@ -358,11 +363,11 @@ function LockButton() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button size="icon" aria-label={allLocked ? 'Unlock' : 'Lock'} aria-pressed={allLocked} onClick={toggleLock} className={cn(allLocked && 'text-primary')}>
+        <Button size="icon" aria-label={allLocked ? t('Unlock') : t('Lock')} aria-pressed={allLocked} onClick={toggleLock} className={cn(allLocked && 'text-primary')}>
           {allLocked ? <Lock /> : <Unlock />}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>{allLocked ? 'Unlock' : 'Lock'}</TooltipContent>
+      <TooltipContent>{allLocked ? t('Unlock') : t('Lock')}</TooltipContent>
     </Tooltip>
   )
 }
@@ -370,13 +375,14 @@ function LockButton() {
 // 3D object/material controls: a body colour (tintable materials only, no opacity —
 // the stroke widget) plus a settings popover with "use global size" + a size slider.
 function Object3DControls({ side }: { side: 'right' | 'top' }) {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   return (
     <>
-      {p.allObject3DColor && <ColorButton kind="fill" label="Color" value={p.values.object3dColor} onChange={p.setObject3DColor} side={side} showOpacity={false} />}
+      {p.allObject3DColor && <ColorButton kind="fill" label={t('Color')} value={p.values.object3dColor} onChange={p.setObject3DColor} side={side} showOpacity={false} />}
       {/* Per-part colors for multi-material objects (e.g. flag pole: Pole + Flag). */}
       {p.object3dSlots.map((s) => (
-        <ColorButton key={s.id} kind="fill" label={s.label} value={p.values.object3dSlotColors[s.id]} onChange={(c) => p.setObject3DSlotColor(s.id, c)} side={side} showOpacity={false} />
+        <ColorButton key={s.id} kind="fill" label={t(s.label)} value={p.values.object3dSlotColors[s.id]} onChange={(c) => p.setObject3DSlotColor(s.id, c)} side={side} showOpacity={false} />
       ))}
       <Object3DSettingsButton side={side} />
     </>
@@ -397,6 +403,7 @@ function objSliderToSize(v: number): number {
 }
 
 function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
+  const { t } = useTranslation()
   // 3D object size (specs/animation.md): ONE slider that edits the GLOBAL
   // scale (background.objectScale — every object follows), unless the
   // "Apply only to this object" switch is on, in which case it edits the
@@ -427,29 +434,29 @@ function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button size="icon" aria-label="Object size">
+            <Button size="icon" aria-label={t('Object size')}>
               <Box />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Size</TooltipContent>
+        <TooltipContent>{t('Size')}</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
         <div className="grid gap-3">
           <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-            <Scale3d className="size-4 text-muted-foreground" /> 3D Objects size
+            <Scale3d className="size-4 text-muted-foreground" /> {t('3D Objects size')}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-medium text-muted-foreground">Apply only to this object</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t('Apply only to this object')}</span>
             <Switch checked={perObject} onCheckedChange={togglePerObject} disabled={sel.length === 0} />
           </div>
           <div className="flex items-center gap-2">
             {perObject ? <Box className="size-4 shrink-0 text-muted-foreground" /> : <Boxes className="size-4 shrink-0 text-muted-foreground" />}
             <div className="grid flex-1 gap-1.5">
               <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-                <span>Real</span>
+                <span>{t('Real')}</span>
                 <span className="tabular-nums text-foreground">{Math.round(effective * 10) / 10}×</span>
-                <span>Big</span>
+                <span>{t('Big')}</span>
               </div>
               <WaveSlider min={0} max={100} value={Math.round(objSizeToSlider(effective))} onChange={(v) => { arm(); setEffective(v) }} />
             </div>
@@ -461,17 +468,18 @@ function Object3DSettingsButton({ side }: { side: 'right' | 'top' }) {
 }
 
 function SettingsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
+  const { t } = useTranslation()
   return (
     <Popover>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button size={small ? 'icon-sm' : 'icon'} aria-label="Settings" className={cn(translucent && TRANSLUCENT)}>
+            <Button size={small ? 'icon-sm' : 'icon'} aria-label={t('Settings')} className={cn(translucent && TRANSLUCENT)}>
               <SlidersHorizontal />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Settings</TooltipContent>
+        <TooltipContent>{t('Settings')}</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-52">
         <SettingsWidget />
@@ -521,6 +529,7 @@ function StyleToggle({ icon, label, active, onToggle }: { icon: ReactNode; label
 // the menu opens). Applying a font awaits its load first, so the text box is
 // measured with the REAL metrics rather than the fallback's.
 function FontPicker({ value, onChange }: { value?: string; onChange: (id?: string) => void }) {
+  const { t } = useTranslation()
   const current = boardFont(value)
   const pick = (id?: string) => {
     if (!id) {
@@ -533,13 +542,13 @@ function FontPicker({ value, onChange }: { value?: string; onChange: (id?: strin
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="w-full justify-between font-normal" onPointerDown={() => void loadAllBoardFonts()}>
-          <span className="truncate" style={{ fontFamily: textFontStack(value) }}>{current?.label ?? 'Default'}</span>
+          <span className="truncate" style={{ fontFamily: textFontStack(value) }}>{current?.label ?? t('Default')}</span>
           <ChevronDown className="size-4 shrink-0 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-80 w-52 overflow-y-auto">
         <DropdownMenuItem onSelect={() => pick(undefined)}>
-          <span className="flex-1">Default</span>
+          <span className="flex-1">{t('Default')}</span>
           {!current && <Check className="size-4 shrink-0 text-primary" />}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -555,44 +564,45 @@ function FontPicker({ value, onChange }: { value?: string; onChange: (id?: strin
 }
 
 function TextSettingsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   return (
     <Popover>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button size={small ? 'icon-sm' : 'icon'} aria-label="Text settings" className={cn(translucent && TRANSLUCENT)}>
+            <Button size={small ? 'icon-sm' : 'icon'} aria-label={t('Text settings')} className={cn(translucent && TRANSLUCENT)}>
               <SlidersHorizontal />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Text</TooltipContent>
+        <TooltipContent>{t('Text')}</TooltipContent>
       </Tooltip>
       <PopoverContent side={side} align="start" className="w-56">
         <div className="grid gap-3">
-          <Field label="Font">
+          <Field label={t('Font')}>
             <FontPicker value={p.values.fontFamily} onChange={p.setFontFamily} />
           </Field>
-          <Field label={`Font size (${p.values.fontSize ?? 0})`}>
+          <Field label={t('Font size ({{size}})', { size: p.values.fontSize ?? 0 })}>
             <WaveSlider min={TEXT_MIN_FONT} max={TEXT_MAX_FONT} value={p.values.fontSize ?? 0} onChange={p.setFontSize} />
           </Field>
-          <Field label="Alignment">
+          <Field label={t('Alignment')}>
             <div className="flex items-center gap-2">
-              <Segmented items={ALIGN_ITEMS} value={p.values.align} onChange={p.setAlign} />
-              <StyleToggle icon={<Bold className="size-4" />} label="Bold" active={!!p.values.bold} onToggle={() => p.setBold(!p.values.bold)} />
-              <StyleToggle icon={<Italic className="size-4" />} label="Italic" active={!!p.values.italic} onToggle={() => p.setItalic(!p.values.italic)} />
+              <Segmented items={ALIGN_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} value={p.values.align} onChange={p.setAlign} />
+              <StyleToggle icon={<Bold className="size-4" />} label={t('Bold')} active={!!p.values.bold} onToggle={() => p.setBold(!p.values.bold)} />
+              <StyleToggle icon={<Italic className="size-4" />} label={t('Italic')} active={!!p.values.italic} onToggle={() => p.setItalic(!p.values.italic)} />
             </div>
           </Field>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">On field (3D)</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t('On field (3D)')}</span>
             <Switch checked={!!p.values.text3d} onCheckedChange={p.setText3d} />
           </div>
           {p.values.text3d && (
-            <Field label="Orientation">
+            <Field label={t('Orientation')}>
               <Segmented items={ORIENT_ITEMS} value={p.values.orientation ?? 0} onChange={p.setOrientation} />
             </Field>
           )}
-          <Field label="Opacity">
+          <Field label={t('Opacity')}>
             <WaveSlider min={0} max={100} value={Math.round((p.values.opacity ?? 1) * 100)} onChange={(v) => p.setOpacity(v / 100)} />
           </Field>
         </div>
@@ -666,30 +676,32 @@ function boardTokenStyles(elements: readonly BoardElement[]): TokenVisualStyle[]
 // restyles the selected token(s) to match (a one-click "paste style"). When the
 // Token tool is active, `active` outlines the preset that the next token will use.
 function TokenStyleButton({ style, onApply, active, side }: { style: TokenVisualStyle; onApply: () => void; active?: boolean; side: 'right' | 'top' }) {
+  const { t } = useTranslation()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button size="icon" aria-label="Apply this token style" aria-pressed={active} onClick={onApply} className={cn(active && 'ring-2 ring-primary ring-offset-1 ring-offset-card')}>
+        <Button size="icon" aria-label={t('Apply this token style')} aria-pressed={active} onClick={onApply} className={cn(active && 'ring-2 ring-primary ring-offset-1 ring-offset-card')}>
           <TokenPreview shape={style.shape} fill={style.tokenFill} color1={style.color1} color2={style.color2} textColor={style.textColor} text="" size={26} />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side={side}>Copy this style</TooltipContent>
+      <TooltipContent side={side}>{t('Copy this style')}</TooltipContent>
     </Tooltip>
   )
 }
 
 function TokenSettingsButton({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
+  const { t } = useTranslation()
   return (
     <Popover>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button size={small ? 'icon-sm' : 'icon'} aria-label="Token settings" className={cn(translucent && TRANSLUCENT)}>
+            <Button size={small ? 'icon-sm' : 'icon'} aria-label={t('Token settings')} className={cn(translucent && TRANSLUCENT)}>
               <SlidersHorizontal />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Token</TooltipContent>
+        <TooltipContent>{t('Token')}</TooltipContent>
       </Tooltip>
       <PopoverContent
         side={side}
@@ -709,6 +721,7 @@ function TokenSettingsButton({ side, small, translucent }: { side: 'right' | 'to
 }
 
 function TokenSettingsWidget() {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   const tokens3d = useEditorStore((s) => s.doc.background.tokens3d)
   const setBackground = useEditorStore((s) => s.setBackground)
@@ -718,30 +731,30 @@ function TokenSettingsWidget() {
   const tc = p.values.textColor ?? '#111111'
   return (
     <div className="grid gap-3">
-      <Field label="Type">
+      <Field label={t('Type')}>
         <Segmented
           items={[
-            { value: 'token' as TokenShape, label: 'Token', render: <TokenDiscIcon className="size-4" /> },
-            { value: 'jersey' as TokenShape, label: 'Jersey', render: <JerseyIcon className="size-4" /> },
+            { value: 'token' as TokenShape, label: t('Token'), render: <TokenDiscIcon className="size-4" /> },
+            { value: 'jersey' as TokenShape, label: t('Jersey'), render: <JerseyIcon className="size-4" /> },
           ]}
           value={p.values.tokenShape}
           onChange={p.setTokenShape}
         />
       </Field>
-      <Field label="Colors">
+      <Field label={t('Colors')}>
         <div className="flex items-center gap-2">
-          <ColorButton kind="fill" label="Color 1" value={p.values.color1} onChange={p.setColor1} side="right" small />
-          <ColorButton kind="fill" label="Color 2" value={p.values.color2} onChange={p.setColor2} side="right" small />
-          <ColorButton kind="fill" label="Text color" value={p.values.textColor} onChange={p.setTextColor} side="right" small />
+          <ColorButton kind="fill" label={t('Color 1')} value={p.values.color1} onChange={p.setColor1} side="right" small />
+          <ColorButton kind="fill" label={t('Color 2')} value={p.values.color2} onChange={p.setColor2} side="right" small />
+          <ColorButton kind="fill" label={t('Text color')} value={p.values.textColor} onChange={p.setTextColor} side="right" small />
         </div>
       </Field>
-      <Field label="Fill">
+      <Field label={t('Fill')}>
         <div className="grid grid-cols-3 gap-1.5">
           {FILL_ITEMS.map((f) => (
             <button
               key={f.value}
               type="button"
-              aria-label={f.label}
+              aria-label={t(f.label)}
               aria-pressed={p.values.tokenFill === f.value}
               onClick={() => p.setTokenFill(f.value)}
               className={cn(
@@ -754,17 +767,17 @@ function TokenSettingsWidget() {
           ))}
         </div>
       </Field>
-      <Field label="Text">
+      <Field label={t('Text')}>
         <input
           type="text"
           value={p.values.text ?? ''}
           onChange={(e) => p.setText(e.target.value)}
           className="h-8 rounded-md border border-border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          placeholder="Number"
+          placeholder={t('Number')}
         />
       </Field>
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-muted-foreground">Label</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('Label')}</span>
         <Switch checked={!!p.values.showLabel} onCheckedChange={p.setShowLabel} />
       </div>
       {p.values.showLabel && (
@@ -773,28 +786,28 @@ function TokenSettingsWidget() {
           value={p.values.label ?? ''}
           onChange={(e) => p.setLabel(e.target.value)}
           className="h-8 rounded-md border border-border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          placeholder="Player"
+          placeholder={t('Player')}
         />
       )}
-      <Field label="Opacity">
+      <Field label={t('Opacity')}>
         <WaveSlider min={0} max={100} value={Math.round((p.values.opacity ?? 1) * 100)} onChange={(v) => p.setOpacity(v / 100)} />
       </Field>
       {/* Global settings — shared by EVERY token on the board, not just the selection:
           the badge-number font, the caption-label font, and the token size (2–10 m). */}
-      <SectionDivider label="Global Settings" />
-      <Field label={`Text size (${Math.round((p.values.tokenTextScale ?? 1) * 100)}%)`}>
+      <SectionDivider label={t('Global Settings')} />
+      <Field label={t('Text size ({{pct}}%)', { pct: Math.round((p.values.tokenTextScale ?? 1) * 100) })}>
         <WaveSlider min={50} max={200} value={Math.round((p.values.tokenTextScale ?? 1) * 100)} onChange={(v) => p.setTokenTextScale(v / 100)} />
       </Field>
-      <Field label={`Label size (${Math.round((p.values.tokenLabelScale ?? 1) * 100)}%)`}>
+      <Field label={t('Label size ({{pct}}%)', { pct: Math.round((p.values.tokenLabelScale ?? 1) * 100) })}>
         <WaveSlider min={50} max={200} value={Math.round((p.values.tokenLabelScale ?? 1) * 100)} onChange={(v) => p.setTokenLabelScale(v / 100)} />
       </Field>
-      <Field label={`Token size (${Math.round(p.values.tokenSize ?? TOKEN_DEFAULT_SIZE_M)} m)`}>
+      <Field label={t('Token size ({{n}} m)', { n: Math.round(p.values.tokenSize ?? TOKEN_DEFAULT_SIZE_M) })}>
         <WaveSlider min={1} max={10} value={Math.round(p.values.tokenSize ?? TOKEN_DEFAULT_SIZE_M)} onChange={p.setTokenSize} />
       </Field>
       {/* Render disc tokens as real 3D pucks (background.tokens3d) — a board-wide
           style, so it lives here with the other global token settings. */}
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-muted-foreground">3D tokens</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('3D tokens')}</span>
         <Switch checked={tokens3d} onCheckedChange={(v) => setBackground({ tokens3d: v })} />
       </div>
     </div>
@@ -861,18 +874,19 @@ function WaveSlider({ min, max, value, onChange, disabled }: { min: number; max:
 // plus, for polylines, line type (straight/curved/zigzag), wave frequency/amplitude,
 // arrow tips and close-path.
 function SettingsWidget() {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   return (
     <div className="grid gap-3">
       {p.allPoly && (
         <>
-          <Field label="Line type">
+          <Field label={t('Line type')}>
             <Segmented
               items={[
-                { value: 'straight', label: 'Straight', render: <LineStylePlainIcon className="size-4" /> },
-                { value: 'curved', label: 'Curved', render: <LineStyleCurvedIcon className="size-4" /> },
-                { value: 'zigzag', label: 'Zigzag', render: <LineStyleZigzagIcon className="size-4" /> },
-                { value: 'double', label: 'Double', render: <LineStyleDoubleIcon className="size-4" /> },
+                { value: 'straight', label: t('Straight'), render: <LineStylePlainIcon className="size-4" /> },
+                { value: 'curved', label: t('Curved'), render: <LineStyleCurvedIcon className="size-4" /> },
+                { value: 'zigzag', label: t('Zigzag'), render: <LineStyleZigzagIcon className="size-4" /> },
+                { value: 'double', label: t('Double'), render: <LineStyleDoubleIcon className="size-4" /> },
               ]}
               value={p.values.lineStyle}
               onChange={p.setLineStyle}
@@ -880,7 +894,7 @@ function SettingsWidget() {
           </Field>
           {p.values.lineStyle === 'zigzag' && (
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Frequency">
+              <Field label={t('Frequency')}>
                 {/* Stored as a wave length (px); the slider reads as frequency, so
                     right = tighter waves. Range maps MAX→MIN px. */}
                 <WaveSlider
@@ -890,7 +904,7 @@ function SettingsWidget() {
                   onChange={(pct) => p.setWaveLength(pctToFreq(pct))}
                 />
               </Field>
-              <Field label={`Amplitude${p.values.waveAmplitude === 0 ? ' (auto)' : ''}`}>
+              <Field label={p.values.waveAmplitude === 0 ? t('Amplitude (auto)') : t('Amplitude')}>
                 {/* 0 = Auto (wave as tall as it is wide). */}
                 <WaveSlider
                   min={0}
@@ -902,7 +916,7 @@ function SettingsWidget() {
             </div>
           )}
           {p.values.lineStyle === 'double' && (
-            <Field label="Lines offset">
+            <Field label={t('Lines offset')}>
               <WaveSlider
                 min={LINES_OFFSET_MIN}
                 max={LINES_OFFSET_MAX}
@@ -913,11 +927,11 @@ function SettingsWidget() {
           )}
           {p.allOpenPoly && (
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Start tip">
-                <Segmented items={TIP_ITEMS} value={p.values.startTip} onChange={p.setStartTip} />
+              <Field label={t('Start tip')}>
+                <Segmented items={TIP_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} value={p.values.startTip} onChange={p.setStartTip} />
               </Field>
-              <Field label="End tip">
-                <Segmented items={TIP_ITEMS} value={p.values.endTip} onChange={p.setEndTip} />
+              <Field label={t('End tip')}>
+                <Segmented items={TIP_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} value={p.values.endTip} onChange={p.setEndTip} />
               </Field>
             </div>
           )}
@@ -943,6 +957,7 @@ function SettingsWidget() {
 // The "⋯" actions menu: duplicate, flip (figures), arrange (z-order), copy/paste
 // style, delete.
 function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; small?: boolean; translucent?: boolean }) {
+  const { t } = useTranslation()
   const { allFigure, flip, allClosablePoly, allRect, values, setClosed } = usePropertyEditing()
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected)
   const arrangeSelected = useEditorStore((s) => s.arrangeSelected)
@@ -962,89 +977,89 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button size={small ? 'icon-sm' : 'icon'} aria-label="Actions" className={cn(translucent && TRANSLUCENT)}>
+            <Button size={small ? 'icon-sm' : 'icon'} aria-label={t('Actions')} className={cn(translucent && TRANSLUCENT)}>
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>Actions</TooltipContent>
+        <TooltipContent>{t('Actions')}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent side={side} align="start" className="min-w-44">
         <DropdownMenuItem onSelect={duplicateSelected}>
-          <CopyPlus /> Duplicate
+          <CopyPlus /> {t('Duplicate')}
         </DropdownMenuItem>
         {allFigure && (
           <DropdownMenuItem onSelect={flip}>
-            <FlipHorizontal2 /> Flip
+            <FlipHorizontal2 /> {t('Flip')}
           </DropdownMenuItem>
         )}
         {allRect && (
           <DropdownMenuItem onSelect={convertRectsToPolylines}>
-            <PolylineIcon /> Convert to polyline
+            <PolylineIcon /> {t('Convert to polyline')}
           </DropdownMenuItem>
         )}
         {/* Close / open a polyline with more than 2 points. */}
         {allClosablePoly &&
           (values.closed ? (
             <DropdownMenuItem onSelect={() => setClosed(false)}>
-              <OpenPathIcon /> Open path
+              <OpenPathIcon /> {t('Open path')}
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem onSelect={() => setClosed(true)}>
-              <ClosePathIcon /> Close path
+              <ClosePathIcon /> {t('Close path')}
             </DropdownMenuItem>
           ))}
         {/* Alignment: only meaningful with a multi-selection (distribute ≥3). */}
         {selCount >= 2 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Align</DropdownMenuLabel>
+            <DropdownMenuLabel>{t('Align')}</DropdownMenuLabel>
             <DropdownMenuItem onSelect={() => alignSelected('left')}>
-              <AlignStartVertical /> Align left
+              <AlignStartVertical /> {t('Align left')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => alignSelected('centerX')}>
-              <AlignCenterVertical /> Center horizontally
+              <AlignCenterVertical /> {t('Center horizontally')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => alignSelected('right')}>
-              <AlignEndVertical /> Align right
+              <AlignEndVertical /> {t('Align right')}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={selCount < 3} onSelect={() => alignSelected('distributeX')}>
-              <AlignHorizontalDistributeCenter /> Distribute horizontally
+              <AlignHorizontalDistributeCenter /> {t('Distribute horizontally')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => alignSelected('top')}>
-              <AlignStartHorizontal /> Align top
+              <AlignStartHorizontal /> {t('Align top')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => alignSelected('centerY')}>
-              <AlignCenterHorizontal /> Center vertically
+              <AlignCenterHorizontal /> {t('Center vertically')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => alignSelected('bottom')}>
-              <AlignEndHorizontal /> Align bottom
+              <AlignEndHorizontal /> {t('Align bottom')}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={selCount < 3} onSelect={() => alignSelected('distributeY')}>
-              <AlignVerticalDistributeCenter /> Distribute vertically
+              <AlignVerticalDistributeCenter /> {t('Distribute vertically')}
             </DropdownMenuItem>
           </>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Arrange</DropdownMenuLabel>
+        <DropdownMenuLabel>{t('Arrange')}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => arrangeSelected('front')}>
-          <BringToFront /> Bring to front
+          <BringToFront /> {t('Bring to front')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => arrangeSelected('forward')}>
-          <ArrowUp /> Bring forward
+          <ArrowUp /> {t('Bring forward')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => arrangeSelected('backward')}>
-          <ArrowDown /> Send backward
+          <ArrowDown /> {t('Send backward')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => arrangeSelected('back')}>
-          <SendToBack /> Send to back
+          <SendToBack /> {t('Send to back')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={copyStyle}>
-          <ClipboardCopy /> Copy style
+          <ClipboardCopy /> {t('Copy style')}
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!hasStyle} onSelect={pasteStyle}>
-          <ClipboardPaste /> Paste style
+          <ClipboardPaste /> {t('Paste style')}
         </DropdownMenuItem>
         {/* Animation frame sync: stamp the element's current state into every
             FOLLOWING frame (as if they'd just been created from this one), or
@@ -1053,18 +1068,18 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
         {framesCount > 1 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Animation</DropdownMenuLabel>
+            <DropdownMenuLabel>{t('Animation')}</DropdownMenuLabel>
             <DropdownMenuItem disabled={currentFrame >= framesCount - 1} onSelect={applyToFollowingFrames}>
-              <ArrowRightToLine /> Apply to all following frames
+              <ArrowRightToLine /> {t('Apply to all following frames')}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={currentFrame === 0} onSelect={resetFrameChanges}>
-              <TimerReset /> Reset changes in this frame
+              <TimerReset /> {t('Reset changes in this frame')}
             </DropdownMenuItem>
           </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={deleteSelected}>
-          <Trash2 /> Delete
+          <Trash2 /> {t('Delete')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1074,6 +1089,7 @@ function ActionsMenu({ side, small, translucent }: { side: 'right' | 'top'; smal
 // Always rendered in mobile mode. Selection color/settings on the left, undo/redo
 // (always) + duplicate/delete (when selected) on the right.
 export function MobileBar() {
+  const { t } = useTranslation()
   const p = usePropertyEditing()
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
@@ -1085,15 +1101,15 @@ export function MobileBar() {
   return (
     <div className="pointer-events-none absolute inset-x-2 bottom-16 z-30 flex items-center justify-between gap-2">
       <div className="pointer-events-auto flex items-center gap-1">
-        {p.editable && p.hasClosed && <ColorButton kind="fill" label="Background" value={p.values.fill} onChange={p.setFill} side="top" small translucent />}
-        {p.editable && !p.allFigure && <ColorButton kind="stroke" label="Border" value={p.values.stroke} onChange={p.setStroke} side="top" small translucent />}
+        {p.editable && p.hasClosed && <ColorButton kind="fill" label={t('Background')} value={p.values.fill} onChange={p.setFill} side="top" small translucent />}
+        {p.editable && !p.allFigure && <ColorButton kind="stroke" label={t('Border')} value={p.values.stroke} onChange={p.setStroke} side="top" small translucent />}
         {p.editable && <SettingsButton side="top" small translucent />}
       </div>
       <div className="pointer-events-auto flex items-center gap-1">
-        <IconButton icon={Undo2} label="Undo" onClick={undo} disabled={!canUndo} />
-        <IconButton icon={Redo2} label="Redo" onClick={redo} disabled={!canRedo} />
-        {selected && <IconButton icon={Copy} label="Duplicate" onClick={duplicateSelected} />}
-        {selected && <IconButton icon={Trash2} label="Delete" onClick={deleteSelected} />}
+        <IconButton icon={Undo2} label={t('Undo')} onClick={undo} disabled={!canUndo} />
+        <IconButton icon={Redo2} label={t('Redo')} onClick={redo} disabled={!canRedo} />
+        {selected && <IconButton icon={Copy} label={t('Duplicate')} onClick={duplicateSelected} />}
+        {selected && <IconButton icon={Trash2} label={t('Delete')} onClick={deleteSelected} />}
       </div>
     </div>
   )

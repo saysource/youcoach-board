@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X, Sparkles, Maximize, Minimize, ChevronDown, Check, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, List, Camera, type LucideIcon } from 'lucide-react'
 import { BOARD_WIDTH, BOARD_HEIGHT } from '@youcoach-board/core'
 import { Button } from './ui/button'
@@ -78,6 +79,7 @@ interface LibraryDrawerProps {
 // facing, or material type) + a thumbnail grid; clicking a thumbnail drops the
 // figure centered on the board. Categories come from the catalog (assets).
 export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, categoryId, onCategoryChange, orbitActive = false }: LibraryDrawerProps) {
+  const { t } = useTranslation()
   const storeApi = useEditorStoreApi()
   const { url, catalog, catalogError } = useAssets()
   const createFigure = useEditorStore((s) => s.createFigure)
@@ -507,16 +509,16 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
       )}
     >
       <div className="flex items-center justify-between gap-1 border-b border-border p-2 pl-3">
-        <span className="text-sm font-semibold">Library</span>
+        <span className="text-sm font-semibold">{t('Library')}</span>
         <div className="flex items-center gap-0.5">
-          <HeaderButton icon={Sparkles} label="AI tools" disabled />
+          <HeaderButton icon={Sparkles} label={t('AI tools')} disabled />
           <HeaderButton
             icon={fullscreen ? Minimize : Maximize}
-            label={fullscreen ? 'Exit full view' : 'Fill the viewport'}
+            label={fullscreen ? t('Exit full view') : t('Fill the viewport')}
             active={fullscreen}
             onClick={onToggleFullscreen}
           />
-          <HeaderButton icon={X} label="Close library" onClick={onClose} />
+          <HeaderButton icon={X} label={t('Close library')} onClick={onClose} />
         </div>
       </div>
 
@@ -529,7 +531,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
           {/* Category selector + the sub-categories (actions) jump dropdown. */}
           <div className="flex items-center gap-1 border-b border-border p-2">
             <Button variant="outline" size="sm" aria-expanded={listOpen} onClick={toggleList} className="flex-1 justify-between font-normal">
-              <span className="truncate">{cat?.name ?? fields3dCat?.name ?? (isLegacyCat ? LEGACY_CAT.name : 'Select category')}</span>
+              <span className="truncate">{t(cat?.name ?? fields3dCat?.name ?? (isLegacyCat ? LEGACY_CAT.name : 'Select category'))}</span>
               <ChevronDown className={cn('transition-transform', listOpen && 'rotate-180')} />
             </Button>
             {!listOpen && jumpItems && jumpItems.length > 1 && (
@@ -537,7 +539,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon-sm" aria-label="Jump to type">
+                      <Button variant="outline" size="icon-sm" aria-label={t('Jump to type')}>
                         <List />
                       </Button>
                     </DropdownMenuTrigger>
@@ -548,7 +550,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                   {jumpItems.map((a) => (
                     <Fragment key={a.id}>
                       {a.separatorBefore && <DropdownMenuSeparator />}
-                      <DropdownMenuItem onSelect={() => jumpTo(a.id)}>{a.label}</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => jumpTo(a.id)}>{t(a.label)}</DropdownMenuItem>
                     </Fragment>
                   ))}
                 </DropdownMenuContent>
@@ -586,7 +588,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                         onClick={() => setOpenGroups((o) => ({ ...o, [g.id]: !expanded }))}
                         className="sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-foreground/20 bg-background px-3 py-3 text-left text-xs font-bold uppercase tracking-wide text-foreground backdrop-blur-sm hover:bg-foreground/5 hover:text-foreground"
                       >
-                        {g.name}
+                        {t(g.name)}
                         <ChevronDown className={cn('size-4 shrink-0 transition-transform', expanded && 'rotate-180')} />
                       </button>
                       {expanded &&
@@ -626,7 +628,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                         `zcat-${c.id}` === flash.id && 'ycb-flash',
                       )}
                     >
-                      {c.label}
+                      {t(c.label)}
                     </div>
                     <div className="mb-3 grid grid-cols-2 gap-2 last:mb-0">
                       {zonesForField(fields3dCat.type)
@@ -635,7 +637,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                           <button
                             key={z.id}
                             type="button"
-                            title={z.label}
+                            title={t(z.label)}
                             onClick={() => applyZone(z)}
                             className="flex flex-col items-center gap-1 rounded-md border border-border p-1 hover:border-primary hover:bg-primary/10"
                           >
@@ -646,7 +648,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                                 <Camera className="size-5 text-muted-foreground" />
                               )}
                             </span>
-                            <span className="text-[11px]">{z.label}</span>
+                            <span className="text-[11px]">{t(z.label)}</span>
                           </button>
                         ))}
                     </div>
@@ -669,7 +671,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                           <button
                             type="button"
                             aria-pressed={facing === f.id}
-                            aria-label={desc}
+                            aria-label={t(desc)}
                             onClick={() => setFacing(f.id)}
                             className={cn('flex h-8 flex-1 items-center justify-center rounded-md border border-border hover:bg-accent [&_svg]:size-4', facing === f.id && 'bg-primary/15')}
                           >
@@ -695,7 +697,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                           sec.id === flash.id && 'ycb-flash',
                         )}
                       >
-                        {sec.label}
+                        {t(sec.label)}
                       </div>
                     )}
                     {/* 3D-player poses show 2-up (1.5× bigger thumbnails). */}
@@ -705,8 +707,8 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                           <button
                             key={`${f.thumb}-${i}`}
                             type="button"
-                            title={f.label ? undefined : f.tool ? 'Text' : cat?.name}
-                            aria-label={f.label}
+                            title={f.label ? undefined : f.tool ? t('Text') : cat?.name && t(cat.name)}
+                            aria-label={f.label && t(f.label)}
                             onPointerDown={(e) => onThumbPointerDown(e, f)}
                             className={cn(
                               'flex aspect-square touch-manipulation items-center justify-center rounded-md border border-transparent p-1 hover:border-primary hover:bg-primary/20',
@@ -721,7 +723,7 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
                         return f.label ? (
                           <Tooltip key={`${f.thumb}-${i}`}>
                             <TooltipTrigger asChild>{thumb}</TooltipTrigger>
-                            <TooltipContent side="left">{f.label}</TooltipContent>
+                            <TooltipContent side="left">{t(f.label)}</TooltipContent>
                           </Tooltip>
                         ) : (
                           thumb

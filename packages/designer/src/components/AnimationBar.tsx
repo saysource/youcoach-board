@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Camera, ChevronDown, ChevronLeft, ChevronRight, ClipboardCopy, ClipboardPaste, Copy, Play, Plus, Settings, Square, Trash2, Undo2 } from 'lucide-react'
 import type { FieldView } from '@youcoach-board/core'
 import { Button } from './ui/button'
@@ -31,6 +32,7 @@ const ACTIVE_EXTRA = 16
 const CHROME_W = 184
 
 export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
+  const { t } = useTranslation()
   const storeApi = useEditorStoreApi()
   const frames = useEditorStore((s) => s.doc.animation.frames)
   const currentFrame = useEditorStore((s) => s.currentFrame)
@@ -113,7 +115,7 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
       <div className="relative flex flex-col gap-1 self-stretch justify-center">
       <div className="flex items-center gap-1">
       {/* Step to the previous/next frame (also pans the window when many). */}
-      <Button size="icon-sm" aria-label="Previous frame" disabled={playing || activeFrame <= 0} onClick={() => selectFrame(activeFrame - 1)} className="w-4 px-0 hover:bg-primary/25">
+      <Button size="icon-sm" aria-label={t('Previous frame')} disabled={playing || activeFrame <= 0} onClick={() => selectFrame(activeFrame - 1)} className="w-4 px-0 hover:bg-primary/25">
         <ChevronLeft />
       </Button>
       {frames.slice(start, end).map((f, idx) => {
@@ -124,7 +126,7 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
           <div key={i} className="flex items-center overflow-hidden rounded-md border border-border">
             <Button
               size="icon-sm"
-              aria-label={`Frame ${i + 1}`}
+              aria-label={t('Frame {{n}}', { n: i + 1 })}
               aria-pressed
               className="relative rounded-r-none text-xs font-semibold tabular-nums bg-primary/40 hover:bg-primary/40"
             >
@@ -134,29 +136,29 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="icon-sm" aria-label={`Frame ${i + 1} options`} className="w-3.5 rounded-l-none px-0 hover:bg-primary/25">
+                <Button size="icon-sm" aria-label={t('Frame {{n}} options', { n: i + 1 })} className="w-3.5 rounded-l-none px-0 hover:bg-primary/25">
                   <ChevronDown className="!size-3" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-48">
                 <DropdownMenuItem onSelect={() => storeApi.getState().duplicateFrame(i)}>
-                  <Copy /> Duplicate
+                  <Copy /> {t('Duplicate')}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={!field3d} onSelect={() => storeApi.getState().setFrameCamera(i, storeApi.getState().doc.background.field3d)}>
-                  <Camera /> Set camera position
+                  <Camera /> {t('Set camera position')}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={i === 0} onSelect={() => storeApi.getState().setFrameCamera(i, frames[i - 1]?.camera ?? null)}>
-                  <Undo2 /> Reset camera position
+                  <Undo2 /> {t('Reset camera position')}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={!f.camera} onSelect={() => setCamClipboard(f.camera)}>
-                  <ClipboardCopy /> Copy camera position
+                  <ClipboardCopy /> {t('Copy camera position')}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={!camClipboard} onSelect={() => storeApi.getState().setFrameCamera(i, camClipboard)}>
-                  <ClipboardPaste /> Paste camera position
+                  <ClipboardPaste /> {t('Paste camera position')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem disabled={frames.length <= 1} onSelect={() => storeApi.getState().removeFrame(i)}>
-                  <Trash2 /> Remove
+                  <Trash2 /> {t('Remove')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -168,7 +170,7 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
             <TooltipTrigger asChild>
               <Button
                 size="icon-sm"
-                aria-label={`Frame ${i + 1}`}
+                aria-label={t('Frame {{n}}', { n: i + 1 })}
                 aria-pressed={i === activeFrame}
                 disabled={playing}
                 onClick={() => selectFrame(i)}
@@ -178,12 +180,12 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
                 {f.camera && <Camera aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 !size-2.5 text-foreground/60" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Frame {i + 1}</TooltipContent>
+            <TooltipContent>{t('Frame {{n}}', { n: i + 1 })}</TooltipContent>
           </Tooltip>
         )
         )
       })}
-      <Button size="icon-sm" aria-label="Next frame" disabled={playing || activeFrame >= frames.length - 1} onClick={() => selectFrame(activeFrame + 1)} className="w-4 px-0 hover:bg-primary/25">
+      <Button size="icon-sm" aria-label={t('Next frame')} disabled={playing || activeFrame >= frames.length - 1} onClick={() => selectFrame(activeFrame + 1)} className="w-4 px-0 hover:bg-primary/25">
         <ChevronRight />
       </Button>
       </div>
@@ -212,18 +214,18 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
       </div>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" aria-label="Add frame" disabled={playing} onClick={() => storeApi.getState().addFrame()} className="hover:bg-primary/25">
+          <Button size="icon-sm" aria-label={t('Add frame')} disabled={playing} onClick={() => storeApi.getState().addFrame()} className="hover:bg-primary/25">
             <Plus />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Add frame (copy of the last)</TooltipContent>
+        <TooltipContent>{t('Add frame (copy of the last)')}</TooltipContent>
       </Tooltip>
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             size="icon-sm"
-            aria-label={playing ? 'Stop' : 'Play'}
+            aria-label={playing ? t('Stop') : t('Play')}
             disabled={!playing && frames.length < 2}
             onClick={() => (playing ? stopPlayback(storeApi) : startPlayback(storeApi))}
             className={cn('hover:bg-primary/25', playing && 'bg-primary/40 hover:bg-primary/40')}
@@ -231,31 +233,31 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
             {playing ? <Square /> : <Play />}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{playing ? 'Stop' : 'Play the animation in a loop'}</TooltipContent>
+        <TooltipContent>{playing ? t('Stop') : t('Play the animation in a loop')}</TooltipContent>
       </Tooltip>
       {/* Animation settings: playback speed + camera easing (saved in the doc). */}
       <Popover>
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <Button size="icon-sm" aria-label="Animation settings" disabled={playing} className="hover:bg-primary/25">
+              <Button size="icon-sm" aria-label={t('Animation settings')} disabled={playing} className="hover:bg-primary/25">
                 <Settings />
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>Animation settings</TooltipContent>
+          <TooltipContent>{t('Animation settings')}</TooltipContent>
         </Tooltip>
         <PopoverContent align="end" className="w-56 space-y-3 p-3">
           <div className="grid gap-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground">Playback speed ({speed}x)</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t('Playback speed ({{n}}x)', { n: speed })}</span>
             <Slider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => storeApi.getState().setAnimationSettings({ speed: v })} />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Loop</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t('Loop')}</span>
             <Switch checked={loop} onCheckedChange={(v) => storeApi.getState().setAnimationSettings({ loop: v })} />
           </div>
           <div className="grid gap-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground">Camera easing</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t('Camera easing')}</span>
             <div className="flex gap-1">
               {(
                 [
@@ -270,7 +272,7 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
                   onClick={() => storeApi.getState().setAnimationSettings({ cameraEasing: value })}
                   className={cn('flex-1 hover:bg-primary/25', cameraEasing === value && 'bg-primary/40 hover:bg-primary/40')}
                 >
-                  {label}
+                  {t(label)}
                 </Button>
               ))}
             </div>

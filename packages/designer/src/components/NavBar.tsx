@@ -1,4 +1,5 @@
 import { Rotate3d, RectangleHorizontal, RectangleVertical, MapPin, ZoomIn, ZoomOut, Hand } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/cn'
@@ -45,6 +46,7 @@ interface NavBarProps {
 // shortcuts. Navigation orbits the field's pose directly — it IS the drawing's pose,
 // stored in the JSON — so there's no separate "temporary" view to save or reset.
 export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV, markers, onToggleMarkers, flat = false, zoom = 1, onZoomIn, onZoomOut, onResetZoom, panning = false, onTogglePan, editingBg = false, onZoom3d, pan3d = false, onTogglePan3d, showPan3d = false, vertical = false }: NavBarProps) {
+  const { t } = useTranslation()
   // Shared shell + divider classes, flipped for the vertical (mobile) layout.
   const barClass = cn('pointer-events-auto select-none flex items-center rounded-lg border border-border bg-card shadow-md', vertical && 'flex-col')
   const sepClass = cn('bg-border', vertical ? 'my-0.5 h-px w-5' : 'mx-0.5 h-5 w-px')
@@ -55,35 +57,35 @@ export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV
       <div className={barClass}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button size="icon-sm" aria-label="Zoom out (−)" disabled={zoom <= 0.1} onClick={onZoomOut}>
+            <Button size="icon-sm" aria-label={t('Zoom out (−)')} disabled={zoom <= 0.1} onClick={onZoomOut}>
               <ZoomOut />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Zoom out (−)</TooltipContent>
+          <TooltipContent>{t('Zoom out (−)')}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button size="icon-sm" aria-label="Reset zoom (100%)" onClick={onResetZoom} className="w-11 shrink-0 px-0 text-xs tabular-nums font-medium">
+            <Button size="icon-sm" aria-label={t('Reset zoom (100%)')} onClick={onResetZoom} className="w-11 shrink-0 px-0 text-xs tabular-nums font-medium">
               {Math.round(zoom * 100)}%
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Reset zoom (100%)</TooltipContent>
+          <TooltipContent>{t('Reset zoom (100%)')}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button size="icon-sm" aria-label="Zoom in (+)" disabled={zoom >= 8} onClick={onZoomIn}>
+            <Button size="icon-sm" aria-label={t('Zoom in (+)')} disabled={zoom >= 8} onClick={onZoomIn}>
               <ZoomIn />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Zoom in (+)</TooltipContent>
+          <TooltipContent>{t('Zoom in (+)')}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button size="icon-sm" aria-label={panning ? 'Exit pan (drag scrolls the view)' : 'Pan the view (or ⇧+arrows)'} aria-pressed={panning} disabled={zoom <= 1 && !panning} onClick={onTogglePan} className={cn('hover:bg-primary/25', panning && 'bg-primary/40 hover:bg-primary/40')}>
+            <Button size="icon-sm" aria-label={panning ? t('Exit pan (drag scrolls the view)') : t('Pan the view (or ⇧+arrows)')} aria-pressed={panning} disabled={zoom <= 1 && !panning} onClick={onTogglePan} className={cn('hover:bg-primary/25', panning && 'bg-primary/40 hover:bg-primary/40')}>
               <Hand />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{panning ? 'Exit pan' : 'Pan the view (⇧+arrows)'}</TooltipContent>
+          <TooltipContent>{panning ? t('Exit pan') : t('Pan the view (⇧+arrows)')}</TooltipContent>
         </Tooltip>
       </div>
     )
@@ -94,7 +96,7 @@ export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV
   // current drag behavior is always visible at a glance.
   const inOrbitSession = navigating || editingBg
   const orbitActive = inOrbitSession && !pan3d
-  const orbitLabel = !inOrbitSession ? 'Navigate scene (Space)' : pan3d ? 'Orbit (drag rotates)' : editingBg ? 'Orbit — drag rotates the view' : 'Exit navigation (Space)'
+  const orbitLabel = !inOrbitSession ? t('Navigate scene (Space)') : pan3d ? t('Orbit (drag rotates)') : editingBg ? t('Orbit — drag rotates the view') : t('Exit navigation (Space)')
   return (
     <div className={barClass}>
       <Tooltip>
@@ -117,59 +119,59 @@ export function NavBar({ available, navigating, onToggle, onTopViewH, onTopViewV
       {/* Field-camera zoom (dolly), same as the +/− keys. */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" aria-label="Zoom in (+)" onClick={() => onZoom3d?.(1)}>
+          <Button size="icon-sm" aria-label={t('Zoom in (+)')} onClick={() => onZoom3d?.(1)}>
             <ZoomIn />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Zoom in (+)</TooltipContent>
+        <TooltipContent>{t('Zoom in (+)')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" aria-label="Zoom out (−)" onClick={() => onZoom3d?.(-1)}>
+          <Button size="icon-sm" aria-label={t('Zoom out (−)')} onClick={() => onZoom3d?.(-1)}>
             <ZoomOut />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Zoom out (−)</TooltipContent>
+        <TooltipContent>{t('Zoom out (−)')}</TooltipContent>
       </Tooltip>
       {/* Pan hand: while orbiting (navigation / Edit Background), a plain drag
           pans the camera instead of rotating it. */}
       {showPan3d && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button size="icon-sm" aria-label={pan3d ? 'Exit pan (drag orbits again)' : 'Pan the view (drag pans)'} aria-pressed={pan3d} onClick={onTogglePan3d} className={cn('hover:bg-primary/25', pan3d && 'bg-primary/40 hover:bg-primary/40')}>
+            <Button size="icon-sm" aria-label={pan3d ? t('Exit pan (drag orbits again)') : t('Pan the view (drag pans)')} aria-pressed={pan3d} onClick={onTogglePan3d} className={cn('hover:bg-primary/25', pan3d && 'bg-primary/40 hover:bg-primary/40')}>
               <Hand />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{pan3d ? 'Exit pan' : 'Pan the view'}</TooltipContent>
+          <TooltipContent>{pan3d ? t('Exit pan') : t('Pan the view')}</TooltipContent>
         </Tooltip>
       )}
       <span className={sepClass} />
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" aria-label="Top view (horizontal)" onClick={onTopViewH}>
+          <Button size="icon-sm" aria-label={t('Top view (horizontal)')} onClick={onTopViewH}>
             <RectangleHorizontal />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Top view — horizontal</TooltipContent>
+        <TooltipContent>{t('Top view — horizontal')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon-sm" aria-label="Top view (vertical)" onClick={onTopViewV}>
+          <Button size="icon-sm" aria-label={t('Top view (vertical)')} onClick={onTopViewV}>
             <RectangleVertical />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Top view — vertical</TooltipContent>
+        <TooltipContent>{t('Top view — vertical')}</TooltipContent>
       </Tooltip>
       {navigating && (
         <>
           <span className={sepClass} />
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="icon-sm" aria-label={markers ? 'Hide position markers' : 'Show position markers'} aria-pressed={markers} onClick={onToggleMarkers} className={cn(markers && 'text-primary')}>
+              <Button size="icon-sm" aria-label={markers ? t('Hide position markers') : t('Show position markers')} aria-pressed={markers} onClick={onToggleMarkers} className={cn(markers && 'text-primary')}>
                 <MapPin />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{markers ? 'Hide position markers' : 'Show position markers'}</TooltipContent>
+            <TooltipContent>{markers ? t('Hide position markers') : t('Show position markers')}</TooltipContent>
           </Tooltip>
         </>
       )}

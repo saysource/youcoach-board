@@ -1,12 +1,15 @@
+import { useEffect } from 'react'
 import { type BoardDoc } from '@youcoach-board/core'
+import { I18nextProvider } from 'react-i18next'
 import { BoardShell } from './components/BoardShell'
 import { EditorStoreProvider } from './store/EditorStoreProvider'
 import { AssetsProvider } from './lib/AssetsProvider'
 import { type AssetsConfig } from './lib/assets'
+import { i18n, resolveLanguage } from './lib/i18n'
 import type { ThemeSetting } from './lib/use-theme'
-// TEMPORARY default field background. Will be replaced once asset locations are
-// defined/loaded dynamically (the URL just feeds the doc's background.image).
-import defaultFieldImage from './assets/field0.jpg'
+// The bundled default field background, plus a repair for stale references to it
+// saved by a different build (see field-image.ts).
+import { DEFAULT_FIELD_IMAGE, resolveFieldImage } from './lib/field-image'
 import { topViewForField } from './lib/field-zones'
 
 // Base image kept for legacy (fieldSvg) docs; figure scale for the default field.
@@ -23,6 +26,10 @@ export interface BoardDesignerProps {
   theme?: ThemeSetting
   /** Whether to show the in-menu theme switch. Later driven by embed config. */
   showThemeControl?: boolean
+  /** UI language ('en' | 'it' | a locale like 'it-IT'). Omitted → the page
+   *  URL's ?lang parameter, then English. Unsupported values fall back to
+   *  English. Changing the prop switches the live UI. */
+  language?: string
   /** Where figures/thumbnails/catalog load from. Defaults to the dev server's
    *  public/ folder. Memoize this if you pass it (it keys the catalog fetch). */
   assets?: AssetsConfig
@@ -32,7 +39,12 @@ export interface BoardDesignerProps {
 
 // The editor's public entry point: a per-instance editor store wrapping the
 // floating-chrome shell + interactive board.
-export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, assets, onChange }: BoardDesignerProps) {
+export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeControl, language, assets, onChange }: BoardDesignerProps) {
+  // UI language: host prop → URL ?lang → English (see lib/i18n.ts).
+  useEffect(() => {
+    const lang = resolveLanguage(language)
+    if (i18n.language !== lang) void i18n.changeLanguage(lang)
+  }, [language])
   // A fresh board opens on the real 3D field (a default preset pose) over the base
   // grass image. Legacy docs that carry a hand-drawn `fieldSvg` keep the old SVG.
   const bg = initialDoc?.background
@@ -41,17 +53,19 @@ export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeContro
     ...initialDoc,
     background: {
       ...bg,
-      image: bg?.image ?? defaultFieldImage,
+      image: resolveFieldImage(bg?.image) ?? DEFAULT_FIELD_IMAGE,
       fieldSvg: bg?.fieldSvg ?? null,
       field3d: bg?.field3d ?? (legacy ? null : topViewForField(bg?.fieldType ?? 'soccer11')),
       figureScale: bg?.figureScale ?? DEFAULT_FIELD_FIGURE_SCALE,
     },
   }
   return (
-    <AssetsProvider config={assets}>
-      <EditorStoreProvider initialDoc={docWithBackground} onChange={onChange}>
-        <BoardShell initialTheme={initialTheme} theme={theme} showThemeControl={showThemeControl} />
-      </EditorStoreProvider>
-    </AssetsProvider>
+    <I18nextProvider i18n={i18n}>
+      <AssetsProvider config={assets}>
+        <EditorStoreProvider initialDoc={docWithBackground} onChange={onChange}>
+          <BoardShell initialTheme={initialTheme} theme={theme} showThemeControl={showThemeControl} />
+        </EditorStoreProvider>
+      </AssetsProvider>
+    </I18nextProvider>
   )
 }

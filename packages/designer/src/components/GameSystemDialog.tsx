@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ElementView } from '@youcoach-board/core'
 import soccerRaw from '../assets/football_field.svg?raw'
 import futsalRaw from '../assets/futsal_field.svg?raw'
@@ -83,6 +84,7 @@ function FieldPreview({ code, kind, dir, spread }: { code: string; kind: FieldKi
 }
 
 function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose: () => void }) {
+  const { t } = useTranslation()
   const elements = useEditorStore((s) => s.doc.elements)
   const field3d = useEditorStore((s) => s.doc.background.field3d)
   const tokenSizeM = useEditorStore((s) => s.tokenSizeM)
@@ -111,11 +113,11 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
   return (
     <div className="grid gap-4">
       <DialogTitle className="text-base font-semibold">
-        Game system <span className="text-primary">{code}</span>
+        {t('Game system')} <span className="text-primary">{code}</span>
       </DialogTitle>
 
       <div className="grid gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Direction</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('Direction')}</span>
         <div className="flex flex-wrap gap-2">
           {dirs.map((d) => (
             <button
@@ -126,14 +128,14 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
               className={cn('flex flex-col items-center gap-1 rounded-lg border p-2 transition-colors', dir === d.id ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-accent')}
             >
               <FieldPreview code={code} kind={cfg.kind} dir={d.id} spread={spread} />
-              <span className="text-[11px] text-muted-foreground">{d.label}</span>
+              <span className="text-[11px] text-muted-foreground">{t(d.label)}</span>
             </button>
           ))}
         </div>
       </div>
 
       <div className="grid gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Coverage</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('Coverage')}</span>
         <div className="flex gap-1 rounded-md bg-muted p-0.5">
           {(['half', 'whole'] as Spread[]).map((s) => (
             <button
@@ -143,7 +145,7 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
               onClick={() => setSpread(s)}
               className={cn('flex-1 rounded px-2 py-1.5 text-sm capitalize transition-colors', spread === s ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
             >
-              {s === 'half' ? 'Half pitch' : 'Whole pitch'}
+              {s === 'half' ? t('Half pitch') : t('Whole pitch')}
             </button>
           ))}
         </div>
@@ -151,13 +153,13 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
       
 
       <div className="grid gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Team</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('Team')}</span>
         <div className="flex flex-wrap gap-1.5">
           {options.map((s, i) => (
             <button
               key={i}
               type="button"
-              aria-label={`Team ${i + 1}`}
+              aria-label={t('Team {{n}}', { n: i + 1 })}
               aria-pressed={styleIdx === i}
               onClick={() => setStyleIdx(i)}
               className={cn('flex items-center justify-center rounded-md border p-0.5', styleIdx === i ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-accent')}
@@ -172,10 +174,10 @@ function Body({ code, cfg, onClose }: { code: string; cfg: SystemConfig; onClose
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" size="sm" onClick={onClose}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button variant="default" size="sm" onClick={place}>
-          Add {cfg.teamSize} players
+          {t('Add {{n}} players', { n: cfg.teamSize })}
         </Button>
       </div>
     </div>

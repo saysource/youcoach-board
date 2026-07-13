@@ -19,11 +19,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:app": "vite build --config vite.app.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@youcoach-board/core": "0.0.0",
+    "i18next": "^26.3.6",
     "react-colorful": "^5.7.0",
+    "react-i18next": "^17.0.9",
     "three": "^0.180.0"
   },
   "peerDependencies": {

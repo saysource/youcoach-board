@@ -1,4 +1,5 @@
 import { Fragment } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 
 // ⌘/⌥/⇧ on macOS; Ctrl/Alt/Shift elsewhere (the spec's combos are Mac-first).
@@ -85,13 +86,14 @@ function Key({ children }: { children: string }) {
 }
 
 function ShortcutRow({ row }: { row: Row }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between gap-4 py-1.5">
-      <span className="text-sm text-muted-foreground">{row.label}</span>
+      <span className="text-sm text-muted-foreground">{t(row.label)}</span>
       <span className="flex flex-wrap items-center justify-end gap-1">
         {row.combos.map((combo, ci) => (
           <Fragment key={ci}>
-            {ci > 0 && <span className="px-1 text-xs text-muted-foreground">or</span>}
+            {ci > 0 && <span className="px-1 text-xs text-muted-foreground">{t('or')}</span>}
             {combo.map((k, ki) => (
               <Key key={ki}>{k}</Key>
             ))}
@@ -103,9 +105,10 @@ function ShortcutRow({ row }: { row: Row }) {
 }
 
 function SectionBlock({ section }: { section: Section }) {
+  const { t } = useTranslation()
   return (
     <div>
-      <h3 className="mb-1 text-sm font-semibold text-foreground">{section.title}</h3>
+      <h3 className="mb-1 text-sm font-semibold text-foreground">{t(section.title)}</h3>
       <div className="divide-y divide-border/50">
         {section.rows.map((row) => (
           <ShortcutRow key={row.label} row={row} />
@@ -118,10 +121,11 @@ function SectionBlock({ section }: { section: Section }) {
 /** The Help → "Keyboard Shortcuts" dialog: every binding grouped Tools / Editor /
  *  View, with platform-correct key glyphs. */
 export function KeyboardShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogTitle className="mb-4 text-lg font-semibold">Keyboard shortcuts</DialogTitle>
+        <DialogTitle className="mb-4 text-lg font-semibold">{t('Keyboard shortcuts')}</DialogTitle>
         <div className="grid grid-cols-1 gap-x-10 gap-y-6 md:grid-cols-2">
           <SectionBlock section={TOOLS} />
           <div className="grid gap-6">

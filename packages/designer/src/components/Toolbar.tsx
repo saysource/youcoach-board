@@ -1,4 +1,5 @@
 import { type ElementType, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Film, Lock, MousePointer2, Square, Circle, Diamond, Pentagon, Triangle, MoveRight, Minus, Pencil, Eraser, Shapes, Type, Users, Lasso, Spline, RulerDimensionLine } from 'lucide-react'
 import { PlayersIcon, TrainingIcon, SoccerFieldIcon, MatchIcon, ShapesIcon, TrapezoidIcon, LinesIcon, ElbowLineIcon, ElbowArrowIcon, LineZigzagArrowIcon, LineStyleDoubleIcon, TokenIcon } from './icons'
 import { isShapeTool, isLineTool, type ShapeTool, type LineTool } from '../lib/draw'
@@ -106,6 +107,7 @@ interface ToolbarProps {
 type ToolbarMenu = 'shapes' | 'lines' | 'more'
 
 export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpenCategory, onEditBackground, onPickFormation, animActive, onToggleAnimation }: ToolbarProps) {
+  const { t } = useTranslation()
   // The shape last picked/used, so the Shapes button shows it and re-opening the
   // menu re-activates it. Null until the first use (button shows the generic icon).
   const [lastShape, setLastShape] = useState<ShapeTool | null>(null)
@@ -128,12 +130,12 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
   })
   return (
     <div className="pointer-events-auto select-none flex items-center gap-1 rounded-xl border border-border bg-card py-0.5 px-1 shadow-md">
-      <ToolButton label={locked ? 'Unlock' : 'Keep selected tool active'} active={locked} onClick={onToggleLock}>
+      <ToolButton label={locked ? t('Unlock') : t('Keep selected tool active')} active={locked} onClick={onToggleLock}>
         <Lock />
       </ToolButton>
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       {NAV_TOOLS.map((tool) => (
-        <ToolButton key={tool.id} label={tool.label} active={activeTool === tool.id} shortcut={tool.shortcut} onClick={() => onToolChange(tool.id)}>
+        <ToolButton key={tool.id} label={t(tool.label)} active={activeTool === tool.id} shortcut={tool.shortcut} onClick={() => onToolChange(tool.id)}>
           <tool.icon />
         </ToolButton>
       ))}
@@ -142,15 +144,15 @@ export function Toolbar({ activeTool, onToolChange, locked, onToggleLock, onOpen
       <LinesMenu activeTool={activeTool} lastLine={lastLine} onPick={pickLine} onPick3D={() => onToolChange('arrow3d')} {...menuProps('lines')} />
       <Separator orientation="vertical" className="mx-0.5 h-6" />
       <MoreToolsMenu onToolChange={onToolChange} onOpenCategory={onOpenCategory} onPickFormation={onPickFormation} {...menuProps('more')} />
-      <ToolButton label="Change field and edit background settings" onClick={onEditBackground}>
+      <ToolButton label={t('Change field and edit background settings')} onClick={onEditBackground}>
         <SoccerFieldIcon />
       </ToolButton>
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <ToolButton label="Eraser" active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
+      <ToolButton label={t('Eraser')} active={activeTool === 'eraser'} onClick={() => onToolChange('eraser')}>
         <Eraser />
       </ToolButton>
       <Separator orientation="vertical" className="mx-0.5 h-6" />
-      <ToolButton label="Animation" active={animActive} onClick={onToggleAnimation}>
+      <ToolButton label={t('Animation')} active={animActive} onClick={onToggleAnimation}>
         <Film />
       </ToolButton>
     </div>
@@ -174,6 +176,7 @@ function ShapesMenu({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const active = isShapeTool(activeTool)
   const current = active ? activeTool : lastShape
   const Icon = current ? SHAPE_ICON[current] : ShapesIcon
@@ -190,7 +193,7 @@ function ShapesMenu({
           <DropdownMenuTrigger asChild>
             <Button
               size="icon-sm"
-              aria-label="Shapes"
+              aria-label={t('Shapes')}
               aria-pressed={active}
               className={cn('relative hover:bg-primary/25', active && 'bg-primary/40 hover:bg-primary/40')}
             >
@@ -198,12 +201,12 @@ function ShapesMenu({
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>Shapes</TooltipContent>
+        <TooltipContent>{t('Shapes')}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="min-w-40">
         {SHAPE_ITEMS.map((it) => (
           <DropdownMenuItem key={it.id} onSelect={() => onPick(it.id)}>
-            <it.icon /> {it.label}
+            <it.icon /> {t(it.label)}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -229,6 +232,7 @@ function LinesMenu({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const active = isLineTool(activeTool) || activeTool === 'arrow3d'
   const current = isLineTool(activeTool) ? activeTool : lastLine
   const Icon = current ? LINE_ICON[current] : LinesIcon
@@ -245,7 +249,7 @@ function LinesMenu({
           <DropdownMenuTrigger asChild>
             <Button
               size="icon-sm"
-              aria-label="Lines"
+              aria-label={t('Lines')}
               aria-pressed={active}
               className={cn('relative hover:bg-primary/25', active && 'bg-primary/40 hover:bg-primary/40')}
             >
@@ -253,18 +257,18 @@ function LinesMenu({
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>Lines</TooltipContent>
+        <TooltipContent>{t('Lines')}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="min-w-40">
         {LINE_ITEMS.map((it) => (
           <DropdownMenuItem key={it.id} onSelect={() => onPick(it.id)}>
-            <it.icon /> {it.label}
+            <it.icon /> {t(it.label)}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
         {/* A real three.js 3D arrow (drawn on the WebGL overlay). */}
         <DropdownMenuItem onSelect={onPick3D}>
-          <Spline /> 3D Arrow
+          <Spline /> {t('3D Arrow')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -287,6 +291,7 @@ function MoreToolsMenu({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const { catalog } = useAssets()
   const storeApi = useEditorStoreApi()
   // Game systems are offered only on 3D fields with a regulation team size
@@ -307,12 +312,12 @@ function MoreToolsMenu({
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button size="icon-sm" aria-label="More tools" className="hover:bg-primary/25">
+            <Button size="icon-sm" aria-label={t('More tools')} className="hover:bg-primary/25">
               <Shapes />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>More tools</TooltipContent>
+        <TooltipContent>{t('More tools')}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-44">
         {/* Figure macro-groups jump the drawer to a category. Fields have their
@@ -324,26 +329,26 @@ function MoreToolsMenu({
             const firstCat = g.categories[0]
             return (
               <DropdownMenuItem key={g.id} disabled={!firstCat} onSelect={() => firstCat && onOpenCategory(firstCat)}>
-                <Icon /> {g.name}
+                <Icon /> {t(g.name)}
               </DropdownMenuItem>
             )
           })}
         <DropdownMenuSeparator />
         {/* Token stamp tool — placed by clicking the board, then edited inline. */}
         <DropdownMenuItem onSelect={() => onToolChange('token')}>
-          <TokenIcon /> Token
+          <TokenIcon /> {t('Token')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!ball} onSelect={addBall}>
-          <MatchIcon /> Add Ball
+          <MatchIcon /> {t('Add Ball')}
         </DropdownMenuItem>
         {/* Text stamp tool — click the board to place, then edit inline. */}
         <DropdownMenuItem onSelect={() => onToolChange('text')}>
-          <Type /> Add Text
+          <Type /> {t('Add Text')}
         </DropdownMenuItem>
         {/* Free-draw (pen) tool — moved here from the main toolbar row. */}
         <DropdownMenuItem onSelect={() => onToolChange('draw')}>
-          <Pencil /> Pen
+          <Pencil /> {t('Pen')}
         </DropdownMenuItem>
         {/* Game systems: only fields that define them (soccer/futsal) can place a
             formation. On other fields (e.g. area/skills) keep the item visible but
@@ -351,7 +356,7 @@ function MoreToolsMenu({
         {systems.length > 0 ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
-              <Users /> Game systems
+              <Users /> {t('Game systems')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               {systems.map((code) => (
@@ -363,13 +368,13 @@ function MoreToolsMenu({
           </DropdownMenuSub>
         ) : (
           <DropdownMenuItem disabled>
-            <Users /> Game systems
+            <Users /> {t('Game systems')}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         {/* Lasso: free-draw a selection; elements the loop touches are selected. */}
         <DropdownMenuItem onSelect={() => onToolChange('lasso')}>
-          <Lasso /> Lasso select
+          <Lasso /> {t('Lasso select')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

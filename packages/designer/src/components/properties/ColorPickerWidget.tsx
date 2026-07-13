@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { HexColorPicker, HexColorInput } from 'react-colorful'
 import { Pipette } from 'lucide-react'
 import { cn } from '../../lib/cn'
@@ -59,6 +60,7 @@ export function ColorPickerWidget({
   /** Hide the transparent swatch (channels that must carry a solid color). */
   allowTransparent?: boolean
 }) {
+  const { t } = useTranslation()
   const storeApi = useEditorStoreApi()
   // Coalesce only the CONTINUOUS controls (opacity slider + the picker drag) into
   // one undo step — armed on their first change and committed on pointer release,
@@ -102,11 +104,11 @@ export function ColorPickerWidget({
 
       {onFillStyleChange && (
         <div className="grid gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Fill style</span>
+          <span className="text-xs font-medium text-muted-foreground">{t('Fill style')}</span>
           <Segmented
             items={[
-              { value: 'solid', label: 'Solid', render: <span className="size-4 rounded-[3px]" style={{ background: 'currentColor' }} /> },
-              { value: 'striped', label: 'Striped', render: <span className="size-4 rounded-[3px]" style={{ backgroundImage: 'repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 4px)' }} /> },
+              { value: 'solid', label: t('Solid'), render: <span className="size-4 rounded-[3px]" style={{ background: 'currentColor' }} /> },
+              { value: 'striped', label: t('Striped'), render: <span className="size-4 rounded-[3px]" style={{ backgroundImage: 'repeating-linear-gradient(135deg, currentColor 0 2px, transparent 2px 4px)' }} /> },
             ]}
             value={fillStyle}
             onChange={onFillStyleChange}
@@ -117,7 +119,7 @@ export function ColorPickerWidget({
       {showOpacity && (
         <>
           <div className="grid gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Opacity</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('Opacity')}</span>
             <div className="flex items-center gap-2">
               <Slider
                 min={0}
@@ -150,7 +152,7 @@ export function ColorPickerWidget({
         {/* The sample swatch opens the RGB picker. */}
         <Popover>
           <PopoverTrigger asChild>
-            <button type="button" aria-label="Color picker" className="size-8  p-0 shrink-0 overflow-hidden rounded-md border border-border">
+            <button type="button" aria-label={t('Color picker')} className="size-8  p-0 shrink-0 overflow-hidden rounded-md border border-border">
               <span className="block size-full" style={{ backgroundImage: CHECKER_IMAGE, backgroundColor: '#ffffff' }}>
                 <span className="block size-full" style={isTransparent(value) ? undefined : { background: value }} />
               </span>
@@ -180,7 +182,7 @@ export function ColorPickerWidget({
         {'EyeDropper' in window && (
           <button
             type="button"
-            aria-label="Pick color from screen"
+            aria-label={t('Pick color from screen')}
             className="flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground [&_svg]:size-4"
             onClick={async () => {
               try {

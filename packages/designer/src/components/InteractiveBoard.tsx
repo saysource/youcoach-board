@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   BoardCanvas,
   BOARD_WIDTH,
@@ -13,7 +14,6 @@ import {
   TOKEN_FONT_WEIGHT,
   TOKEN_LABEL_PX,
   TOKEN_LABEL_GAP_PX,
-  TOKEN_LABEL_PLACEHOLDER,
   textFontStack,
   TEXT_FONT_WEIGHT,
   TEXT_FONT_WEIGHT_BOLD,
@@ -330,6 +330,7 @@ function BoardGrid() {
 }
 
 export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {}, animMode = false, presenting = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void; animMode?: boolean; presenting?: boolean }) {
+  const { t } = useTranslation()
   const doc = useEditorStore((s) => s.doc)
   const playing = useEditorStore((s) => s.playing)
   const currentFrame = useEditorStore((s) => s.currentFrame)
@@ -2692,7 +2693,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         ) : render.type === 'figure' ? (
           <FigureView element={render} />
         ) : (
-          <ElementView element={render} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokens3d && render.type === 'token' && render.shape === 'token'} />
+          <ElementView element={render} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenBadgeHidden={tokens3d && render.type === 'token' && render.shape === 'token'} tokenLabelPlaceholder={t('Player')} />
         )}
       </g>
     )
@@ -2986,7 +2987,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         {onionElements && (
           <g pointerEvents="none" opacity={0.1}>
             {onionElements.map((el) =>
-              el.type === 'figure' ? <FigureView key={el.id} element={el} /> : <ElementView key={el.id} element={el} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} />,
+              el.type === 'figure' ? <FigureView key={el.id} element={el} /> : <ElementView key={el.id} element={el} viewScale={scale} tokenTextScale={tokenTextScale} tokenLabelScale={tokenLabelScale} tokenLabelPlaceholder={t('Player')} />,
             )}
           </g>
         )}
@@ -3086,22 +3087,22 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           2D token captions; pointer-transparent (the SVG hit-box owns interaction). */}
       {token3dList.length > 0 && (
         <svg data-layer="captions" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" style={{ pointerEvents: 'none' }}>
-          {token3dList.map((t) => {
-            const el = doc.elements.find((e) => e.id === t.id)
+          {token3dList.map((tk) => {
+            const el = doc.elements.find((e) => e.id === tk.id)
             if (!el || el.type !== 'token' || !el.showLabel) return null
-            if (editing && editing.id === t.id && editing.field === 'label') return null
+            if (editing && editing.id === tk.id && editing.field === 'label') return null
             const cp = arrow3dCam.position
-            let dx = cp.x - t.x
-            let dz = cp.z - t.z
+            let dx = cp.x - tk.x
+            let dz = cp.z - tk.z
             const len = Math.hypot(dx, dz) || 1
             dx /= len
             dz /= len
-            const b = object3dToBoard(t.x + dx * (t.sizeM / 2), 0, t.z + dz * (t.sizeM / 2))
+            const b = object3dToBoard(tk.x + dx * (tk.sizeM / 2), 0, tk.z + dz * (tk.sizeM / 2))
             const font = TOKEN_LABEL_PX / (scale || 1)
             const gap = TOKEN_LABEL_GAP_PX / (scale || 1)
             return (
-              <text key={t.id} x={b.x} y={b.y + gap + font / 2} textAnchor="middle" dominantBaseline="central" fontSize={font} fontWeight={TOKEN_FONT_WEIGHT} fill="#000000" style={{ fontFamily: TOKEN_FONT }}>
-                {el.label || TOKEN_LABEL_PLACEHOLDER}
+              <text key={tk.id} x={b.x} y={b.y + gap + font / 2} textAnchor="middle" dominantBaseline="central" fontSize={font} fontWeight={TOKEN_FONT_WEIGHT} fill="#000000" style={{ fontFamily: TOKEN_FONT }}>
+                {el.label || t('Player')}
               </text>
             )
           })}
@@ -3182,7 +3183,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         <input
           autoFocus
           value={editing.text}
-          placeholder={editing.field === 'label' ? 'Player' : ''}
+          placeholder={editing.field === 'label' ? t('Player') : ''}
           onFocus={(e) => e.currentTarget.select()}
           onChange={(e) => setEditing((cur) => (cur ? { ...cur, text: e.target.value } : cur))}
           onBlur={commitTokenEdit}
