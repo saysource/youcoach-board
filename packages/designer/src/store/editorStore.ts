@@ -402,12 +402,76 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       return { ...doc, animation: { ...a, frames } }
     }
 
+    // PER-FRAME attributes INHERIT FORWARD: an edit on frame k also lands on
+    // every FOLLOWING frame whose copy still holds the pre-edit values for the
+    // edited fields — a frame the user explicitly re-authored breaks the chain
+    // (it, and the frames after it, own their values). So a newly added object
+    // can be adjusted in its entering frame and carries the final setup
+    // through the frames ahead until re-authored ("inherit everything from
+    // the previous frame until explicitly changed"). Derived from the OP's
+    // before/after (the live doc is already mutated during drags); ground
+    // moves of rects/ellipses arrive as remove+add pairs and are diffed.
+    function collectEdits(op: Operation): ElementChange[] {
+      const changes: ElementChange[] = []
+      const removed = new Map<string, BoardElement>()
+      const added = new Map<string, BoardElement>()
+      const walk = (o: Operation): void => {
+        if (o.kind === 'update') changes.push(...o.changes)
+        else if (o.kind === 'remove') removed.set(o.element.id, o.element)
+        else if (o.kind === 'add') added.set(o.element.id, o.element)
+        else if (o.kind === 'transaction') o.ops.forEach(walk)
+      }
+      walk(op)
+      // A same-id remove+add pair is an in-place replacement: diff its fields.
+      for (const [id, after] of added) {
+        const before = removed.get(id)
+        if (!before) continue
+        const av = after as unknown as Record<string, unknown>
+        const bv = before as unknown as Record<string, unknown>
+        const b: Record<string, unknown> = {}
+        const a: Record<string, unknown> = {}
+        for (const k of new Set([...Object.keys(av), ...Object.keys(bv)])) {
+          if (JSON.stringify(av[k]) === JSON.stringify(bv[k])) continue
+          b[k] = bv[k]
+          a[k] = av[k]
+        }
+        if (Object.keys(a).length) changes.push({ id, before: b as ElementPatch, after: a as ElementPatch })
+      }
+      return changes
+    }
+    function propagateEdits(op: Operation, doc: BoardDoc): BoardDoc {
+      const a = doc.animation
+      if (a.frames.length < 2 || a.current >= a.frames.length - 1) return doc
+      const changes = collectEdits(op)
+      if (changes.length === 0) return doc
+      const frames = a.frames.slice()
+      let any = false
+      for (const ch of changes) {
+        const keys = Object.keys(ch.after)
+        if (keys.length === 0) continue
+        const before = ch.before as unknown as Record<string, unknown>
+        for (let i = a.current + 1; i < frames.length; i++) {
+          const els = frames[i].elements
+          const idx = els.findIndex((e) => e.id === ch.id)
+          if (idx < 0) break // the element left the scene — chain ends
+          const cur = els[idx] as unknown as Record<string, unknown>
+          // This frame owns a DIFFERENT value for an edited field → chain broken.
+          if (keys.some((k) => JSON.stringify(cur[k]) !== JSON.stringify(before[k]))) break
+          const next = els.slice()
+          next[idx] = { ...els[idx], ...structuredClone(ch.after) } as BoardElement
+          frames[i] = { ...frames[i], elements: next }
+          any = true
+        }
+      }
+      return any ? { ...doc, animation: { ...a, frames } } : doc
+    }
+
     function push(op: Operation, post?: (d: BoardDoc) => BoardDoc) {
       if (get().playing) return // playback owns the doc; no edits land
       const { doc, stack, pointer } = get()
       let nextDoc = applyOperation(doc, op)
       if (post) nextDoc = post(nextDoc)
-      nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, syncFrames(nextDoc)))
+      nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, propagateEdits(op, syncFrames(nextDoc))))
       const nextStack = stack.slice(0, pointer + 1)
       nextStack.push(op)
       set({ doc: nextDoc, stack: nextStack, pointer: pointer + 1 })
@@ -1088,7 +1152,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       undo: () => {
         const { stack, pointer, doc, selectedIds } = get()
         if (pointer < 0) return
-        const nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, syncFrames(applyOperation(doc, invertOperation(stack[pointer])))))
+        const inv = invertOperation(stack[pointer])
+        const nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, propagateEdits(inv, syncFrames(applyOperation(doc, inv)))))
         // Keep the selection across undo, but drop ids of elements the undo
         // removed (e.g. undoing a create) — so only delete-like undos clear it.
         set({ doc: nextDoc, pointer: pointer - 1, selectedIds: keepExisting(selectedIds, nextDoc) })
@@ -1098,7 +1163,7 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       redo: () => {
         const { stack, pointer, doc, selectedIds } = get()
         if (pointer >= stack.length - 1) return
-        const nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, syncFrames(applyOperation(doc, stack[pointer + 1]))))
+        const nextDoc = propagateEffects(doc.elements, propagatePresence(doc.elements, propagateEdits(stack[pointer + 1], syncFrames(applyOperation(doc, stack[pointer + 1])))))
         set({ doc: nextDoc, pointer: pointer + 1, selectedIds: keepExisting(selectedIds, nextDoc) })
         onChange?.(nextDoc)
       },
