@@ -130,6 +130,10 @@ export const SCISSOR_KICK: GkCatchMeta = { clip: 'Scissor Kick', loop: false, co
 // the head at frame 20 (user-measured (-0.03, -0.65, 1.4), raw mapping: the
 // clip's hips barely move) exactly ON the frame boundary.
 export const HEADER: GkCatchMeta = { clip: 'Header', loop: false, contactTime: 20 / 30, reach: 1.0, hand: [-0.03, 1.4, 0.65] }
+// JUMPING HEADER: the ball meets the head at the top of the jump — frame 38,
+// user-measured (0.02, -0.4, 1.75), raw mapping (a pure vertical jump, no
+// ground drift).
+export const JUMPING_HEADER: GkCatchMeta = { clip: 'Soccer Header', loop: false, contactTime: 38 / 30, reach: 1.0, hand: [0.02, 1.75, 0.4] }
 
 /** Whether this pose is the scissor kick. */
 export function isScissorPose(objectId: string): boolean {
@@ -142,6 +146,7 @@ export function isScissorPose(objectId: string): boolean {
 export function airStrikeFor(objectId: string): GkCatchMeta | null {
   if (isScissorPose(objectId)) return SCISSOR_KICK
   if (/^pose_(?:man|woman)_header$/.test(objectId)) return HEADER
+  if (/^pose_(?:man|woman)_jumping_header$/.test(objectId)) return JUMPING_HEADER
   return null
 }
 
@@ -189,7 +194,7 @@ export function gkCatchFor(objectId: string): GkCatchMeta | null {
   return (m && GK_CATCH[m[1]]) || null
 }
 
-const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK, SCISSOR_KICK, HEADER, THROW_IN].map((m) => [m.clip, m]))
+const metaByClip = new Map([...Object.values(PLAYER_CLIPS), ...Object.values(GK_CATCH), GK_KICK, SCISSOR_KICK, HEADER, JUMPING_HEADER, THROW_IN].map((m) => [m.clip, m]))
 
 // ── Character lookup ─────────────────────────────────────────────────────────
 // Which skinned character a player objectId animates as. Base players map to
