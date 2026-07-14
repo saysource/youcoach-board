@@ -87,8 +87,8 @@ import { isObject3DBall, isObject3DRotatable, object3dGroundBounds } from '../li
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, type PitchType } from '../lib/field-camera'
 import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
-import { exportBoardImage, registerBoardExporter, registerBoardVideoExporter, loadExportFonts, drawBoardVideoFrame } from '../lib/export-image'
-import { GK_MISS_FACTOR, interactionReach, startPlayback, isPlaying, beginAnimationRender, seekAnimationFrame, endAnimationRender, animationFrameCount } from '../lib/animation-playback'
+import { exportBoardImage, registerBoardExporter } from '../lib/export-image'
+import { GK_MISS_FACTOR, interactionReach, beginAnimationRender, seekAnimationFrame, endAnimationRender, animationFrameCount } from '../lib/animation-playback'
 import { gkCatchFor } from '../lib/player-anim'
 import { logoDarkFor } from '../lib/logo'
 import { boardToMetric, worldToBoard } from '../lib/homography-camera'
@@ -2471,7 +2471,6 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // latest closure lives in a ref (it captures doc/camera/ctm) — refreshed in an
   // effect (not during render) — and is registered once on mount.
   const exportImageRef = useRef<(w: number, h: number) => Promise<void>>(async () => {})
-  const exportVideoRef = useRef<(w: number, h: number) => Promise<void>>(async () => {})
   useEffect(() => {
     exportImageRef.current = async (w, h) => {
       if (!containerRef.current || !svgRef.current) return
@@ -2510,100 +2509,19 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         setSelection(prevSel)
       }
     }
-    // "Video" (main menu, animations only): play the clip ONCE and capture each
-    // composited frame into a canvas → MediaRecorder → .webm. Real-time capture,
-    // so the video length matches playback; frame rate follows how fast the layer
-    // stack can be composited.
-    exportVideoRef.current = async (w, h) => {
-      const container = containerRef.current
-      const svg = svgRef.current
-      if (!container || !svg) return
-      if (doc.animation.frames.length < 2 || typeof MediaRecorder === 'undefined') return
-      const ctm = boardCtm
-      const env = {
-        container,
-        svg,
-        background: doc.background,
-        texts: fieldCamCfg && ctm ? doc.elements.map(liveElement).filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground) : [],
-        cam: arrow3dCam,
-        boardToPx: (b: [number, number]) => (ctm ? { x: ctm.a * b[0] + ctm.c * b[1] + ctm.ex, y: ctm.b * b[0] + ctm.d * b[1] + ctm.ey } : { x: 0, y: 0 }),
-        fontIds: docFontIds(doc),
-      }
-      const fontCss = await loadExportFonts(env)
-      const rec = document.createElement('canvas')
-      rec.width = w
-      rec.height = h
-      const g = rec.getContext('2d')
-      if (!g) return
-      const stream = rec.captureStream(30)
-      // Prefer MP4/H.264 (universally playable, native on iOS/Safari); fall back to
-      // WebM (VP9/VP8) where MP4 recording isn't supported (e.g. Firefox).
-      const mime = ['video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm'
-      const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm'
-      let recorder: MediaRecorder
-      try {
-        recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16_000_000 })
-      } catch {
-        return
-      }
-      const chunks: Blob[] = []
-      recorder.ondataavailable = (e) => {
-        if (e.data.size) chunks.push(e.data)
-      }
-      const stopped = new Promise<void>((res) => {
-        recorder.onstop = () => res()
-      })
-      // Play once (loop off → playback auto-stops), from the first frame, with no
-      // selection chrome. Save the editing state and restore it afterwards.
-      const st = storeApi.getState()
-      const prevLoop = st.doc.animation.loop
-      const prevFrame = st.currentFrame
-      const prevSel = selectedIds
-      setSelection([])
-      st.setAnimationSettings({ loop: false })
-      st.setCurrentFrame(0)
-      const raf = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
-      await raf()
-      await raf() // let the first frame settle before recording
-      recorder.start()
-      startPlayback(storeApi)
-      await raf() // give playback a tick to set `playing`
-      while (isPlaying(storeApi)) {
-        await drawBoardVideoFrame(env, g, w, h, fontCss)
-        await raf()
-      }
-      await drawBoardVideoFrame(env, g, w, h, fontCss) // final resting frame
-      recorder.stop()
-      await stopped
-      const s2 = storeApi.getState()
-      s2.setAnimationSettings({ loop: prevLoop })
-      s2.setCurrentFrame(prevFrame)
-      setSelection(prevSel)
-      const blob = new Blob(chunks, { type: mime })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${doc.title || 'board'}-${w}x${h}.${ext}`
-      a.click()
-      URL.revokeObjectURL(url)
-    }
   })
   useEffect(() => {
     registerBoardExporter((w, h) => exportImageRef.current(w, h))
-    registerBoardVideoExporter((w, h) => exportVideoRef.current(w, h))
     // Dev-only automation hook (CDP tests drive exports directly through it).
     if (import.meta.env.DEV) {
-      const win = window as unknown as { __ycbExport?: unknown; __ycbExportVideo?: unknown }
+      const win = window as unknown as { __ycbExport?: unknown }
       win.__ycbExport = (w: number, h: number) => exportImageRef.current(w, h)
-      win.__ycbExportVideo = (w: number, h: number) => exportVideoRef.current(w, h)
     }
     return () => {
       registerBoardExporter(null)
-      registerBoardVideoExporter(null)
       if (import.meta.env.DEV) {
-        const win = window as unknown as { __ycbExport?: unknown; __ycbExportVideo?: unknown }
+        const win = window as unknown as { __ycbExport?: unknown }
         delete win.__ycbExport
-        delete win.__ycbExportVideo
       }
     }
   }, [])

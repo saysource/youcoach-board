@@ -119,10 +119,10 @@ export function ExportVideoDialog({ open, onOpenChange, exportUrl }: { open: boo
               ))}
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => change(false)}>
+              <Button variant="outline" size="sm" onClick={() => change(false)}>
                 {t('Cancel')}
               </Button>
-              <Button onClick={() => void start()} disabled={phase === 'submitting'}>
+              <Button variant="default" size="sm" onClick={() => void start()} disabled={phase === 'submitting'}>
                 {phase === 'submitting' ? <LoaderCircle className="animate-spin" /> : <Clapperboard />} {t('Start export')}
               </Button>
             </div>
@@ -141,7 +141,7 @@ export function ExportVideoDialog({ open, onOpenChange, exportUrl }: { open: boo
           <div className="flex flex-col items-center gap-3 py-4">
             <CheckCircle2 className="size-8 text-green-600" />
             <div className="text-sm">{t('The video is ready and the download has started.')}</div>
-            <Button variant="outline" onClick={() => change(false)}>
+            <Button variant="outline" size="sm" onClick={() => change(false)}>
               {t('Close')}
             </Button>
           </div>
@@ -152,10 +152,10 @@ export function ExportVideoDialog({ open, onOpenChange, exportUrl }: { open: boo
             <TriangleAlert className="size-8 text-destructive" />
             <div className="text-sm">{t('The video export failed. Please try again.')}</div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => change(false)}>
+              <Button variant="outline" size="sm" onClick={() => change(false)}>
                 {t('Close')}
               </Button>
-              <Button onClick={() => setPhase('idle')}>{t('Try again')}</Button>
+              <Button variant="default" size="sm" onClick={() => setPhase('idle')}>{t('Try again')}</Button>
             </div>
           </div>
         )}

@@ -37,16 +37,6 @@ export function boardExporter(): Exporter | null {
   return currentExporter
 }
 
-// Video exporter (animation → .webm): registered by InteractiveBoard, called by
-// the main menu's Video items (shown only when the drawing has >1 frame).
-let currentVideoExporter: Exporter | null = null
-export function registerBoardVideoExporter(fn: Exporter | null): void {
-  currentVideoExporter = fn
-}
-export function boardVideoExporter(): Exporter | null {
-  return currentVideoExporter
-}
-
 /** The letterboxed 4:3 board rect within the container, in container px. */
 function boardRect(env: ExportEnv): { x: number; y: number; width: number; height: number } {
   const sr = env.svg.getBoundingClientRect()
@@ -240,19 +230,6 @@ async function paintBoard(g: CanvasRenderingContext2D, env: ExportEnv, br: { x: 
   drawCanvasLayer(g, env, 'canvas[data-layer="object3d"]')
   const captions = env.container.querySelector<SVGSVGElement>('svg[data-layer="captions"]')
   if (captions) await drawSvg(g, env, captions, k)
-}
-
-// Paint ONE animation frame straight into a (width×height) video canvas: cover-fit
-// (board fills the frame, excess cropped about the centre), at 1× — no supersample,
-// so each frame stays fast enough to keep up with playback. `fontCss` is loaded once
-// by the caller. The context is cleared each call (video canvases have no alpha).
-export async function drawBoardVideoFrame(env: ExportEnv, g: CanvasRenderingContext2D, width: number, height: number, fontCss: string): Promise<void> {
-  const br = boardRect(env)
-  g.setTransform(1, 0, 0, 1, 0, 0)
-  g.clearRect(0, 0, width, height)
-  const k = Math.max(width / br.width, height / br.height)
-  g.setTransform(k, 0, 0, k, -br.x * k + (width - br.width * k) / 2, -br.y * k + (height - br.height * k) / 2)
-  await paintBoard(g, env, br, k, fontCss)
 }
 
 export async function exportBoardImage(env: ExportEnv, width: number, height: number, filename: string): Promise<void> {
