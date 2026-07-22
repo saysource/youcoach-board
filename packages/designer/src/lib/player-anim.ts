@@ -434,8 +434,8 @@ export function buildSkinnedPlayer(objectId: string): THREE.Object3D | null {
 }
 
 /** Live kit swap for a skinned instance (same semantics as the static branch). */
-export function setSkinnedPlayerKit(root: THREE.Object3D, objectId: string, colors?: Record<string, string>): void {
-  const kit = playerKitTexture(objectId, colors)
+export function setSkinnedPlayerKit(root: THREE.Object3D, objectId: string, colors?: Record<string, string>, text?: string, textColor?: string): void {
+  const kit = playerKitTexture(objectId, colors, text, textColor)
   root.traverse((o) => {
     const m = (o as THREE.SkinnedMesh).isSkinnedMesh ? ((o as THREE.SkinnedMesh).material as THREE.Material) : null
     if (m instanceof THREE.MeshToonMaterial && m.map !== kit) {

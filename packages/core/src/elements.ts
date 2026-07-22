@@ -356,6 +356,11 @@ export interface Object3DElement extends BaseElement {
   /** Recolor slots (3D players: skin/hair/kit), the same slot names as figure
    *  players (yc-skin, yc-hair, yc-color-1 …). Absent → the authored look. */
   colors?: Record<string, string>
+  /** 3D players: a short shirt print (number/name) replacing the default
+   *  "10 PLAYER" artwork on back/chest/shorts, drawn in `textColor` (white
+   *  when unset). Absent → the authored print. */
+  text?: string
+  textColor?: string
   /** TRANSIENT render hints (playback enter/exit effects only, never
    *  persisted): mesh opacity (0‥1), an extra scale multiplier, and a height
    *  off the pitch in metres (vertical drop/lift/up/down effects). */
@@ -1143,6 +1148,8 @@ export function parseElement(raw: unknown): BoardElement | null {
       size: num(o.size) ?? OBJECT3D_DEFAULTS.size,
       useGlobalSize: o.useGlobalSize !== false,
       colors: parseColors(o.colors),
+      text: typeof o.text === 'string' && o.text !== '' ? o.text : undefined,
+      textColor: typeof o.textColor === 'string' && o.textColor !== '' ? o.textColor : undefined,
     }
   }
   return null

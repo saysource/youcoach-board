@@ -389,11 +389,11 @@ export const Object3DLayer = forwardRef<Object3DLayerHandle, Props>(function Obj
       // (the asset-ready re-render then lands the real one).
       if (isObject3DPlayer(e.objectId)) {
         if (obj.userData.skinned) {
-          setSkinnedPlayerKit(obj, e.objectId, e.colors)
+          setSkinnedPlayerKit(obj, e.objectId, e.colors, e.text, e.textColor)
         } else {
           const m = (obj as THREE.Mesh).material
           if (m instanceof THREE.MeshToonMaterial) {
-            const kit = playerKitTexture(e.objectId, e.colors)
+            const kit = playerKitTexture(e.objectId, e.colors, e.text, e.textColor)
             if (m.map !== kit) {
               m.map = kit
               m.needsUpdate = true

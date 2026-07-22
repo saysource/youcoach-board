@@ -10,7 +10,7 @@ import { useAssets, buildFigureElement, buildObject3DElement, figureIndex, figur
 import { boardTokenStyles, clientToBoard, makeToken, nextTokenText, TOKEN_SIZE, tokenLookKey } from '../lib/draw'
 import { pinNewToken } from '../lib/field-anchor'
 import { boardToGround, makeArrow3DCamera } from '../lib/arrow3d'
-import { isObject3DPlayer, onObject3DAssetReady, PLAYER_NEUTRAL_SLOTS, tokenPuckThumb } from '../lib/objects3d'
+import { nextPlayerShirtNumber, isObject3DPlayer, onObject3DAssetReady, PLAYER_NEUTRAL_SLOTS, tokenPuckThumb } from '../lib/objects3d'
 import { makeCalibratedCamera } from '../lib/field-camera'
 import { fieldCamera } from '../lib/field-reference'
 import { legacyObjectScale, TOKEN_DEFAULT_SIZE_M } from '../lib/field-anchor'
@@ -441,7 +441,10 @@ export function LibraryDrawer({ open, onClose, fullscreen, onToggleFullscreen, c
         setBackground({ objectScale: legacyObjectScale(fieldCamera(bgFieldSvg), figureScale) })
       }
       const inherited = Object.keys(playerColors).length ? playerColors : PLAYER_NEUTRAL_SLOTS
-      createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z, isObject3DPlayer(d.desc.object3d) ? inherited : undefined))
+      const isPlayer = isObject3DPlayer(d.desc.object3d)
+      // Like tokens, a dropped player takes the first free shirt number among
+      // the players already wearing this kit (1, 2, …).
+      createFigure(buildObject3DElement(d.desc.object3d, g.x, g.z, isPlayer ? inherited : undefined, isPlayer ? nextPlayerShirtNumber(elements, inherited) : undefined))
       return
     }
     // A TOKEN template: create a disc token there (like the token tool would)

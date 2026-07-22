@@ -693,9 +693,44 @@ function kitImage(key: string, dataUri: string): HTMLImageElement | null {
 }
 
 /** The cache key a set of colors resolves to (order-stable, kit slots only). */
-export function playerKitKey(objectId: string, colors: Record<string, string> | undefined): string {
-  if (!colors) return objectId
-  return objectId + '|' + KIT_SLOTS.map((s) => colors[s] ?? '').join('|')
+export function playerKitKey(objectId: string, colors: Record<string, string> | undefined, text?: string, textColor?: string): string {
+  const c = colors ? objectId + '|' + KIT_SLOTS.map((s) => colors[s] ?? '').join('|') : objectId
+  return text ? c + '|t:' + text + '|' + (textColor ?? '') : c
+}
+
+// The three spots the kit atlas prints the shirt text (block-local coords,
+// measured from kit_print.png): the big back number, the chest print and the
+// small shorts print. A custom text replaces all three (the PLAYER caption is
+// dropped — it belongs to the default artwork).
+// Jersey glyphs must stay INSIDE the UV island (x 14..114 — beyond it the
+// texels wrap to the sides/shoulders), so back/chest centre on the island
+// and cap their width with a small margin.
+const SHIRT_PRINTS = [
+  { block: 3, cx: 64, cy: 58, size: 56, maxW: 84 }, // back
+  { block: 4, cx: 64, cy: 82, size: 36, maxW: 84 }, // chest
+  { block: 5, cx: 19, cy: 86, size: 15, maxW: 30 }, // shorts
+]
+
+/** The team-identity kit slots (skin/hair excluded): two players "wear the
+ *  same kit" when these colors match. */
+const KIT_TEAM_SLOTS = [SLOT_JERSEY, SLOT_SHORTS, SLOT_VSTRIPE, SLOT_HSTRIPE, SLOT_SOCKS]
+
+/** First free shirt number (1, 2, …) among the 3D players wearing the same
+ *  kit colors. A player without a custom print counts as 10 — that is what
+ *  his default shirt shows. Non-numeric prints don't reserve a number. */
+export function nextPlayerShirtNumber(elements: ReadonlyArray<{ type: string; objectId?: string; colors?: Record<string, string>; text?: string }>, colors: Record<string, string> | undefined): string {
+  const teamKey = (c?: Record<string, string>) => KIT_TEAM_SLOTS.map((s) => c?.[s] ?? '').join('|')
+  const mine = teamKey(colors)
+  const taken = new Set<number>()
+  for (const e of elements) {
+    if (e.type !== 'object3d' || !e.objectId || !isObject3DPlayer(e.objectId)) continue
+    if (teamKey(e.colors) !== mine) continue
+    const n = Number((e.text ?? '10').trim())
+    if (Number.isInteger(n)) taken.add(n)
+  }
+  let n = 1
+  while (taken.has(n)) n++
+  return String(n)
 }
 
 // One texture per distinct (character, colors) look, shared across instances.
@@ -710,9 +745,10 @@ function activeStripe(c: string | undefined, jersey: string | undefined): string
 /** The kit texture for a character + optional recolor slots. Cached by look.
  *  Falls back to the plain character atlas while images are still decoding
  *  (subscribers re-render when they're ready). */
-export function playerKitTexture(objectId: string, colors?: Record<string, string>): THREE.Texture {
-  const hasCustom = !!colors && KIT_SLOTS.some((s) => colors[s])
-  const key = hasCustom ? playerKitKey(objectId, colors) : objectId
+export function playerKitTexture(objectId: string, colors?: Record<string, string>, text?: string, textColor?: string): THREE.Texture {
+  const shirtText = text?.trim() ? text.trim() : null
+  const hasCustom = (!!colors && KIT_SLOTS.some((s) => colors[s])) || !!shirtText
+  const key = hasCustom ? playerKitKey(objectId, colors, shirtText ?? undefined, textColor) : objectId
   const cached = kitTextures.get(key)
   if (cached) return cached
 
@@ -736,6 +772,17 @@ export function playerKitTexture(objectId: string, colors?: Record<string, strin
   canvas.height = KIT_H
   const g = canvas.getContext('2d')!
   g.drawImage(base, 0, 0, KIT_W, KIT_H) // defaults for untouched blocks (shoes …)
+
+  // A custom shirt text replaces the baked "10 PLAYER" prints: flood each print
+  // block with its own flat atlas color first (sampled from a print-free corner)
+  // so the old glyphs are gone even when that block keeps its authored color.
+  if (shirtText) {
+    for (const b of [...JERSEY_BLOCKS, SHORTS_BLOCK]) {
+      const px = g.getImageData(b * BLOCK + 4, 4, 1, 1).data
+      g.fillStyle = `rgb(${px[0]},${px[1]},${px[2]})`
+      g.fillRect(b * BLOCK, 0, BLOCK, KIT_H)
+    }
+  }
 
   const fillBlock = (b: number, color: string) => {
     g.fillStyle = color
@@ -776,7 +823,24 @@ export function playerKitTexture(objectId: string, colors?: Record<string, strin
     g.fillStyle = jersey
     g.fillRect(SLEEVE_X, 0, KIT_W - SLEEVE_X, KIT_H)
   }
-  g.drawImage(print, 0, 0, KIT_W, KIT_H) // restore the "PLAYER 10" prints
+  if (shirtText) {
+    // Paint the custom text at the three print spots (auto-shrunk to fit).
+    g.textAlign = 'center'
+    g.textBaseline = 'middle'
+    g.fillStyle = textColor || '#ffffff'
+    for (const sp of SHIRT_PRINTS) {
+      let size = sp.size
+      g.font = `${TOKEN_FONT_WEIGHT} ${size}px ${TOKEN_FONT}`
+      const w = g.measureText(shirtText).width
+      if (w > sp.maxW) {
+        size = Math.max(8, (size * sp.maxW) / w)
+        g.font = `${TOKEN_FONT_WEIGHT} ${size}px ${TOKEN_FONT}`
+      }
+      g.fillText(shirtText, sp.block * BLOCK + sp.cx, sp.cy)
+    }
+  } else {
+    g.drawImage(print, 0, 0, KIT_W, KIT_H) // restore the "PLAYER 10" prints
+  }
 
   const tex = new THREE.CanvasTexture(canvas)
   tex.flipY = false

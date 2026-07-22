@@ -142,6 +142,8 @@ export function usePropertyEditing() {
         object3dSize: undefined as number | undefined,
         object3dUseGlobal: undefined as boolean | undefined,
         object3dSlotColors: {} as Record<string, string>,
+        shirtText: undefined as string | undefined,
+        shirtTextColor: undefined as string | undefined,
       },
       setStroke: (stroke: string) => setToolDefaults({ stroke }),
       setStrokeWidth: (strokeWidth: number) => setToolDefaults({ strokeWidth }),
@@ -189,6 +191,8 @@ export function usePropertyEditing() {
       setObject3DUseGlobal: () => {},
       setObject3DSize: () => {},
       setObject3DSlotColor: () => {},
+      setShirtText: () => {},
+      setShirtTextColor: () => {},
       setSkin: () => {},
       setHair: () => {},
       setSkinHair: () => {},
@@ -335,6 +339,9 @@ export function usePropertyEditing() {
       object3dSize: firstObject3D?.size,
       object3dUseGlobal: firstObject3D?.useGlobalSize,
       object3dSlotColors,
+      // 3D player shirt print (custom text replacing the default "10").
+      shirtText: player3ds[0]?.text ?? '',
+      shirtTextColor: player3ds[0]?.textColor ?? '#ffffff',
     },
     setStroke: (stroke: string) => {
       patch(els, (e) => ({ before: { stroke: e.stroke }, after: { stroke } }))
@@ -394,6 +401,9 @@ export function usePropertyEditing() {
     setObject3DUseGlobal: (useGlobalSize: boolean) => patch(object3ds, (e) => ({ before: { useGlobalSize: (e as Extract<BoardElement, { type: 'object3d' }>).useGlobalSize }, after: { useGlobalSize } })),
     setObject3DSize: (size: number) => patch(object3ds, (e) => ({ before: { size: (e as Extract<BoardElement, { type: 'object3d' }>).size }, after: { size } })),
     setObject3DSlotColor: (slot: string, color: string) => patch(object3ds, (e) => ({ before: { colors: colorsOf(e) }, after: { colors: { ...colorsOf(e), [slot]: color } } })),
+    // 3D player shirt print: text + its color.
+    setShirtText: (text: string) => patch(player3ds, (e) => ({ before: { text: (e as Extract<BoardElement, { type: 'object3d' }>).text }, after: { text: text || undefined } })),
+    setShirtTextColor: (textColor: string) => patch(player3ds, (e) => ({ before: { textColor: (e as Extract<BoardElement, { type: 'object3d' }>).textColor }, after: { textColor } })),
     // Player skin/kit: patch the relevant color slots on the selected player(s) —
     // 2D figures and 3D player characters alike (both carry `colors` slots).
     // (The remember-effect re-captures them, so new players inherit the change.)
