@@ -616,7 +616,11 @@ const INTERACT_R = 1.0
 const KICK_MIN_RUN = 3 // the ball must depart at least this far
 const KICK_PRE_S = 0.25 // one-shot starts this long before its ball contact
 const GAIT_FADE_S = 0.25 // clip-to-clip cross-fade (jog↔run, into one-shots)
-const TURN_MIN_RAD = Math.PI / 4 // sharp corner: direction change ≥ 45° (interior ≤ 135°)
+const TURN_MIN_RAD = Math.PI / 4 // turn-in-place: authored rotation spin ≥ 45°
+// Change Direction plays only for a REPENTINE corner: the direction must
+// rotate by MORE than 135° at the shared frame point (spec "More about change
+// of direction"), measured between the spline tangents, not the chords.
+const SHARP_TURN_MIN_RAD = (3 * Math.PI) / 4
 const GAIT_RAMP_S = 0.3 // idle↔locomotion envelope: ramp in from rest / out to rest
 const FACE_BLEND = 0.15 // transition fraction blending authored ↔ path tangent
 
@@ -938,13 +942,27 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       }
     }
   }
-  // A SHARP path corner between two real runs (direction change ≥ 45° — the
-  // corner's interior angle ≤ 135°, all the way down to a full reversal).
-  const sharpTurn = (v1x: number, v1z: number, v2x: number, v2z: number): boolean => {
+  // A REPENTINE path corner between two real runs: the travel direction turns
+  // by MORE than 135° at the shared point. Measured on the ACTUAL estimated
+  // path — the incoming leg's spline tangent at its last point vs the outgoing
+  // leg's at its first — so a bent spline can't fake (or hide) the corner the
+  // straight chords would suggest.
+  const TANGENT_EPS = 0.02 // path fraction sampled on each side of the corner
+  const sharpCorner = (posIn: (q: number) => { x: number; z: number } | null, posOut: (q: number) => { x: number; z: number } | null, runIn: number, runOut: number): boolean => {
+    if (runIn / D < IDLE_SPEED || runOut / D < IDLE_SPEED) return false
+    const i1 = posIn(1 - TANGENT_EPS)
+    const i2 = posIn(1)
+    const o1 = posOut(0)
+    const o2 = posOut(TANGENT_EPS)
+    if (!i1 || !i2 || !o1 || !o2) return false
+    const v1x = i2.x - i1.x
+    const v1z = i2.z - i1.z
+    const v2x = o2.x - o1.x
+    const v2z = o2.z - o1.z
     const l1 = Math.hypot(v1x, v1z)
     const l2 = Math.hypot(v2x, v2z)
-    if (l1 / D < IDLE_SPEED || l2 / D < IDLE_SPEED) return false
-    return (v1x * v2x + v1z * v2z) / (l1 * l2) <= Math.cos(TURN_MIN_RAD)
+    if (!l1 || !l2) return false
+    return (v1x * v2x + v1z * v2z) / (l1 * l2) < Math.cos(SHARP_TURN_MIN_RAD)
   }
   // A player already claimed by an interaction one-shot never turn-plants.
   const busy = (id: string): boolean =>
@@ -960,7 +978,13 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       if (!p0 || !p1 || p0.type !== 'object3d' || p1.type !== 'object3d') continue
       const g = gaitFor(Math.hypot(p1.x - p0.x, p1.z - p0.z) / D)
       gaits.set(p.id, { clip: g.clip, rate: g.rate, moving: g.moving })
-      if (!isGoalkeeper(p.objectId) && !busy(p.id) && sharpTurn(p1.x - p0.x, p1.z - p0.z, p.x - p1.x, p.z - p1.z)) {
+      const midsIn = prev.paths?.[p.id]
+      const midsOut = paths?.[p.id]
+      const posIn = groundPosAt(p0, p1, midsIn, midsIn?.length ? cam() : null)
+      const posOut = groundPosAt(p1, p, midsOut, midsOut?.length ? cam() : null)
+      const runIn = groundRun(p0, p1, midsIn, midsIn?.length ? cam() : null)
+      const runOut = groundRun(p1, p, midsOut, midsOut?.length ? cam() : null)
+      if (!isGoalkeeper(p.objectId) && !busy(p.id) && sharpCorner(posIn, posOut, runIn, runOut)) {
         ;(rules.prevTurnOf = rules.prevTurnOf ?? new Set()).add(p.id)
         // Where the turn froze him: the clip-start point on the previous leg.
         const fq = Math.max(0, (D - (PLAYER_CLIPS.changeDir.contactTime ?? 0.833)) / D)
@@ -980,7 +1004,14 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       const g = gaitFor(Math.hypot(p2.x - p.x, p2.z - p.z) / D)
       gaits.set(p.id, { clip: g.clip, rate: g.rate, moving: g.moving })
       const pA = byIdA.get(p.id) as Obj3D | undefined
-      if (pA?.type === 'object3d' && !isGoalkeeper(p.objectId) && !busy(p.id) && sharpTurn(p.x - pA.x, p.z - pA.z, p2.x - p.x, p2.z - p.z)) (rules.turnOf = rules.turnOf ?? new Set()).add(p.id)
+      if (pA?.type !== 'object3d' || isGoalkeeper(p.objectId) || busy(p.id)) continue
+      const midsIn = paths?.[p.id]
+      const midsOut = next.paths?.[p.id]
+      const posIn = groundPosAt(pA, p, midsIn, midsIn?.length ? cam() : null)
+      const posOut = groundPosAt(p, p2, midsOut, midsOut?.length ? cam() : null)
+      const runIn = groundRun(pA, p, midsIn, midsIn?.length ? cam() : null)
+      const runOut = groundRun(p, p2, midsOut, midsOut?.length ? cam() : null)
+      if (sharpCorner(posIn, posOut, runIn, runOut)) (rules.turnOf = rules.turnOf ?? new Set()).add(p.id)
     }
     rules.nextGait = gaits
   }
