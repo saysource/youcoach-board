@@ -229,6 +229,21 @@ function KitColorButton({ color, label, onChange, open, onOpenChange }: { color:
   )
 }
 
+// The shirt print's text color: a small swatch opening the standard picker
+// (nested popper content — the parent popover's keepOpenOnNested keeps it up).
+function ShirtTextColorButton({ color, label, onChange }: { color: string; label: string; onChange: (c: string) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label={label} className="size-6 shrink-0 rounded-md border border-border/70" style={{ background: color }} />
+      </PopoverTrigger>
+      <PopoverContent side="right" align="start" className="w-56">
+        <ColorPickerWidget value={color} onChange={onChange} showOpacity={false} allowTransparent={false} />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 const KIT_STYLES: KitStyle[] = ['solid', 'vstripes', 'hstripes', 'checker']
 
 // The kit editor: big preview | controls (style + colors) | recent-kits grid.
@@ -362,6 +377,27 @@ export function PlayerSettingsButton({ side }: { side: 'right' | 'top' }) {
             <SkinButton open={editor === 'skin'} onToggle={() => go(editor === 'skin' ? null : 'skin')} />
             <KitButton open={editor === 'kit'} onToggle={() => go(editor === 'kit' ? null : 'kit')} />
           </div>
+          {/* Shirt print (3D characters only): text + its color, between the
+              skin/kit editors and the opacity, set off by a separator. */}
+          {p.allObject3D && (
+            <>
+              <div className="h-px w-full bg-border" />
+              <div>
+                <div className="mb-1 text-[11px] font-medium text-muted-foreground">{t('Shirt text')}</div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={p.values.shirtText ?? ''}
+                    onChange={(e) => p.setShirtText(e.target.value)}
+                    maxLength={12}
+                    placeholder={t('Number')}
+                    className="h-8 w-full min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <ShirtTextColorButton color={p.values.shirtTextColor ?? '#ffffff'} label={t('Text color')} onChange={p.setShirtTextColor} />
+                </div>
+              </div>
+            </>
+          )}
           <OpacityRow />
         </div>
       </PopoverContent>

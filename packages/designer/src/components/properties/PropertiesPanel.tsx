@@ -1,6 +1,6 @@
 import { type ComponentType, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Type,
+import {
   SlidersHorizontal,
   ChevronDown,
   Check,
@@ -176,15 +176,6 @@ function PropertiesBar({ backgroundMode }: { backgroundMode: boolean }) {
           <>
             <PlayerSettingsButton side="right" />
             {p.allObject3D && <Object3DSettingsButton side="right" />}
-            {/* Shirt print (3D characters only): the text, then — past a
-                separator — its color. */}
-            {p.allObject3D && (
-              <>
-                <ShirtTextButton side="right" />
-                <span className="my-0.5 h-px w-6 bg-border" />
-                <ColorButton kind="fill" label={t('Text color')} value={p.values.shirtTextColor} onChange={p.setShirtTextColor} side="right" showOpacity={false} />
-              </>
-            )}
           </>
         ) : p.allArrow3d ? (
           // 3D arrow: colour + a settings popover (opacity + geometry).
@@ -570,39 +561,6 @@ function FontPicker({ value, onChange }: { value?: string; onChange: (id?: strin
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-// The 3D player's shirt print: a short text (number or name) written on the
-// jersey in place of the default "10 PLAYER" artwork.
-function ShirtTextButton({ side }: { side: 'right' | 'top' }) {
-  const { t } = useTranslation()
-  const p = usePropertyEditing()
-  return (
-    <Popover>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button size="icon" aria-label={t('Shirt text')}>
-              <Type />
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{t('Shirt text')}</TooltipContent>
-      </Tooltip>
-      <PopoverContent side={side} align="start" className="w-56">
-        <Field label={t('Text')}>
-          <input
-            type="text"
-            value={p.values.shirtText ?? ''}
-            onChange={(e) => p.setShirtText(e.target.value)}
-            className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            placeholder={t('Number')}
-            maxLength={12}
-          />
-        </Field>
-      </PopoverContent>
-    </Popover>
   )
 }
 
