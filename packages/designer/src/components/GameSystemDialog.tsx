@@ -21,7 +21,7 @@ import {
 } from '../lib/formations'
 
 // The two default team colors when the board doesn't already have teams.
-const RED: TokenStyle = { shape: 'token', tokenFill: 'solid', color1: '#d34134', color2: '#d34134', textColor: '#000000', showLabel: false }
+const RED: TokenStyle = { shape: 'token', tokenFill: 'solid', color1: '#fa3523', color2: '#fa3523', textColor: '#000000', showLabel: false }
 const BLUE: TokenStyle = { shape: 'token', tokenFill: 'solid', color1: '#3888ff', color2: '#3888ff', textColor: '#000000', showLabel: false }
 
 // The field artwork (single stroked path) per kind.
