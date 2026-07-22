@@ -964,6 +964,38 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
     if (!l1 || !l2) return false
     return (v1x * v2x + v1z * v2z) / (l1 * l2) < Math.cos(SHARP_TURN_MIN_RAD)
   }
+  // CARRYING the ball: a ball glued to the player's run over a whole leg (the
+  // same 5-sample DRIBBLE_R glue-check the dribble gait uses). A carrier never
+  // plants a Change Direction — whatever the corner angle — since the ball
+  // must stay at his feet the whole time (spec "More about change of
+  // direction"); the dribble gait carries him through the corner instead.
+  const dribblesLeg = (elsFrom: BoardElement[], elsTo: BoardElement[], legPaths: AnimationFrame['paths'] | undefined, playerId: string): boolean => {
+    const pTo = elsTo.find((e) => e.id === playerId) as Obj3D | undefined
+    const pFrom = elsFrom.find((e) => e.id === playerId) as Obj3D | undefined
+    if (!pTo || !pFrom || pTo.type !== 'object3d' || pFrom.type !== 'object3d') return false
+    const pMids = legPaths?.[playerId]
+    const pPos = groundPosAt(pFrom, pTo, pMids, pMids?.length ? cam() : null)
+    for (const ballTo of elsTo) {
+      if (ballTo.type !== 'object3d' || !isObject3DBall(ballTo.objectId)) continue
+      const ballFrom = elsFrom.find((e) => e.id === ballTo.id) as Obj3D | undefined
+      if (!ballFrom || ballFrom.type !== 'object3d') continue
+      const bMids = legPaths?.[ballTo.id]
+      const bC = bMids?.length ? cam() : null
+      if (groundRun(ballFrom, ballTo, bMids, bC) < 1) continue
+      const bPos = groundPosAt(ballFrom, ballTo, bMids, bC)
+      let glued = true
+      for (const q of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+        const pp = pPos(q)
+        const bp = bPos(q)
+        if (!pp || !bp || Math.hypot(pp.x - bp.x, pp.z - bp.z) > DRIBBLE_R) {
+          glued = false
+          break
+        }
+      }
+      if (glued) return true
+    }
+    return false
+  }
   // A player already claimed by an interaction one-shot never turn-plants.
   const busy = (id: string): boolean =>
     rules.kickerOf.has(id) || !!rules.saveOf?.has(id) || !!rules.prevSaveOf?.has(id) || !!rules.scissorOf?.has(id) || !!rules.prevScissorOf?.has(id) || !!rules.gkKickOf?.has(id)
@@ -984,7 +1016,7 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       const posOut = groundPosAt(p1, p, midsOut, midsOut?.length ? cam() : null)
       const runIn = groundRun(p0, p1, midsIn, midsIn?.length ? cam() : null)
       const runOut = groundRun(p1, p, midsOut, midsOut?.length ? cam() : null)
-      if (!isGoalkeeper(p.objectId) && !busy(p.id) && sharpCorner(posIn, posOut, runIn, runOut)) {
+      if (!isGoalkeeper(p.objectId) && !busy(p.id) && sharpCorner(posIn, posOut, runIn, runOut) && !dribblesLeg(prev.elements, a, prev.paths, p.id) && !dribblesLeg(a, b, paths, p.id)) {
         ;(rules.prevTurnOf = rules.prevTurnOf ?? new Set()).add(p.id)
         // Where the turn froze him: the clip-start point on the previous leg.
         const fq = Math.max(0, (D - (PLAYER_CLIPS.changeDir.contactTime ?? 0.833)) / D)
@@ -1011,7 +1043,7 @@ function buildPlayerRules(a: BoardElement[], b: BoardElement[], paths: Animation
       const posOut = groundPosAt(p, p2, midsOut, midsOut?.length ? cam() : null)
       const runIn = groundRun(pA, p, midsIn, midsIn?.length ? cam() : null)
       const runOut = groundRun(p, p2, midsOut, midsOut?.length ? cam() : null)
-      if (sharpCorner(posIn, posOut, runIn, runOut)) (rules.turnOf = rules.turnOf ?? new Set()).add(p.id)
+      if (sharpCorner(posIn, posOut, runIn, runOut) && !dribblesLeg(a, b, paths, p.id) && !dribblesLeg(b, next.elements, next.paths, p.id)) (rules.turnOf = rules.turnOf ?? new Set()).add(p.id)
     }
     rules.nextGait = gaits
   }
