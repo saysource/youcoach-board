@@ -25,6 +25,8 @@ interface BoardSettings {
   renderMode?: boolean
   /** Host endpoint for server-side MP4 exports; enables "Export video…". */
   exportUrl?: string
+  /** Read-only viewer: presentation surface with hover video controls. */
+  viewerMode?: boolean
 }
 
 declare global {
@@ -54,6 +56,7 @@ createRoot(mountEl).render(
       showThemeControl={settings.showThemeControl ?? true}
       assets={assets}
       renderMode={settings.renderMode}
+      viewerMode={settings.viewerMode}
       exportUrl={settings.exportUrl}
     />
   </StrictMode>,

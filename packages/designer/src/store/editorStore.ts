@@ -148,6 +148,10 @@ export interface EditorState {
   /** Playback position in frame units (segment + linear progress, 0‥frames−1);
    *  null when not playing. Drives the AnimationBar's timeline indicator. */
   playhead: number | null
+  /** Viewer/presentation "fix the view": playback ignores the frames' stored
+   *  camera poses and plays from the CURRENT (user-orbited) perspective. */
+  fixedView: boolean
+  setFixedView: (fixedView: boolean) => void
 
   // Undo/redo: a flat operation stack + a pointer to the last applied operation
   // (VA's model). Everything before/at `pointer` is "done"; everything after is
@@ -509,6 +513,8 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       currentFrame: initialDoc.animation.frames.length > 0 ? initialDoc.animation.current : 0,
       playing: false,
       playhead: null,
+      fixedView: false,
+      setFixedView: (fixedView) => set({ fixedView }),
       stack: [],
       pointer: -1,
 

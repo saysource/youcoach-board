@@ -1549,6 +1549,9 @@ interface Playback {
   paused: boolean
   pauseStart: number
   pausedAccum: number
+  /** Jump to a playhead (frame units, 0‥frames−1) — installed by startPlayback
+   *  (needs its closure state); applies the frame immediately, even paused. */
+  seek?: (ph: number) => void
 }
 
 const players = new WeakMap<EditorStore, Playback>()
@@ -1606,6 +1609,20 @@ export function resumePlayback(store: EditorStore): void {
   store.setState({ playing: true })
 }
 
+/** Scrub to a playhead position (frame units, 0‥frames−1). With no active
+ *  playback, starts one PAUSED at that spot (so play resumes from there);
+ *  during playback (running or paused) it jumps in place. */
+export function seekPlayhead(store: EditorStore, ph: number): void {
+  let pb = players.get(store)
+  if (!pb) {
+    startPlayback(store)
+    pb = players.get(store)
+    if (!pb) return
+    pausePlayback(store)
+  }
+  pb.seek?.(ph)
+}
+
 /** Start looping playback (no-op with fewer than 2 frames). */
 export function startPlayback(store: EditorStore): void {
   if (players.get(store)) return
@@ -1648,6 +1665,45 @@ export function startPlayback(store: EditorStore): void {
   // (the players' clip clock; resets on wrap).
   let curD = TRANSITION_MS / 1000
   let elapsedBase = 0
+  // Apply the interpolated frame at progress t of the current segment. With
+  // "fix the view" on, the frames' camera poses are ignored: the pose is the
+  // CURRENT (user-chosen) one, and pinned elements reproject to it.
+  const renderAt = (t: number) => {
+    const st = store.getState()
+    const fr = st.doc.animation.frames
+    const anim = st.doc.animation
+    const spd = Math.min(2, Math.max(0.25, anim.speed))
+    // Wall-clock seconds into this loop — the players' clip time
+    // (phase-continuous across segments).
+    const elapsedS = (elapsedBase + t * curD) / spd
+    const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
+    const pose = st.fixedView
+      ? st.doc.background.field3d
+      : effCam[seg] && effCam[seg + 1]
+        ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT)
+        : (effCam[seg + 1] ?? effCam[seg])
+    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, st.doc.background.tokens3d && !!st.doc.background.field3d, curD / spd, st.doc.background.objectScale, fr[seg + 1].effects, elapsedS, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths, effects: fr[seg + 2].effects } : undefined), pose, seg + t)
+  }
+  // Timeline scrub: jump to an arbitrary playhead. Re-anchors the wall-clock
+  // bookkeeping so a running (or later resumed) loop continues from there, and
+  // applies the frame immediately so a paused scrub is live.
+  pb.seek = (ph: number) => {
+    const fr = store.getState().doc.animation.frames
+    if (fr.length < 2) return
+    const spd = Math.min(2, Math.max(0.25, store.getState().doc.animation.speed))
+    seg = Math.min(fr.length - 2, Math.max(0, Math.floor(ph)))
+    const frac = Math.min(1, Math.max(0, ph - seg))
+    first = false
+    const prevCtx = (i: number) => (i > 0 ? { elements: fr[i - 1].elements, paths: fr[i].paths } : undefined)
+    curD = segmentDuration(fr[seg], fr[seg + 1], pb.preCamera, prevCtx(seg))
+    elapsedBase = 0
+    for (let i = 0; i < seg; i++) elapsedBase += segmentDuration(fr[i], fr[i + 1], pb.preCamera, prevCtx(i))
+    // The step clock is rAF-time minus pausedAccum; while paused it is frozen
+    // at (pauseStart − pausedAccum) until resume re-anchors it.
+    const base = pb.paused ? pb.pauseStart - pb.pausedAccum : performance.now() - pb.pausedAccum
+    segStart = base - (frac * curD * 1000) / spd
+    renderAt(frac)
+  }
   const step = (raw: number) => {
     if (players.get(store) !== pb || pb.stopped) return
     // Paused: hold the loop (the last frame stays on screen) and don't advance.
@@ -1670,17 +1726,12 @@ export function startPlayback(store: EditorStore): void {
       // Starting (from the edited frame) or wrapping the loop: hard cut to the
       // segment's start frame — its camera applies instantly (per spec). 3D
       // players keep their idle pose through the cut (no static flash).
-      if (first || seg === 0) apply(withPlayerIdles(fr[seg].elements, elapsedBase / spd), effCam[seg], seg)
+      if (first || seg === 0) apply(withPlayerIdles(fr[seg].elements, elapsedBase / spd), store.getState().fixedView ? store.getState().doc.background.field3d : effCam[seg], seg)
       first = false
       segStart = now
     }
     const t = Math.min(1, ((now - segStart) * spd) / (curD * 1000))
-    // Wall-clock seconds into this loop — the players' clip time
-    // (phase-continuous across segments).
-    const elapsedS = (elapsedBase + t * curD) / spd
-    const camT = anim.cameraEasing === 'ease' ? easeInOutCubic(t) : t
-    const pose = effCam[seg] && effCam[seg + 1] ? lerpPose(effCam[seg]!, effCam[seg + 1]!, camT) : (effCam[seg + 1] ?? effCam[seg])
-    apply(lerpElements(fr[seg].elements, fr[seg + 1].elements, t, fr[seg + 1].paths, pb.preCamera, store.getState().doc.background.tokens3d && !!store.getState().doc.background.field3d, curD / spd, store.getState().doc.background.objectScale, fr[seg + 1].effects, elapsedS, seg > 0 ? { elements: fr[seg - 1].elements, paths: fr[seg].paths } : undefined, seg + 2 < fr.length ? { elements: fr[seg + 2].elements, paths: fr[seg + 2].paths, effects: fr[seg + 2].effects } : undefined), pose, seg + t)
+    renderAt(t)
     if (t >= 1) {
       if (seg + 1 >= fr.length - 1) {
         // Reached the last frame. Loop wraps (hard cut back to frame 1);

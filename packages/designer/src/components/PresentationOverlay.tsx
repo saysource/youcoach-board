@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Play, Pause, SkipBack, SkipForward, Gauge, Highlighter, Rotate3d, Move, X } from 'lucide-react'
+import { Play, Pause, Settings, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { Slider } from './ui/slider'
+import { Switch } from './ui/switch'
 import { cn } from '../lib/cn'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
-import { startPlayback, stopPlayback, pausePlayback, resumePlayback, isPlaying, isPaused } from '../lib/animation-playback'
+import { startPlayback, stopPlayback, pausePlayback, resumePlayback, isPlaying, isPaused, seekPlayhead } from '../lib/animation-playback'
 
 // The bar auto-hides after this long with no pointer/keyboard activity; the laser
 // trail fades each stroke to nothing over the same window.
@@ -118,36 +119,22 @@ function LaserTrail() {
   )
 }
 
-function SpeedControl({ speed, onChange, disabled }: { speed: number; onChange: (v: number) => void; disabled: boolean }) {
-  const { t } = useTranslation()
+
+// A labelled switch row inside the cog popover.
+function SwitchRow({ label, checked, onCheckedChange, disabled }: { label: string; checked: boolean; onCheckedChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button size="icon-sm" aria-label={t('Playback speed')} disabled={disabled} className="w-auto gap-1 px-2">
-          <Gauge />
-          <span className="text-xs tabular-nums">{speed}×</span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent side="top" align="center" className="w-52">
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-            <span>{t('Speed')}</span>
-            <span className="tabular-nums text-foreground">{speed}×</span>
-          </div>
-          <Slider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => onChange(v)} />
-          <div className="flex justify-between text-[10px] text-muted-foreground">
-            <span>0.25×</span>
-            <span>2×</span>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
+    <div className="flex items-center justify-between">
+      <span className={cn('text-[11px] font-medium text-muted-foreground', disabled && 'opacity-50')}>{label}</span>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+    </div>
   )
 }
 
-// Presentation-mode HUD: a controls bar that appears on activity and fades after
-// IDLE_MS, plus the laser overlay. Space toggles play; Esc (owned by BoardShell)
-// exits.
+// Presentation/viewer HUD: video controls that appear on pointer activity and
+// fade after IDLE_MS — play/pause + a timeline scrubber + a cog menu (orbit /
+// pan / laser / speed / fix-the-view) — plus the laser overlay. Space toggles
+// play; Esc (owned by BoardShell) exits presentation. In the read-only viewer
+// (no onExit) a still drawing shows no controls at all.
 export function PresentationOverlay({
   onExit,
   canNavigate = false,
@@ -157,7 +144,8 @@ export function PresentationOverlay({
   onPan,
   onExitNav = () => {},
 }: {
-  onExit: () => void
+  /** Exit presentation (the X button + hint). Omit in the viewer — no exit. */
+  onExit?: () => void
   /** A 3D field exists, so orbit/pan the camera is possible. */
   canNavigate?: boolean
   /** Orbit mode is active (drag rotates the camera around the scene). */
@@ -175,7 +163,6 @@ export function PresentationOverlay({
   const currentFrame = useEditorStore((s) => s.currentFrame)
   const frameCount = useEditorStore((s) => s.doc.animation.frames.length)
   const speed = useEditorStore((s) => s.doc.animation.speed)
-  const setCurrentFrame = useEditorStore((s) => s.setCurrentFrame)
   const setAnimationSettings = useEditorStore((s) => s.setAnimationSettings)
   const [visible, setVisible] = useState(true)
   const [laser, setLaser] = useState(false)
@@ -199,14 +186,18 @@ export function PresentationOverlay({
     }
   }, [])
 
+  const fixedView = useEditorStore((s) => s.fixedView)
+  const setFixedView = useEditorStore((s) => s.setFixedView)
+  const playhead = useEditorStore((s) => s.playhead)
+
   const togglePlay = () => {
     if (isPaused(storeApi)) {
-      onExitNav() // leave orbit/pan so the camera follows playback again
+      if (!fixedView) onExitNav() // leave orbit/pan so the camera follows playback again
       resumePlayback(storeApi) // resume from the frozen frame
     } else if (isPlaying(storeApi)) {
       pausePlayback(storeApi) // freeze in place
     } else {
-      onExitNav()
+      if (!fixedView) onExitNav()
       startPlayback(storeApi)
     }
   }
@@ -227,50 +218,83 @@ export function PresentationOverlay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeApi])
 
-  const step = (d: 1 | -1) => {
-    if (isPlaying(storeApi)) stopPlayback(storeApi)
-    setCurrentFrame(Math.min(frameCount - 1, Math.max(0, currentFrame + d)))
-  }
+  // Timeline position (frame units 0‥frames−1): live playhead during playback/
+  // pause, else the edited frame.
+  const timeline = playhead ?? currentFrame
+  // The viewer shows controls only for real animations; presentation keeps the
+  // bar (cog + exit stay useful on a still drawing).
+  if (!hasAnim && !onExit) return <>{laser && <LaserTrail />}</>
 
   return (
     <>
       {laser && <LaserTrail />}
       <div className={cn('pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 pb-4 transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}>
-        <div className={cn('flex items-center gap-1 rounded-xl border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
-          <Button size="icon-sm" aria-label={playing ? t('Pause') : t('Play')} disabled={!hasAnim} onClick={togglePlay} className="hover:bg-primary/25">
-            {playing ? <Pause /> : <Play />}
-          </Button>
-          <Button size="icon-sm" aria-label={t('Previous frame')} disabled={!hasAnim || currentFrame <= 0} onClick={() => step(-1)}>
-            <SkipBack />
-          </Button>
-          <Button size="icon-sm" aria-label={t('Next frame')} disabled={!hasAnim || currentFrame >= frameCount - 1} onClick={() => step(1)}>
-            <SkipForward />
-          </Button>
-          <SpeedControl speed={speed} onChange={(v) => setAnimationSettings({ speed: v })} disabled={!hasAnim} />
-          {canNavigate && (
+        <div className={cn('flex items-center gap-1.5 rounded-xl border border-border bg-card/95 px-2 py-1 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
+          {hasAnim && (
+            <>
+              <Button size="icon-sm" aria-label={playing ? t('Pause') : t('Play')} onClick={togglePlay} className="hover:bg-primary/25">
+                {playing ? <Pause /> : <Play />}
+              </Button>
+              {/* Timeline cursor: scrubbing seeks in place (starts a PAUSED
+                  playback when none is running, so Play resumes from there). */}
+              <Slider
+                min={0}
+                max={frameCount - 1}
+                step={0.001}
+                value={[Math.min(frameCount - 1, Math.max(0, timeline))]}
+                onValueChange={([v]) => seekPlayhead(storeApi, v)}
+                aria-label={t('Timeline')}
+                className="w-56"
+              />
+            </>
+          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="icon-sm" aria-label={t('Playback settings')}>
+                <Settings />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="center" className="w-56">
+              <div className="grid gap-3">
+                {canNavigate && (
+                  <>
+                    {/* Orbit / pan the camera. Free while paused/stopped — or any
+                        time with a fixed view (the animation no longer owns it). */}
+                    <SwitchRow label={t('Orbit')} checked={orbiting} disabled={playing && !fixedView} onCheckedChange={() => { setLaser(false); onOrbit?.() }} />
+                    <SwitchRow label={t('Pan')} checked={panning} disabled={playing && !fixedView} onCheckedChange={() => { setLaser(false); onPan?.() }} />
+                  </>
+                )}
+                <SwitchRow label={t('Laser pointer')} checked={laser} onCheckedChange={(v) => { if (v) onExitNav(); setLaser(v) }} />
+                {hasAnim && (
+                  <div className="grid gap-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                      <span>{t('Speed')}</span>
+                      <span className="tabular-nums text-foreground">{speed}×</span>
+                    </div>
+                    <Slider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => setAnimationSettings({ speed: v })} />
+                  </div>
+                )}
+                {canNavigate && hasAnim && (
+                  <>
+                    <div className="h-px w-full bg-border" />
+                    {/* Fixed view: playback ignores the frames' camera poses and
+                        plays from the perspective the user set with orbit/pan. */}
+                    <SwitchRow label={t('Fix the view')} checked={fixedView} onCheckedChange={setFixedView} />
+                  </>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+          {onExit && (
             <>
               <span className="mx-0.5 h-5 w-px bg-border" />
-              {/* Orbit / pan the 3D camera to inspect the scene from another angle.
-                  Disabled while playing (the animation drives the camera); available
-                  when paused or stopped. */}
-              <Button size="icon-sm" aria-label={t('Orbit camera')} aria-pressed={orbiting} disabled={playing} onClick={() => { setLaser(false); onOrbit?.() }} className={cn('hover:bg-primary/25', orbiting && 'bg-primary/20 text-primary')}>
-                <Rotate3d />
-              </Button>
-              <Button size="icon-sm" aria-label={t('Pan camera')} aria-pressed={panning} disabled={playing} onClick={() => { setLaser(false); onPan?.() }} className={cn('hover:bg-primary/25', panning && 'bg-primary/20 text-primary')}>
-                <Move />
+              <Button size="icon-sm" aria-label={t('Exit presentation (Esc)')} onClick={onExit}>
+                <X />
               </Button>
             </>
           )}
-          <span className="mx-0.5 h-5 w-px bg-border" />
-          <Button size="icon-sm" aria-label={t('Laser pointer')} aria-pressed={laser} onClick={() => setLaser((v) => { const next = !v; if (next) onExitNav(); return next })} className={cn('hover:bg-primary/25', laser && 'bg-red-500/15 text-red-500 hover:bg-red-500/25')}>
-            <Highlighter />
-          </Button>
-          <span className="mx-0.5 h-5 w-px bg-border" />
-          <Button size="icon-sm" aria-label={t('Exit presentation (Esc)')} onClick={onExit}>
-            <X />
-          </Button>
         </div>
-        {!isTouch && <div className="select-none text-xs text-muted-foreground">{t('Press ESC to exit presentation mode')}</div>}
+        {!isTouch && onExit && <div className="select-none text-xs text-muted-foreground">{t('Press ESC to exit presentation mode')}</div>}
       </div>
     </>
   )
