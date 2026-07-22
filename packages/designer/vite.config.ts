@@ -32,7 +32,7 @@ function scopeCss(css: string): string {
   return root.toString()
 }
 
-function scopeToRoot(): Plugin {
+export function scopeToRoot(): Plugin {
   return {
     name: 'ycb-scope-css',
     enforce: 'post',
