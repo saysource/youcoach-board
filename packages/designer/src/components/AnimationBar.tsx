@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Camera, ChevronDown, ChevronLeft, ChevronRight, ClipboardCopy, ClipboardPaste, Copy, Play, Plus, Settings, Square, Trash2, Undo2 } from 'lucide-react'
+import { Camera, ChevronDown, ChevronLeft, ChevronRight, ClipboardCopy, ClipboardPaste, Copy, Play, Plus, SlidersVertical, Square, Trash2, Undo2 } from 'lucide-react'
 import type { FieldView } from '@youcoach-board/core'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -241,7 +241,7 @@ export function AnimationBar({ maxWidth = Infinity }: { maxWidth?: number }) {
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
               <Button size="icon-sm" aria-label={t('Animation settings')} disabled={playing} className="hover:bg-primary/25">
-                <Settings />
+                <SlidersVertical />
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
