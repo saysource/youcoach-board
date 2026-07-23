@@ -4,12 +4,33 @@
 // property identifies a YouCoach Board file (v3 = this designer's format;
 // v2 = the old jQuery editor's, to get a dedicated converter later).
 
-import { parseBoard, serializeBoard, type BoardDoc } from '@youcoach-board/core'
+import { applyOperation, parseBoard, serializeBoard, type BoardDoc, type BoardElement } from '@youcoach-board/core'
 import type { EditorStore } from '../store/editorStore'
 import { t } from './i18n'
 import { stopPlayback } from './animation-playback'
 import { resolveFieldImage } from './field-image'
 import { convertV2Board, isV1Board, isV2Board } from './v2-convert'
+import { buildPinOps } from './field-anchor'
+
+/** Normalize a loaded doc for its 3D field: run the SAME idempotent pinning
+ *  the editor applies on creation/orbit — ground anchors, the standard token
+ *  sizeM, rect/ellipse → surface-polyline conversion — on the base elements
+ *  AND on every animation frame (each pinned from its own placements).
+ *  Editor-authored docs are already pinned (no-op); imported ones (an AI
+ *  generation, an external tool) thus render like native documents from the
+ *  first paint and STAY on the pitch through playback, instead of waiting
+ *  for the first orbit/background-edit to fix sizes and stickiness. */
+export function pinLoadedDoc(doc: BoardDoc): void {
+  const cam = doc.background.field3d
+  if (!cam) return
+  const pin = (elements: BoardElement[]): BoardElement[] => {
+    let els = elements
+    for (const op of buildPinOps(els, cam)) els = applyOperation({ ...doc, elements: els }, op).elements
+    return els
+  }
+  doc.elements = pin(doc.elements)
+  doc.animation.frames = doc.animation.frames.map((f) => ({ ...f, elements: pin(f.elements) }))
+}
 
 /** Load a (raw, already JSON-parsed) document into the editor: stop playback,
  *  parse defensively, reset history/selection — and always land on the FIRST
@@ -21,6 +42,7 @@ export function loadBoard(store: EditorStore, raw: unknown): void {
   // Repair a background image saved by a different build (e.g. dev's
   // /src/assets/field0.jpg → this build's hashed default) so it doesn't 404.
   doc.background.image = resolveFieldImage(doc.background.image)
+  pinLoadedDoc(doc)
   store.setState({ doc, selectedIds: [], stack: [], pointer: -1, currentFrame: 0 })
 }
 
@@ -40,6 +62,7 @@ export function boardDocFromText(text: string): BoardDoc | null {
   const doc = parseBoard(raw)
   doc.animation.current = 0
   doc.background.image = resolveFieldImage(doc.background.image)
+  pinLoadedDoc(doc)
   return doc
 }
 
