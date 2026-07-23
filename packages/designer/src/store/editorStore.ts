@@ -567,12 +567,23 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
       setTokenSizeM: (m) => {
         const size = Math.max(1, Math.min(10, m))
         set({ tokenSizeM: size })
-        // Resize every token on the pitch to the new global size (one undo step).
+        // Resize every token on the pitch to the new global size — in the live
+        // elements AND in every animation frame (each token restands at its own
+        // frame's spot/depth). A board-wide SETTING, not a per-frame edit, so it
+        // applies off-stack like speed/easing (per-frame ops would leave the
+        // other frames' tokens at the stale size).
         const { doc } = get()
         const f3d = doc.background.field3d
         if (!f3d) return
-        const changes = tokenSizeChanges(doc.elements, f3d, size)
-        if (changes.length) get().updateElements(changes)
+        const resize = (els: BoardElement[]): BoardElement[] => {
+          const changes = tokenSizeChanges(els, f3d, size)
+          return changes.length ? applyOperation({ ...doc, elements: els }, { kind: 'update', changes }).elements : els
+        }
+        const elements = resize(doc.elements)
+        const frames = doc.animation.frames.map((f, i) => ({ ...f, elements: i === doc.animation.current ? elements : resize(f.elements) }))
+        const nextDoc = { ...doc, elements, animation: { ...doc.animation, frames } }
+        set({ doc: nextDoc })
+        onChange?.(nextDoc)
       },
 
       setTokenTextScale: (n) => set({ tokenTextScale: Math.max(0.5, Math.min(2, n)) }),
