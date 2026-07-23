@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import '../styles/board.css'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { cn } from '../lib/cn'
@@ -33,6 +33,20 @@ export function ViewerShell({ initialTheme, theme: controlledTheme }: { initialT
   // whole component over the host page — useful when the viewer sits small
   // inside an app page.
   const [fullscreen, setFullscreen] = useState(false)
+  // Esc leaves fill-the-viewport (capture phase, like presentation's exit —
+  // it must win over any other Escape handling below).
+  useEffect(() => {
+    if (!fullscreen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        setFullscreen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [fullscreen])
   return (
     <div ref={setRootEl} className={cn('ycb-root isolate overflow-hidden bg-background text-foreground', fullscreen ? 'fixed inset-0 z-[2147483647]' : 'relative h-full w-full', isDark && 'dark')}>
       <TooltipPrimitive.Provider delayDuration={300}>
