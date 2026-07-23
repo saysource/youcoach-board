@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Play, Pause, Settings, X } from 'lucide-react'
-import { Button } from './ui/button'
+import { Play, Pause, Rotate3d, Move, Highlighter, Focus, Gauge, X } from 'lucide-react'
+import { Slider as SliderPrimitive } from 'radix-ui'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import { Slider } from './ui/slider'
-import { Switch } from './ui/switch'
 import { cn } from '../lib/cn'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { startPlayback, stopPlayback, pausePlayback, resumePlayback, isPlaying, isPaused, seekPlayhead } from '../lib/animation-playback'
@@ -134,13 +132,37 @@ function LaserTrail() {
 }
 
 
-// A labelled switch row inside the cog popover.
-function SwitchRow({ label, checked, onCheckedChange, disabled }: { label: string; checked: boolean; onCheckedChange: (v: boolean) => void; disabled?: boolean }) {
+// One icon in the dark video-controls strip: a bare toggle button (no themed
+// Button — the bar has its own sleek dark look, macOS-video-controls style).
+function BarButton({ label, active, disabled, onClick, children }: { label: string; active?: boolean; disabled?: boolean; onClick?: () => void; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className={cn('text-[11px] font-medium text-muted-foreground', disabled && 'opacity-50')}>{label}</span>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
-    </div>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'flex size-8 items-center justify-center rounded-lg text-white/85 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-35 [&_svg]:size-5 [&_svg]:[stroke-width:1.75]',
+        active && 'bg-white/25 text-white',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+// A slider restyled for the dark bar: bright track/range and a white thumb, so
+// the timeline reads clearly even at position 0.
+function BarSlider({ className, ...props }: React.ComponentProps<typeof SliderPrimitive.Root>) {
+  return (
+    <SliderPrimitive.Root className={cn('relative flex h-6 touch-none select-none items-center', className)} {...props}>
+      <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-white/25">
+        <SliderPrimitive.Range className="absolute h-full bg-white/90" />
+      </SliderPrimitive.Track>
+      <SliderPrimitive.Thumb className="block size-3.5 rounded-full bg-white shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60" />
+    </SliderPrimitive.Root>
   )
 }
 
@@ -243,72 +265,81 @@ export function PresentationOverlay({
     <>
       {laser && <LaserTrail />}
       <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 pb-4 transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}>
-        <div className={cn('flex items-center gap-1.5 rounded-xl border border-border bg-card/95 px-2 py-1 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
+        <div className={cn('flex items-center gap-1 rounded-2xl bg-black/75 px-2.5 py-1.5 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
           {hasAnim && (
             <>
-              <Button size="icon-sm" aria-label={playing ? t('Pause') : t('Play')} onClick={togglePlay} className="hover:bg-primary/25">
+              <BarButton label={playing ? t('Pause') : t('Play')} onClick={togglePlay}>
                 {playing ? <Pause /> : <Play />}
-              </Button>
+              </BarButton>
               {/* Timeline cursor: scrubbing seeks in place (starts a PAUSED
                   playback when none is running, so Play resumes from there). */}
-              <Slider
+              <BarSlider
                 min={0}
                 max={frameCount - 1}
                 step={0.001}
                 value={[Math.min(frameCount - 1, Math.max(0, timeline))]}
                 onValueChange={([v]) => seekPlayhead(storeApi, v)}
                 aria-label={t('Timeline')}
-                className="w-56"
+                className="mx-1 w-56"
               />
             </>
           )}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button size="icon-sm" aria-label={t('Playback settings')}>
-                <Settings />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent side="top" align="center" className="w-56">
-              <div className="grid gap-3">
-                {canNavigate && (
-                  <>
-                    {/* Orbit / pan the camera. Free while paused/stopped — or any
-                        time with a fixed view (the animation no longer owns it). */}
-                    <SwitchRow label={t('Orbit')} checked={orbiting} disabled={playing && !fixedView} onCheckedChange={() => { setLaser(false); onOrbit?.() }} />
-                    <SwitchRow label={t('Pan')} checked={panning} disabled={playing && !fixedView} onCheckedChange={() => { setLaser(false); onPan?.() }} />
-                  </>
-                )}
-                <SwitchRow label={t('Laser pointer')} checked={laser} onCheckedChange={(v) => { if (v) onExitNav(); setLaser(v) }} />
-                {hasAnim && (
-                  <div className="grid gap-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-                      <span>{t('Speed')}</span>
-                      <span className="tabular-nums text-foreground">{speed}×</span>
-                    </div>
-                    <Slider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => setAnimationSettings({ speed: v })} />
+          {(canNavigate || hasAnim) && <span className="mx-1 h-5 w-px bg-white/20" />}
+          {canNavigate && (
+            <>
+              {/* Orbit / pan the camera. Free while paused/stopped — or any time
+                  with a fixed view (the animation no longer owns the camera). */}
+              <BarButton label={t('Orbit')} active={orbiting} disabled={playing && !fixedView} onClick={() => { setLaser(false); onOrbit?.() }}>
+                <Rotate3d />
+              </BarButton>
+              <BarButton label={t('Pan')} active={panning} disabled={playing && !fixedView} onClick={() => { setLaser(false); onPan?.() }}>
+                <Move />
+              </BarButton>
+            </>
+          )}
+          <BarButton label={t('Laser pointer')} active={laser} onClick={() => setLaser((v) => { const next = !v; if (next) onExitNav(); return next })}>
+            <Highlighter />
+          </BarButton>
+          {/* Fixed view: playback ignores the frames' camera poses and plays
+              from the perspective the user set with orbit/pan. */}
+          {canNavigate && hasAnim && (
+            <BarButton label={t('Fix the view')} active={fixedView} onClick={() => setFixedView(!fixedView)}>
+              <Focus />
+            </BarButton>
+          )}
+          {hasAnim && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" aria-label={t('Speed')} title={t('Speed')} className="flex h-8 items-center gap-1 rounded-lg px-2 text-white/85 transition-colors hover:bg-white/15 hover:text-white [&_svg]:size-5 [&_svg]:[stroke-width:1.75]">
+                  <Gauge />
+                  <span className="text-xs tabular-nums">{speed}×</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="center" className="w-48 border-white/15 bg-black/85 text-white backdrop-blur">
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between text-[11px] font-medium text-white/70">
+                    <span>{t('Speed')}</span>
+                    <span className="tabular-nums text-white">{speed}×</span>
                   </div>
-                )}
-                {canNavigate && hasAnim && (
-                  <>
-                    <div className="h-px w-full bg-border" />
-                    {/* Fixed view: playback ignores the frames' camera poses and
-                        plays from the perspective the user set with orbit/pan. */}
-                    <SwitchRow label={t('Fix the view')} checked={fixedView} onCheckedChange={setFixedView} />
-                  </>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
+                  <BarSlider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => setAnimationSettings({ speed: v })} />
+                  <div className="flex justify-between text-[10px] text-white/50">
+                    <span>0.25×</span>
+                    <span>2×</span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
           {onExit && (
             <>
-              <span className="mx-0.5 h-5 w-px bg-border" />
-              <Button size="icon-sm" aria-label={t('Exit presentation (Esc)')} onClick={onExit}>
+              <span className="mx-1 h-5 w-px bg-white/20" />
+              <BarButton label={t('Exit presentation (Esc)')} onClick={onExit}>
                 <X />
-              </Button>
+              </BarButton>
             </>
           )}
         </div>
-        {!isTouch && onExit && <div className="select-none text-xs text-muted-foreground">{t('Press ESC to exit presentation mode')}</div>}
+        {!isTouch && onExit && <div className="select-none text-xs text-white/75 [text-shadow:0_1px_2px_rgba(0,0,0,0.4)]">{t('Press ESC to exit presentation mode')}</div>}
       </div>
     </>
   )
