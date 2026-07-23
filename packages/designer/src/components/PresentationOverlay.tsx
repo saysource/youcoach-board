@@ -144,7 +144,7 @@ function BarButton({ label, active, disabled, onClick, children }: { label: stri
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'flex size-8 items-center justify-center rounded-lg text-white/85 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-35 [&_svg]:size-5 [&_svg]:[stroke-width:1.75]',
+        'flex size-8 shrink-0 items-center justify-center rounded-lg text-white/85 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-35 [&_svg]:size-5 [&_svg]:[stroke-width:1.75]',
         active && 'bg-white/25 text-white',
       )}
     >
@@ -271,7 +271,9 @@ export function PresentationOverlay({
     <>
       {laser && <LaserTrail />}
       <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 pb-4 transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}>
-        <div className={cn('flex items-center gap-1 rounded-2xl bg-black/30 px-2.5 py-1.5 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
+        {/* In a small container the bar caps at 90% of its width — the TIMELINE
+            absorbs the loss (it shrinks, everything else is shrink-0). */}
+        <div className={cn('flex max-w-[90%] items-center gap-1 rounded-2xl bg-black/30 px-2.5 py-1.5 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
           {hasAnim && (
             <>
               <BarButton label={playing ? t('Pause') : t('Play')} onClick={togglePlay}>
@@ -286,15 +288,15 @@ export function PresentationOverlay({
                 value={[Math.min(frameCount - 1, Math.max(0, timeline))]}
                 onValueChange={([v]) => seekPlayhead(storeApi, v)}
                 aria-label={t('Timeline')}
-                className="mx-1 w-56"
+                className="mx-1 w-56 min-w-16 shrink"
               />
             </>
           )}
-          {(canNavigate || hasAnim) && <span className="mx-1 h-5 w-px bg-white/20" />}
+          {(canNavigate || hasAnim) && <span className="mx-1 h-5 w-px shrink-0 bg-white/20" />}
           {/* The mode toggles + speed live in one panel behind the sliders icon. */}
           <Popover>
             <PopoverTrigger asChild>
-              <button type="button" aria-label={t('Playback settings')} title={t('Playback settings')} className="flex size-8 items-center justify-center rounded-lg text-white/85 transition-colors hover:bg-white/15 hover:text-white [&_svg]:size-5 [&_svg]:[stroke-width:1.75]">
+              <button type="button" aria-label={t('Playback settings')} title={t('Playback settings')} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/85 transition-colors hover:bg-white/15 hover:text-white [&_svg]:size-5 [&_svg]:[stroke-width:1.75]">
                 <SlidersVertical />
               </button>
             </PopoverTrigger>
@@ -366,7 +368,7 @@ export function PresentationOverlay({
           )}
           {onExit && (
             <>
-              <span className="mx-1 h-5 w-px bg-white/20" />
+              <span className="mx-1 h-5 w-px shrink-0 bg-white/20" />
               <BarButton label={t('Exit presentation (Esc)')} onClick={onExit}>
                 <X />
               </BarButton>
