@@ -12,7 +12,7 @@ import { logoDarkFor, logoDarkUrl, logoRect, logoUrl } from '../lib/logo'
 // Object3DLayer's HUD pass). The field SVG injection is a designer/viewer
 // concern — core only draws a placeholder.
 
-export function BackgroundView({ doc }: { doc: BoardDoc }) {
+export function BackgroundView({ doc, hideLogo = false }: { doc: BoardDoc; hideLogo?: boolean }) {
   const { url } = useAssets()
   const bg = doc.background
   const fieldUrl = bg.fieldSvg ? url(bg.fieldSvg) : null
@@ -64,7 +64,7 @@ export function BackgroundView({ doc }: { doc: BoardDoc }) {
         </g>
       )}
 
-      {bg.logo &&
+      {bg.logo && !hideLogo &&
         (() => {
           const r = logoRect(bg.logo)
           // attrX/attrY animate the SVG x/y attributes (x/y are reserved for

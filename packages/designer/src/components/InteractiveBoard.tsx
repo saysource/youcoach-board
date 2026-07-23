@@ -330,7 +330,7 @@ function BoardGrid() {
   )
 }
 
-export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {}, animMode = false, presenting = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void; animMode?: boolean; presenting?: boolean }) {
+export function InteractiveBoard({ backgroundMode = false, homographyMode = false, cameraMode = false, zoneMode = false, showGrid = false, navigating = false, navMarkers = false, onNavTap, fieldPanMode = false, onExitFieldPan = () => {}, animMode = false, presenting = false, hideLogo = false }: { backgroundMode?: boolean; homographyMode?: boolean; cameraMode?: boolean; zoneMode?: boolean; showGrid?: boolean; navigating?: boolean; navMarkers?: boolean; onNavTap?: () => void; fieldPanMode?: boolean; onExitFieldPan?: () => void; animMode?: boolean; presenting?: boolean; hideLogo?: boolean }) {
   const { t } = useTranslation()
   const doc = useEditorStore((s) => s.doc)
   const playing = useEditorStore((s) => s.playing)
@@ -2472,6 +2472,10 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // effect (not during render) — and is registered once on mount.
   const exportImageRef = useRef<(w: number, h: number) => Promise<void>>(async () => {})
   const snapshotRef = useRef<(w: number, h: number) => Promise<Blob | null>>(async () => null)
+  // While an export captures the layers, the SCENE logo is hidden — the export
+  // repaints it relative to the OUTPUT frame (a 16:9/9:16 crop would cut a
+  // board-coordinate logo, or drop a corner one entirely). See exportLogoRect.
+  const [captureHideLogo, setCaptureHideLogo] = useState(false)
   useEffect(() => {
     // Hide the selection chrome, wait for that frame to paint, run `fn` over
     // the live export environment, restore the selection. rAF can stall in
@@ -2480,6 +2484,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       if (!containerRef.current || !svgRef.current) return null
       const prevSel = selectedIds
       setSelection([])
+      setCaptureHideLogo(true)
       await new Promise<void>((r) => {
         let settled = false
         const fin = () => {
@@ -2501,9 +2506,12 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           cam: arrow3dCam,
           boardToPx: (b) => (ctm ? { x: ctm.a * b[0] + ctm.c * b[1] + ctm.ex, y: ctm.b * b[0] + ctm.d * b[1] + ctm.ey } : { x: 0, y: 0 }),
           fontIds: docFontIds(doc),
+          logo: doc.background.logo,
+          logoDark: logoDarkFor(doc.background),
         })
       } finally {
         setSelection(prevSel)
+        setCaptureHideLogo(false)
       }
     }
     exportImageRef.current = async (w, h) => {
@@ -2680,7 +2688,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
         className={cn('touch-none', creating || lassoTool ? 'cursor-crosshair' : eraserTool ? undefined : 'cursor-default')}
         background={
           <>
-            <BackgroundView doc={doc} />
+            <BackgroundView doc={doc} hideLogo={hideLogo || captureHideLogo} />
             {showGrid && <BoardGrid />}
           </>
         }
@@ -3002,7 +3010,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
           this layer only draws them in the legacy homography/fixed modes. */}
       <Arrow3DLayer ref={arrow3dLayerRef} elements={fieldCamCfg ? [] : arrow3dLayerElements} selectedIds={selectedIds} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} homography={useHomography ? fieldH : null} camera={fieldCamCfg} />
       {/* 3D objects ("Materials 3D") + tokens + arrows: WebGL overlay (pointer-transparent). */}
-      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} tokens={token3dList} arrows={fieldCamCfg ? arrow3dLayerElements : []} selectedIds={navigating ? [] : selectedIds} replaceTargetId={dropReplaceId} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} minScale={field3d ? 1 : 0.05} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} logo={doc.background.logo} logoDark={logoDarkFor(doc.background)} />
+      <Object3DLayer ref={object3dLayerRef} elements={object3dElements} tokens={token3dList} arrows={fieldCamCfg ? arrow3dLayerElements : []} selectedIds={navigating ? [] : selectedIds} replaceTargetId={dropReplaceId} erasingIds={erase?.ids} viewport={viewport} svgRef={svgRef} containerRef={containerRef} camera={fieldCamCfg} objectScale={doc.background.objectScale} minScale={field3d ? 1 : 0.05} fieldType={doc.background.fieldType} layout={doc.background.trainingLayout} showGoals={!!field3d && doc.background.showGoals} logo={hideLogo || captureHideLogo ? null : doc.background.logo} logoDark={logoDarkFor(doc.background)} />
       {/* 3D-token captions: the WebGL canvas sits above the SVG, so the discs would
           occlude their own labels — re-render them here, above the canvas, anchored
           just below each disc's camera-facing edge. Fixed on-screen size like the

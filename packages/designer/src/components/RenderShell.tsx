@@ -10,6 +10,8 @@ import { beginAnimationRender, endAnimationRender, seekAnimationFrame } from '..
 import { loadDocFonts } from '../lib/fonts'
 import { ensurePlayerAnimLoaded, playerAnimReady } from '../lib/player-anim'
 import { isObject3DPlayer, object3dGlbReady, onObject3DAssetReady, preloadObject3D } from '../lib/objects3d'
+import { exportLogoRect, logoDarkFor, logoDarkUrl, logoUrl } from '../lib/logo'
+import { useEditorStore } from '../store/context'
 
 // The HEADLESS render page: a chrome-less, cover-fit board driven frame-by-frame
 // by a server-side puppeteer through `window.ycbRender` (see specs/drupal_backend
@@ -75,6 +77,7 @@ function waitPaint(): Promise<void> {
 
 export function RenderShell() {
   const store = useEditorStoreApi()
+  const background = useEditorStore((st) => st.doc.background)
   const { catalog } = useAssets()
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
   const [size, setSize] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
@@ -173,13 +176,33 @@ export function RenderShell() {
   // Cover-fit: the smallest 4:3 rect that covers the viewport, centred.
   const W = Math.max(size.w, size.h * BOARD_ASPECT)
   const H = W / BOARD_ASPECT
+  // The watermark is drawn relative to the FINAL VIDEO FRAME, not the board:
+  // the scene copy is hidden (a 16:9/9:16 crop would cut it) and an overlay
+  // image sits inside the exporter's crop region — the centred rect of the
+  // requested size (settings.renderSize; portrait renders on a wide viewport
+  // that ffmpeg centre-crops). No renderSize → the whole viewport.
+  const rs = (window.__YCB_SETTINGS__ as { renderSize?: { width: number; height: number } } | undefined)?.renderSize
+  const frame = rs
+    ? { w: Math.min(rs.width, size.w), h: Math.min(rs.height, size.h) }
+    : { w: size.w, h: size.h }
+  const frameX = (size.w - frame.w) / 2
+  const frameY = (size.h - frame.h) / 2
+  const logoR = background.logo ? exportLogoRect(background.logo, frame.w, frame.h) : null
   return (
     <div ref={setRootEl} className="ycb-root fixed inset-0 isolate overflow-hidden bg-background" style={{ cursor: 'none' }}>
       <TooltipPrimitive.Provider delayDuration={300}>
         <BoardRootProvider value={rootEl}>
           <div className="absolute" style={{ width: W, height: H, left: (size.w - W) / 2, top: (size.h - H) / 2 }}>
-            <InteractiveBoard presenting />
+            <InteractiveBoard presenting hideLogo />
           </div>
+          {logoR && (
+            <img
+              src={logoDarkFor(background) ? logoDarkUrl : logoUrl}
+              alt=""
+              className="pointer-events-none absolute z-40 opacity-20"
+              style={{ left: frameX + logoR.x, top: frameY + logoR.y, width: logoR.w, height: logoR.h }}
+            />
+          )}
           {/* No interaction ever reaches the board — the driver only evaluates JS. */}
           <div className="absolute inset-0 z-50" />
         </BoardRootProvider>

@@ -30,6 +30,29 @@ export function logoRect(pos: LogoPosition): { x: number; y: number; w: number; 
   }
 }
 
+/** Logo box for an EXPORT frame (w×h px): the board's proportions applied to
+ *  the frame — corner width = 280/1200 of the frame width (centered = 2×),
+ *  square padding = 40/1200 of the frame width. Exports crop the 4:3 board to
+ *  the target aspect, so the logo must be placed relative to the FRAME (a
+ *  corner logo would otherwise fall outside a 9:16 crop entirely). */
+export function exportLogoRect(pos: LogoPosition, frameW: number, frameH: number): { x: number; y: number; w: number; h: number } {
+  const w = (pos === 'center' ? LOGO_W * 2 : LOGO_W) * (frameW / BOARD_WIDTH)
+  const h = w * LOGO_RATIO
+  const pad = LOGO_PAD * (frameW / BOARD_WIDTH)
+  switch (pos) {
+    case 'top-left':
+      return { x: pad, y: pad, w, h }
+    case 'top-right':
+      return { x: frameW - w - pad, y: pad, w, h }
+    case 'bottom-left':
+      return { x: pad, y: frameH - h - pad, w, h }
+    case 'bottom-right':
+      return { x: frameW - w - pad, y: frameH - h - pad, w, h }
+    default:
+      return { x: (frameW - w) / 2, y: (frameH - h) / 2, w, h }
+  }
+}
+
 /** Relative luminance (0..1) of a #rgb/#rrggbb color, or null if unparseable. */
 function luminance(hex: string): number | null {
   const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim())

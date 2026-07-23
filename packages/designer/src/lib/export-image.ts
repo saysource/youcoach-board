@@ -12,9 +12,14 @@ import { BOARD_WIDTH, BOARD_HEIGHT, textFontStack, TEXT_FONT_WEIGHT, TEXT_FONT_W
 import { fontFaceCssFor, loadBoardFont } from './fonts'
 import { solveHomography } from './homography'
 import { text3dCorners } from './text3d'
+import { exportLogoRect, logoDarkUrl, logoUrl } from './logo'
 
 /** Everything the exporter needs from the live board (provided by InteractiveBoard). */
 export interface ExportEnv {
+  /** Watermark: drawn onto the OUTPUT frame (not the cropped board) at the
+   *  drawing's position, in the contrast tint (see exportLogoRect/logoDarkFor). */
+  logo?: import('@youcoach-board/core').LogoPosition | null
+  logoDark?: boolean
   container: HTMLDivElement
   svg: SVGSVGElement
   background: BoardBackground
@@ -281,7 +286,42 @@ export async function boardImageBlob(env: ExportEnv, width: number, height: numb
   og.imageSmoothingQuality = 'high'
   og.drawImage(big, 0, 0, width, height)
 
+  // The watermark, relative to the OUTPUT frame (the scene copy is hidden
+  // during capture): fully visible whatever the export aspect.
+  if (env.logo) await drawExportLogo(og, env.logo, env.logoDark === true, width, height)
+
   return await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
+}
+
+// The two logo artworks, decoded once.
+const exportLogoImages = new Map<string, Promise<HTMLImageElement>>()
+function exportLogoImage(dark: boolean): Promise<HTMLImageElement> {
+  const src = dark ? logoDarkUrl : logoUrl
+  let p = exportLogoImages.get(src)
+  if (!p) {
+    p = new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = reject
+      img.src = src
+    })
+    exportLogoImages.set(src, p)
+  }
+  return p
+}
+
+async function drawExportLogo(g: CanvasRenderingContext2D, pos: NonNullable<ExportEnv['logo']>, dark: boolean, width: number, height: number): Promise<void> {
+  try {
+    const img = await exportLogoImage(dark)
+    const r = exportLogoRect(pos, width, height)
+    g.save()
+    g.setTransform(1, 0, 0, 1, 0, 0)
+    g.globalAlpha = 0.2
+    g.drawImage(img, r.x, r.y, r.w, r.h)
+    g.restore()
+  } catch {
+    /* a missing artwork must not fail the export */
+  }
 }
 
 export async function exportBoardImage(env: ExportEnv, width: number, height: number, filename: string): Promise<void> {

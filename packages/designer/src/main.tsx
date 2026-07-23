@@ -25,6 +25,9 @@ interface BoardSettings {
   /** Headless video-render page (Drupal /youcoach-board/render/<token>): mounts
    *  the chrome-less RenderShell driven through window.ycbRender. */
   renderMode?: boolean
+  /** Render mode: the FINAL video size — the watermark is placed inside that
+   *  centred crop region of the viewport (see RenderShell). */
+  renderSize?: { width: number; height: number }
   /** Host endpoint for server-side MP4 exports; enables "Export video…". */
   exportUrl?: string
   /** Read-only viewer: presentation surface with hover video controls. */
