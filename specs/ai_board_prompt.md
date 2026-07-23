@@ -120,14 +120,17 @@ omit `animation` for a still drawing. When EDITING, keep the incoming
 
 ```json
 { "id": "t1", "type": "token", "x": 600, "y": 430, "width": 70, "height": 70,
-  "tokenFill": "solid", "color1": "#fa3523", "color2": "#fa3523",
+  "sizeM": 4, "tokenFill": "solid", "color1": "#fa3523", "color2": "#fa3523",
   "textColor": "#000000", "text": "1" }
 ```
 
 `x`/`y` is the token's top-left in board units; keep `width` = `height` = 70.
-`tokenFill`: `solid`, `vstripes`, `hstripes`, `checker` or `plaid` (`color2` is
-the second color of the pattern). Tokens of the same colors are a team — number
-them 1, 2, 3… For a jersey-shaped marker use `"shape": "jersey"`.
+ALWAYS include `"sizeM": 4` — it is the disc's real diameter on the pitch in
+metres (4 is the app's standard; without it tokens render oversized). Change it
+only when the coach asks for bigger/smaller markers. `tokenFill`: `solid`,
+`vstripes`, `hstripes`, `checker` or `plaid` (`color2` is the second color of
+the pattern). Tokens of the same colors are a team — number them 1, 2, 3… For
+a jersey-shaped marker use `"shape": "jersey"`.
 
 ### Shapes, lines and labels (board units)
 
@@ -190,7 +193,7 @@ Rules that make animations look right:
 2. All ids unique; identical ids across frames for the same element.
 3. Metres for `object3d` (inside 0–105 × 0–68), board units for 2D elements.
 4. Teams: consistent kit colors per team, shirt/token numbers 1, 2, 3… with no
-   duplicates inside a team.
+   duplicates inside a team; every token carries `"sizeM": 4`.
 5. Editing: everything not asked about is byte-identical to the input.
 
 ## Example — "Rondo on a 10×10 m area, 4 outside players, 2 defenders"
