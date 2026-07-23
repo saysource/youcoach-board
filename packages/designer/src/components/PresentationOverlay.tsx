@@ -31,20 +31,28 @@ function LaserTrail() {
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
     const dpr = () => window.devicePixelRatio || 1
+    // Size to the overlay's own box (the viewer may be EMBEDDED in a page, so
+    // never assume the window): re-check cheaply every frame.
     const resize = () => {
-      canvas.width = window.innerWidth * dpr()
-      canvas.height = window.innerHeight * dpr()
+      const host = canvas.parentElement!
+      const w = host.clientWidth * dpr()
+      const h = host.clientHeight * dpr()
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+      }
     }
     resize()
     window.addEventListener('resize', resize)
     let raf = 0
     const draw = () => {
       raf = requestAnimationFrame(draw)
+      resize()
       const now = performance.now()
       const pts = points.current
       while (pts.length && now - pts[0].t > FADE_MS) pts.shift()
       ctx.setTransform(dpr(), 0, 0, dpr(), 0, 0)
-      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       // Draw each stroke (a run of points between `brk` markers) as ONE continuous
@@ -88,13 +96,18 @@ function LaserTrail() {
   const end = () => {
     drawing.current = false
   }
+  // Pointer samples in the overlay's LOCAL coordinates (embed-safe).
+  const local = (e: { clientX: number; clientY: number; currentTarget: EventTarget }) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    return { x: e.clientX - r.left, y: e.clientY - r.top }
+  }
   return (
     <div
-      className="fixed inset-0 z-40 cursor-crosshair"
+      className="absolute inset-0 z-40 cursor-crosshair"
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
         drawing.current = true
-        points.current.push({ x: e.clientX, y: e.clientY, t: performance.now(), brk: true })
+        points.current.push({ ...local(e), t: performance.now(), brk: true })
         // Capture so the stroke keeps drawing if the pointer leaves the element;
         // best-effort (throws when there's no active pointer, e.g. synthetic events).
         try {
@@ -105,11 +118,12 @@ function LaserTrail() {
       }}
       onPointerMove={(e) => {
         if (!drawing.current) return
+        const p = local(e)
         // Drop samples closer than 3px to the last one — dense clusters at a near-
         // stationary pointer would otherwise pile up into a visible blob.
         const last = points.current[points.current.length - 1]
-        if (last && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 3) return
-        points.current.push({ x: e.clientX, y: e.clientY, t: performance.now() })
+        if (last && Math.hypot(p.x - last.x, p.y - last.y) < 3) return
+        points.current.push({ ...p, t: performance.now() })
       }}
       onPointerUp={end}
       onPointerCancel={end}
@@ -228,7 +242,7 @@ export function PresentationOverlay({
   return (
     <>
       {laser && <LaserTrail />}
-      <div className={cn('pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 pb-4 transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}>
+      <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 pb-4 transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}>
         <div className={cn('flex items-center gap-1.5 rounded-xl border border-border bg-card/95 px-2 py-1 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
           {hasAnim && (
             <>

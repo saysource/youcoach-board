@@ -24,6 +24,25 @@ export function loadBoard(store: EditorStore, raw: unknown): void {
   store.setState({ doc, selectedIds: [], stack: [], pointer: -1, currentFrame: 0 })
 }
 
+/** Parse any supported board JSON text — v3, or a legacy v1/v2 drill through
+ *  the converter — into a display-ready doc (first frame, repaired background
+ *  image). Null on invalid JSON; unknown shapes degrade to an empty board
+ *  (parseBoard is defensive). The pure core of applyOpenedBoard, used by the
+ *  plain-JS embed mounts (window.YouCoachBoard.mount). */
+export function boardDocFromText(text: string): BoardDoc | null {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (isV2Board(raw) || isV1Board(raw)) raw = convertV2Board(raw)
+  const doc = parseBoard(raw)
+  doc.animation.current = 0
+  doc.background.image = resolveFieldImage(doc.background.image)
+  return doc
+}
+
 /** Inspect a parsed file and load it if it's one of ours. Returns an error
  *  message for the user, or null on success. */
 export function applyOpenedBoard(store: EditorStore, text: string): string | null {

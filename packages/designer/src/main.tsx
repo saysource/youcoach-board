@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { BoardDoc } from '@youcoach-board/core'
 import { BoardDesigner } from './BoardDesigner'
+import { boardDocFromText } from './lib/board-file'
 import type { AssetsConfig } from './lib/assets'
 import type { ThemeSetting } from './lib/use-theme'
 
@@ -37,27 +38,53 @@ declare global {
 
 const settings = window.__YCB_SETTINGS__ ?? {}
 
-// Mount into the host-provided container (Drupal uses #ycb-root) or the dev
-// harness's #root. The compiled CSS is scoped to `.ycb-root`, so the mount element
-// must carry that class for anything to be styled.
-const mountEl = document.getElementById('ycb-root') ?? document.getElementById('root')!
-mountEl.classList.add('ycb-root')
+const assetsFor = (resourceBase?: string): AssetsConfig | undefined => (resourceBase ? { urlTemplate: resourceBase, catalog: 'catalog.json' } : undefined)
 
-const assets: AssetsConfig | undefined = settings.resourceBase
-  ? { urlTemplate: settings.resourceBase, catalog: 'catalog.json' }
-  : undefined
+/** Mount options for the plain-JS embed API: the shared settings plus the
+ *  document — either raw (`doc`) or as JSON text (`json`, accepting v3 files
+ *  AND legacy v1/v2 drills through the converter). */
+interface MountOptions extends BoardSettings {
+  doc?: Partial<BoardDoc>
+  json?: string
+}
 
-createRoot(mountEl).render(
-  <StrictMode>
-    <BoardDesigner
-      initialDoc={settings.initialDoc ?? { title: 'Untitled drill' }}
-      language={settings.language}
-      theme={settings.theme}
-      showThemeControl={settings.showThemeControl ?? true}
-      assets={assets}
-      renderMode={settings.renderMode}
-      viewerMode={settings.viewerMode}
-      exportUrl={settings.exportUrl}
-    />
-  </StrictMode>,
-)
+/** Mount a board into `el`. Returns an unmount function. Used by non-React
+ *  hosts (the Drupal loader); React hosts (App 2) import BoardDesigner from
+ *  the library build instead. */
+function mount(el: HTMLElement, opts: MountOptions = {}): () => void {
+  // The compiled CSS is scoped to `.ycb-root` — the mount element must carry it.
+  el.classList.add('ycb-root')
+  const fromJson = opts.json != null ? (boardDocFromText(opts.json) ?? undefined) : undefined
+  const root = createRoot(el)
+  root.render(
+    <StrictMode>
+      <BoardDesigner
+        initialDoc={fromJson ?? opts.doc ?? { title: 'Untitled drill' }}
+        language={opts.language}
+        theme={opts.theme}
+        showThemeControl={opts.showThemeControl ?? true}
+        assets={assetsFor(opts.resourceBase)}
+        renderMode={opts.renderMode}
+        viewerMode={opts.viewerMode}
+        exportUrl={opts.exportUrl}
+      />
+    </StrictMode>,
+  )
+  return () => root.unmount()
+}
+
+// The embed API for plain-JS hosts, announced with an event for loaders that
+// run before this (deferred) module: window.YouCoachBoard.mount(el, options).
+declare global {
+  interface Window {
+    YouCoachBoard?: { mount: typeof mount }
+  }
+}
+window.YouCoachBoard = { mount }
+window.dispatchEvent(new Event('youcoach-board-ready'))
+
+// Auto-mount the full-page app into the host-provided container (Drupal uses
+// #ycb-root) or the dev harness's #root. An EMBED page (youcoach_board_loader)
+// has neither — its containers mount through the API above instead.
+const mountEl = document.getElementById('ycb-root') ?? document.getElementById('root')
+if (mountEl) mount(mountEl, settings)

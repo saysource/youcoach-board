@@ -16,9 +16,6 @@ import { PresentationOverlay } from './PresentationOverlay'
 // video bar — play/pause + timeline scrubber + a cog menu (orbit / pan /
 // laser / speed / fix-the-view). A still drawing shows no controls.
 //
-// NOTE: the overlay + laser position against the viewport, so the viewer is
-// meant to fill the page (the Drupal use). Tight embedding in a scrolling host
-// page would need container-relative positioning first.
 export function ViewerShell() {
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
   const field3d = useEditorStore((s) => s.doc.background.field3d)
