@@ -147,6 +147,14 @@ a jersey-shaped marker use `"shape": "jersey"`.
 - Text label: `{ "id": "l1", "type": "text", "x": 500, "y": 200,
   "width": 220, "height": 44, "text": "Zone A", "fontSize": 28,
   "textColor": "#111111", "bgColor": "transparent" }`.
+  **Labels that describe something ON the pitch (a zone, a lane, a distance,
+  an instruction at a spot) must also carry `"text3d": true`** — the text is
+  then written on the grass and stays at its spot when the coach rotates the
+  view (without it, the label floats in screen space and ends up in an
+  incoherent position from any other camera angle). `"orientation"` picks the
+  reading direction on the pitch: 0 (default) reads along the pitch width,
+  90 along its length. Use a plain (non-3D) text only for a note that should
+  stay readable regardless of the camera, like a drill title in a corner.
 
 ## Animations
 
@@ -193,7 +201,8 @@ Rules that make animations look right:
 2. All ids unique; identical ids across frames for the same element.
 3. Metres for `object3d` (inside 0–105 × 0–68), board units for 2D elements.
 4. Teams: consistent kit colors per team, shirt/token numbers 1, 2, 3… with no
-   duplicates inside a team; every token carries `"sizeM": 4`.
+   duplicates inside a team; every token carries `"sizeM": 4`; every label
+   about a pitch spot/zone carries `"text3d": true`.
 5. Editing: everything not asked about is byte-identical to the input.
 
 ## Example — "Rondo on a 10×10 m area, 4 outside players, 2 defenders"
