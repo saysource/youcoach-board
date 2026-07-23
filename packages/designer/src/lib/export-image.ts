@@ -37,6 +37,23 @@ export function boardExporter(): Exporter | null {
   return currentExporter
 }
 
+// Snapshot: like the exporter, but RETURNS the PNG as a Blob for the host to
+// upload alongside the document JSON (window.YouCoachBoard.snapshot / the
+// library's boardSnapshot). Registered by the mounted board; with several
+// boards on one page the LAST mounted one answers.
+type Snapshotter = (width: number, height: number) => Promise<Blob | null>
+let currentSnapshotter: Snapshotter | null = null
+export function registerBoardSnapshotter(fn: Snapshotter | null): void {
+  currentSnapshotter = fn
+}
+
+/** A PNG snapshot of the current drawing (default 1440×1080, the board's 4:3),
+ *  as a Blob ready for a FormData/file upload. Null when no board is mounted
+ *  or the composite fails. */
+export function boardSnapshot(width = 1440, height = 1080): Promise<Blob | null> {
+  return currentSnapshotter ? currentSnapshotter(width, height) : Promise.resolve(null)
+}
+
 /** The letterboxed 4:3 board rect within the container, in container px. */
 function boardRect(env: ExportEnv): { x: number; y: number; width: number; height: number } {
   const sr = env.svg.getBoundingClientRect()
@@ -232,7 +249,10 @@ async function paintBoard(g: CanvasRenderingContext2D, env: ExportEnv, br: { x: 
   if (captions) await drawSvg(g, env, captions, k)
 }
 
-export async function exportBoardImage(env: ExportEnv, width: number, height: number, filename: string): Promise<void> {
+/** Composite the board into a PNG Blob at width×height (supersampled + the
+ *  same cover-fit as the menu export). Shared by the download action and the
+ *  host snapshot API. */
+export async function boardImageBlob(env: ExportEnv, width: number, height: number): Promise<Blob | null> {
   const br = boardRect(env)
   const big = document.createElement('canvas')
   big.width = width * SS
@@ -261,7 +281,11 @@ export async function exportBoardImage(env: ExportEnv, width: number, height: nu
   og.imageSmoothingQuality = 'high'
   og.drawImage(big, 0, 0, width, height)
 
-  const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
+  return await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
+}
+
+export async function exportBoardImage(env: ExportEnv, width: number, height: number, filename: string): Promise<void> {
+  const blob = await boardImageBlob(env, width, height)
   if (!blob) return
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

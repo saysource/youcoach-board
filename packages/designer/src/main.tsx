@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import type { BoardDoc } from '@youcoach-board/core'
 import { BoardDesigner } from './BoardDesigner'
 import { boardDocFromText } from './lib/board-file'
+import { boardSnapshot } from './lib/export-image'
 import type { AssetsConfig } from './lib/assets'
 import type { ThemeSetting } from './lib/use-theme'
 
@@ -74,13 +75,16 @@ function mount(el: HTMLElement, opts: MountOptions = {}): () => void {
 }
 
 // The embed API for plain-JS hosts, announced with an event for loaders that
-// run before this (deferred) module: window.YouCoachBoard.mount(el, options).
+// run before this (deferred) module: window.YouCoachBoard.mount(el, options)
+// and .snapshot(width?, height?) — a PNG Blob of the current drawing, ready
+// for a FormData upload next to the document JSON (with several boards on one
+// page, the LAST mounted board answers).
 declare global {
   interface Window {
-    YouCoachBoard?: { mount: typeof mount }
+    YouCoachBoard?: { mount: typeof mount; snapshot: typeof boardSnapshot }
   }
 }
-window.YouCoachBoard = { mount }
+window.YouCoachBoard = { mount, snapshot: boardSnapshot }
 window.dispatchEvent(new Event('youcoach-board-ready'))
 
 // Auto-mount the full-page app into the host-provided container (Drupal uses

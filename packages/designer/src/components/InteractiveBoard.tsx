@@ -87,7 +87,7 @@ import { isObject3DBall, isObject3DRotatable, object3dGroundBounds } from '../li
 import { fieldHomography, fieldCamera, PITCH_MODELS } from '../lib/field-reference'
 import { makeCalibratedCamera, type PitchType } from '../lib/field-camera'
 import { buildPinOps, groundDelta, groundMoveElement, polylineGround, pinNewToken, isText3d, isGroundElement, projectGround, standingTransform, centerBoard, referencePPM } from '../lib/field-anchor'
-import { exportBoardImage, registerBoardExporter } from '../lib/export-image'
+import { boardImageBlob, exportBoardImage, registerBoardExporter, registerBoardSnapshotter } from '../lib/export-image'
 import { GK_MISS_FACTOR, interactionReach, beginAnimationRender, seekAnimationFrame, endAnimationRender, animationFrameCount } from '../lib/animation-playback'
 import { gkCatchFor } from '../lib/player-anim'
 import { logoDarkFor } from '../lib/logo'
@@ -2471,13 +2471,15 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
   // latest closure lives in a ref (it captures doc/camera/ctm) — refreshed in an
   // effect (not during render) — and is registered once on mount.
   const exportImageRef = useRef<(w: number, h: number) => Promise<void>>(async () => {})
+  const snapshotRef = useRef<(w: number, h: number) => Promise<Blob | null>>(async () => null)
   useEffect(() => {
-    exportImageRef.current = async (w, h) => {
-      if (!containerRef.current || !svgRef.current) return
+    // Hide the selection chrome, wait for that frame to paint, run `fn` over
+    // the live export environment, restore the selection. rAF can stall in
+    // throttled/headless contexts, so the paint wait races a short timeout.
+    const withExportEnv = async <T,>(fn: (env: Parameters<typeof exportBoardImage>[0]) => Promise<T>): Promise<T | null> => {
+      if (!containerRef.current || !svgRef.current) return null
       const prevSel = selectedIds
-      setSelection([]) // no selection chrome in the export
-      // Wait for the deselected frame to paint. rAF can stall entirely in
-      // throttled/headless contexts, so race it against a short timeout.
+      setSelection([])
       await new Promise<void>((r) => {
         let settled = false
         const fin = () => {
@@ -2491,27 +2493,27 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
       })
       try {
         const ctm = boardCtm
-        await exportBoardImage(
-          {
-            container: containerRef.current,
-            svg: svgRef.current,
-            background: doc.background,
-            texts: fieldCamCfg && ctm ? doc.elements.map(liveElement).filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground) : [],
-            cam: arrow3dCam,
-            boardToPx: (b) => (ctm ? { x: ctm.a * b[0] + ctm.c * b[1] + ctm.ex, y: ctm.b * b[0] + ctm.d * b[1] + ctm.ey } : { x: 0, y: 0 }),
-            fontIds: docFontIds(doc),
-          },
-          w,
-          h,
-          `${doc.title || 'board'}-${w}x${h}.png`,
-        )
+        return await fn({
+          container: containerRef.current,
+          svg: svgRef.current,
+          background: doc.background,
+          texts: fieldCamCfg && ctm ? doc.elements.map(liveElement).filter((e): e is Extract<BoardElement, { type: 'text' }> => isText3d(e) && !!e.ground) : [],
+          cam: arrow3dCam,
+          boardToPx: (b) => (ctm ? { x: ctm.a * b[0] + ctm.c * b[1] + ctm.ex, y: ctm.b * b[0] + ctm.d * b[1] + ctm.ey } : { x: 0, y: 0 }),
+          fontIds: docFontIds(doc),
+        })
       } finally {
         setSelection(prevSel)
       }
     }
+    exportImageRef.current = async (w, h) => {
+      await withExportEnv((env) => exportBoardImage(env, w, h, `${doc.title || 'board'}-${w}x${h}.png`))
+    }
+    snapshotRef.current = (w, h) => withExportEnv((env) => boardImageBlob(env, w, h)).then((b) => b ?? null)
   })
   useEffect(() => {
     registerBoardExporter((w, h) => exportImageRef.current(w, h))
+    registerBoardSnapshotter((w, h) => snapshotRef.current(w, h))
     // Dev-only automation hook (CDP tests drive exports directly through it).
     if (import.meta.env.DEV) {
       const win = window as unknown as { __ycbExport?: unknown }
@@ -2519,6 +2521,7 @@ export function InteractiveBoard({ backgroundMode = false, homographyMode = fals
     }
     return () => {
       registerBoardExporter(null)
+      registerBoardSnapshotter(null)
       if (import.meta.env.DEV) {
         const win = window as unknown as { __ycbExport?: unknown }
         delete win.__ycbExport
