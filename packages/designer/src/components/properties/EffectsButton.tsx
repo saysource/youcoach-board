@@ -104,7 +104,7 @@ function EffectGrid({ label, effects, current, onPick, collapsible, open, onTogg
         (collapsible ? (
           // Collapsed section header (VA's layout): disclosure + name on the
           // left, the CHOSEN effect on the right.
-          <button onClick={onToggle} className="flex w-full items-center gap-1 rounded-md py-1.5 pr-1 text-sm hover:bg-primary/10">
+          <button type="button" onClick={onToggle} className="flex w-full items-center gap-1 rounded-md py-1.5 pr-1 text-sm hover:bg-primary/10">
             <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} />
             <span className="flex-1 text-left font-medium text-foreground">{label}</span>
             <span className="text-muted-foreground">{currentLabel}</span>
@@ -116,6 +116,7 @@ function EffectGrid({ label, effects, current, onPick, collapsible, open, onTogg
       <div className="grid grid-cols-3 gap-1">
         {effects.map((fx) => (
           <button
+            type="button"
             key={fx.id}
             onClick={() => onPick(fx.id)}
             aria-pressed={current === fx.id}
@@ -240,6 +241,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
             ]
           ).map(([value, label]) => (
             <button
+              type="button"
               key={value}
               onClick={() => setTab(value)}
               className={cn(
@@ -262,6 +264,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
                 ] as const
               ).map(([value, label]) => (
                 <button
+                  type="button"
                   key={value}
                   disabled={value === 'move' && !canMove}
                   onClick={() => setScope(value)}
@@ -275,7 +278,7 @@ export function EffectsButton({ side, small, translucent }: { side: 'right' | 't
               ))}
             </div>
             {moveScope && override && (
-              <button onClick={() => sel.forEach((e) => setFrameEffects(currentFrame, e.id, null))} className="w-full rounded-md border border-border py-1 text-xs text-muted-foreground hover:bg-primary/10">
+              <button type="button" onClick={() => sel.forEach((e) => setFrameEffects(currentFrame, e.id, null))} className="w-full rounded-md border border-border py-1 text-xs text-muted-foreground hover:bg-primary/10">
                 {t('Use animation settings for this move')}
               </button>
             )}

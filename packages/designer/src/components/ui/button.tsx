@@ -32,7 +32,13 @@ export interface ButtonProps
 
 export function Button({ className, variant, size, asChild = false, ...props }: ButtonProps) {
   const Comp = asChild ? Slot.Root : 'button'
-  return <Comp className={cn(buttonVariants({ variant, size, className }))} {...props} />
+  // Default to type="button". A bare <button> is type="submit", and the board
+  // has no forms of its own — but a HOST may mount it inside one (App2's drill
+  // editor does), where every unqualified control would submit that form.
+  // Placed before `...props` so a caller can still override; skipped for
+  // asChild, whose child may not be a button element at all.
+  const type = asChild ? undefined : ('button' as const)
+  return <Comp type={type} className={cn(buttonVariants({ variant, size, className }))} {...props} />
 }
 
 export { buttonVariants }
