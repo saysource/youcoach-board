@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Play, Pause, Rotate3d, Move, Highlighter, Focus, Gauge, X } from 'lucide-react'
+import { Play, Pause, Rotate3d, Move, Highlighter, Focus, Gauge, Maximize, Minimize, SlidersVertical, X } from 'lucide-react'
 import { Slider as SliderPrimitive } from 'radix-ui'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { cn } from '../lib/cn'
@@ -179,9 +179,15 @@ export function PresentationOverlay({
   onOrbit,
   onPan,
   onExitNav = () => {},
+  fullscreen = false,
+  onToggleFullscreen,
 }: {
   /** Exit presentation (the X button + hint). Omit in the viewer — no exit. */
   onExit?: () => void
+  /** Fill-the-viewport toggle (the embedded viewer; presentation is already
+   *  full-page, so it omits the handler and the button). */
+  fullscreen?: boolean
+  onToggleFullscreen?: () => void
   /** A 3D field exists, so orbit/pan the camera is possible. */
   canNavigate?: boolean
   /** Orbit mode is active (drag rotates the camera around the scene). */
@@ -265,7 +271,7 @@ export function PresentationOverlay({
     <>
       {laser && <LaserTrail />}
       <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 pb-4 transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}>
-        <div className={cn('flex items-center gap-1 rounded-2xl bg-black/75 px-2.5 py-1.5 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
+        <div className={cn('flex items-center gap-1 rounded-2xl bg-black/30 px-2.5 py-1.5 shadow-lg backdrop-blur', visible ? 'pointer-events-auto' : 'pointer-events-none')}>
           {hasAnim && (
             <>
               <BarButton label={playing ? t('Pause') : t('Play')} onClick={togglePlay}>
@@ -285,50 +291,78 @@ export function PresentationOverlay({
             </>
           )}
           {(canNavigate || hasAnim) && <span className="mx-1 h-5 w-px bg-white/20" />}
-          {canNavigate && (
-            <>
-              {/* Orbit / pan the camera. Free while paused/stopped — or any time
-                  with a fixed view (the animation no longer owns the camera). */}
-              <BarButton label={t('Orbit')} active={orbiting} disabled={playing && !fixedView} onClick={() => { setLaser(false); onOrbit?.() }}>
-                <Rotate3d />
-              </BarButton>
-              <BarButton label={t('Pan')} active={panning} disabled={playing && !fixedView} onClick={() => { setLaser(false); onPan?.() }}>
-                <Move />
-              </BarButton>
-            </>
-          )}
-          <BarButton label={t('Laser pointer')} active={laser} onClick={() => setLaser((v) => { const next = !v; if (next) onExitNav(); return next })}>
-            <Highlighter />
-          </BarButton>
-          {/* Fixed view: playback ignores the frames' camera poses and plays
-              from the perspective the user set with orbit/pan. */}
-          {canNavigate && hasAnim && (
-            <BarButton label={t('Fix the view')} active={fixedView} onClick={() => setFixedView(!fixedView)}>
-              <Focus />
+          {/* The mode toggles + speed live in one panel behind the sliders icon. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button type="button" aria-label={t('Playback settings')} title={t('Playback settings')} className="flex size-8 items-center justify-center rounded-lg text-white/85 transition-colors hover:bg-white/15 hover:text-white [&_svg]:size-5 [&_svg]:[stroke-width:1.75]">
+                <SlidersVertical />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="center"
+              className="w-auto border-white/15 bg-black/75 p-1.5 text-white backdrop-blur"
+              // The speed slider opens as a NESTED popover — interacting with it
+              // must not read as an outside dismissal of this panel.
+              onInteractOutside={(e) => {
+                const target = (e.detail.originalEvent.target as HTMLElement | null) ?? null
+                if (target?.closest('[data-radix-popper-content-wrapper]')) e.preventDefault()
+              }}
+            >
+              <div className="flex items-center gap-1">
+                {canNavigate && (
+                  <>
+                    {/* Orbit / pan the camera. Free while paused/stopped — or any
+                        time with a fixed view (the animation no longer owns it). */}
+                    <BarButton label={t('Orbit')} active={orbiting} disabled={playing && !fixedView} onClick={() => { setLaser(false); onOrbit?.() }}>
+                      <Rotate3d />
+                    </BarButton>
+                    <BarButton label={t('Pan')} active={panning} disabled={playing && !fixedView} onClick={() => { setLaser(false); onPan?.() }}>
+                      <Move />
+                    </BarButton>
+                  </>
+                )}
+                <BarButton label={t('Laser pointer')} active={laser} onClick={() => setLaser((v) => { const next = !v; if (next) onExitNav(); return next })}>
+                  <Highlighter />
+                </BarButton>
+                {/* Fixed view: playback ignores the frames' camera poses and
+                    plays from the perspective the user set with orbit/pan. */}
+                {canNavigate && hasAnim && (
+                  <BarButton label={t('Fix the view')} active={fixedView} onClick={() => setFixedView(!fixedView)}>
+                    <Focus />
+                  </BarButton>
+                )}
+                {hasAnim && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label={t('Speed')} title={t('Speed')} className="flex h-8 items-center gap-1 rounded-lg px-2 text-white/85 transition-colors hover:bg-white/15 hover:text-white [&_svg]:size-5 [&_svg]:[stroke-width:1.75]">
+                        <Gauge />
+                        <span className="text-xs tabular-nums">{speed}×</span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="top" align="center" className="w-48 border-white/15 bg-black/85 text-white backdrop-blur">
+                      <div className="grid gap-2">
+                        <div className="flex items-center justify-between text-[11px] font-medium text-white/70">
+                          <span>{t('Speed')}</span>
+                          <span className="tabular-nums text-white">{speed}×</span>
+                        </div>
+                        <BarSlider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => setAnimationSettings({ speed: v })} />
+                        <div className="flex justify-between text-[10px] text-white/50">
+                          <span>0.25×</span>
+                          <span>2×</span>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+          {/* Fill the viewport — the embedded viewer only (presentation already is). */}
+          {onToggleFullscreen && (
+            <BarButton label={fullscreen ? t('Exit full screen') : t('Full screen')} active={fullscreen} onClick={onToggleFullscreen}>
+              {fullscreen ? <Minimize /> : <Maximize />}
             </BarButton>
-          )}
-          {hasAnim && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <button type="button" aria-label={t('Speed')} title={t('Speed')} className="flex h-8 items-center gap-1 rounded-lg px-2 text-white/85 transition-colors hover:bg-white/15 hover:text-white [&_svg]:size-5 [&_svg]:[stroke-width:1.75]">
-                  <Gauge />
-                  <span className="text-xs tabular-nums">{speed}×</span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent side="top" align="center" className="w-48 border-white/15 bg-black/85 text-white backdrop-blur">
-                <div className="grid gap-2">
-                  <div className="flex items-center justify-between text-[11px] font-medium text-white/70">
-                    <span>{t('Speed')}</span>
-                    <span className="tabular-nums text-white">{speed}×</span>
-                  </div>
-                  <BarSlider min={0.25} max={2} step={0.25} value={[speed]} onValueChange={([v]) => setAnimationSettings({ speed: v })} />
-                  <div className="flex justify-between text-[10px] text-white/50">
-                    <span>0.25×</span>
-                    <span>2×</span>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
           )}
           {onExit && (
             <>
