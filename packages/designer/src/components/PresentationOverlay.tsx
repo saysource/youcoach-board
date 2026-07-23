@@ -7,9 +7,9 @@ import { cn } from '../lib/cn'
 import { useEditorStore, useEditorStoreApi } from '../store/context'
 import { startPlayback, stopPlayback, pausePlayback, resumePlayback, isPlaying, isPaused, seekPlayhead } from '../lib/animation-playback'
 
-// The bar auto-hides after this long with no pointer/keyboard activity; the laser
-// trail fades each stroke to nothing over the same window.
-const IDLE_MS = 3000
+// The bar auto-hides after this long with no pointer/keyboard activity.
+const IDLE_MS = 1000
+// The laser trail fades each stroke to nothing over this window.
 const FADE_MS = 3000
 
 const isTypingTarget = (t: EventTarget | null): boolean => {
