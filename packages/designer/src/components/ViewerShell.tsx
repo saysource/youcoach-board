@@ -2,6 +2,7 @@ import { useState } from 'react'
 import '../styles/board.css'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import { cn } from '../lib/cn'
+import { useTheme, type ThemeSetting } from '../lib/use-theme'
 import { BoardRootProvider } from '../lib/board-root'
 import { useEditorStore } from '../store/context'
 import { InteractiveBoard } from './InteractiveBoard'
@@ -17,7 +18,11 @@ import { PresentationOverlay } from './PresentationOverlay'
 // video bar — play/pause + timeline scrubber + a cog menu (orbit / pan /
 // laser / speed / fix-the-view). A still drawing shows no controls.
 //
-export function ViewerShell() {
+export function ViewerShell({ initialTheme, theme: controlledTheme }: { initialTheme?: ThemeSetting; theme?: ThemeSetting }) {
+  // Scoped styling: the dark class lives on OUR root, never on <html> (embed
+  // safety) — so the host tells us its theme (App 2 mirrors its dark mode via
+  // the `theme` prop), defaulting to the OS preference.
+  const { isDark } = useTheme(initialTheme, controlledTheme)
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
   const field3d = useEditorStore((s) => s.doc.background.field3d)
   // Orbit/pan the 3D camera (the controls panel's toggles): the same navigation
@@ -29,7 +34,7 @@ export function ViewerShell() {
   // inside an app page.
   const [fullscreen, setFullscreen] = useState(false)
   return (
-    <div ref={setRootEl} className={cn('ycb-root isolate overflow-hidden bg-background text-foreground', fullscreen ? 'fixed inset-0 z-[2147483647]' : 'relative h-full w-full')}>
+    <div ref={setRootEl} className={cn('ycb-root isolate overflow-hidden bg-background text-foreground', fullscreen ? 'fixed inset-0 z-[2147483647]' : 'relative h-full w-full', isDark && 'dark')}>
       <TooltipPrimitive.Provider delayDuration={300}>
         <BoardRootProvider value={rootEl}>
           <div className="absolute inset-0">

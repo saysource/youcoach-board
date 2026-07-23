@@ -74,7 +74,7 @@ export function BoardDesigner({ initialDoc, initialTheme, theme, showThemeContro
     <I18nextProvider i18n={i18n}>
       <AssetsProvider config={assets}>
         <EditorStoreProvider initialDoc={docWithBackground} onChange={onChange}>
-          {renderMode ? <RenderShell /> : viewerMode ? <ViewerShell /> : <BoardShell initialTheme={initialTheme} theme={theme} showThemeControl={showThemeControl} exportUrl={exportUrl} />}
+          {renderMode ? <RenderShell /> : viewerMode ? <ViewerShell initialTheme={initialTheme} theme={theme} /> : <BoardShell initialTheme={initialTheme} theme={theme} showThemeControl={showThemeControl} exportUrl={exportUrl} />}
         </EditorStoreProvider>
       </AssetsProvider>
     </I18nextProvider>
