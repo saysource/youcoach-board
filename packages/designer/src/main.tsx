@@ -60,7 +60,7 @@ function mount(el: HTMLElement, opts: MountOptions = {}): () => void {
   root.render(
     <StrictMode>
       <BoardDesigner
-        initialDoc={fromJson ?? opts.doc ?? { title: 'Untitled drill' }}
+        initialDoc={fromJson ?? opts.doc ?? opts.initialDoc ?? { title: 'Untitled drill' }}
         language={opts.language}
         theme={opts.theme}
         showThemeControl={opts.showThemeControl ?? true}
