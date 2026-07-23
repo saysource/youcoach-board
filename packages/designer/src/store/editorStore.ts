@@ -445,6 +445,13 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
     }
     function propagateEdits(op: Operation, doc: BoardDoc): BoardDoc {
       const a = doc.animation
+      // PIN FIXUPS never inherit forward: they re-express the CURRENT frame's
+      // placement (ground anchor + standing transform) for the live camera. In
+      // a document whose frames still hold pristine copies (e.g. an imported
+      // doc positioned purely via x/y with identity transforms), the inherit
+      // chain would never break — frame k's position would stamp EVERY later
+      // frame and flatten the whole animation onto one spot.
+      if (op.kind === 'transaction' && op.label === 'pin') return doc
       if (a.frames.length < 2 || a.current >= a.frames.length - 1) return doc
       const changes = collectEdits(op)
       if (changes.length === 0) return doc
@@ -757,7 +764,9 @@ export function createEditorStore(initialDoc: BoardDoc, onChange?: (doc: BoardDo
 
       pinSetup: (ops) => {
         if (ops.length === 0) return
-        push(ops.length === 1 ? ops[0] : { kind: 'transaction', label: 'pin', ops })
+        // Always a 'pin'-labelled transaction — propagateEdits recognizes it
+        // and skips forward-inheritance (see there).
+        push({ kind: 'transaction', label: 'pin', ops })
       },
 
       setBackground: (patch) => {
